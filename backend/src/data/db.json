@@ -1,0 +1,151 @@
+{
+  "users": [
+    {
+      "id": "s1",
+      "role": "student",
+      "name": "Ana Cruz",
+      "email": "ana@dorsu.edu.ph",
+      "passwordHash": "$2a$10$N.7bI9rt.bS4nbszUJENoenHwZoHYnQIF2RS.yOC7Z2/U0eSLEcKy",
+      "refreshTokenHash": "$2a$10$5nCOQxgGCxNNYPP7xmYKV.Y.anGWnWUsCQKOXpjfd.XWVjnkXgQyi",
+      "course": "BSIT",
+      "avatarUrl": "/uploads/1778546180810-6xzjb0ld.png"
+    },
+    {
+      "id": "a1",
+      "role": "admin",
+      "name": "System Admin",
+      "email": "admin@dorsu.edu.ph",
+      "passwordHash": "$2a$10$YYx.HbNKYs0T75oBueuWiO5EFsTGSu9nBB/BZzxzzwnoPIAHUkZAa",
+      "refreshTokenHash": "$2a$10$mGNdGVY2RWSoil7AOxlCr.Kmh2zdYQCpCHGaN2eZ6CYCiE77V7UPG",
+      "permissions": [
+        "all"
+      ],
+      "avatarUrl": null
+    },
+    {
+      "id": "s2",
+      "role": "student",
+      "name": "yuze",
+      "email": "yuze@gmail.com",
+      "passwordHash": "$2a$10$/MpxxrxIMldp7AMaj14vF.pzGuvayWYEajJltX0u.TEmA6C5P1Ai6",
+      "refreshTokenHash": null,
+      "course": "BSIT",
+      "avatarUrl": null
+    }
+  ],
+  "events": [
+    {
+      "id": "e1",
+      "title": "Student Election 2026",
+      "description": "Campus-wide election for student council officers.",
+      "status": "open",
+      "strategy": "single",
+      "candidates": [
+        {
+          "id": "c1",
+          "name": "Team Sigla",
+          "imageUrl": null
+        },
+        {
+          "id": "c2",
+          "name": "Team Bagani",
+          "imageUrl": null
+        }
+      ],
+      "maxVotesPerUser": 1,
+      "rules": "",
+      "coverImageUrl": null
+    },
+    {
+      "id": "e2",
+      "title": "Candidates",
+      "description": "hi ",
+      "status": "open",
+      "strategy": "single",
+      "candidates": [
+        {
+          "id": "c17785444291280",
+          "name": "Team Blue",
+          "imageUrl": null
+        },
+        {
+          "id": "c17785444291281",
+          "name": "Team Gold",
+          "imageUrl": null
+        }
+      ],
+      "maxVotesPerUser": 1,
+      "rules": "",
+      "coverImageUrl": null
+    }
+  ],
+  "votes": [
+    {
+      "id": "v1",
+      "userId": "s1",
+      "eventId": "e1",
+      "candidateId": "c2",
+      "weight": 1
+    }
+  ],
+  "posts": [
+    {
+      "id": "p3",
+      "authorId": "s1",
+      "author": "Ana Cruz",
+      "authorAvatar": "/uploads/1778546180810-6xzjb0ld.png",
+      "content": "hi guys",
+      "imageUrl": "/uploads/1778546220110-orroitjr.gif",
+      "reactionUserIds": [],
+      "comments": []
+    },
+    {
+      "id": "p2",
+      "author": "Ana Cruz",
+      "content": "hi guys sino ba candidates?",
+      "reactions": 0,
+      "comments": [],
+      "authorId": "s1",
+      "imageUrl": null,
+      "reactionUserIds": [],
+      "authorAvatar": "/uploads/1778546180810-6xzjb0ld.png"
+    },
+    {
+      "id": "p1",
+      "author": "Ana Cruz",
+      "content": "Ready to vote!",
+      "reactions": 7,
+      "comments": [],
+      "authorId": "s1",
+      "imageUrl": null,
+      "reactionUserIds": [],
+      "authorAvatar": "/uploads/1778546180810-6xzjb0ld.png"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "an1",
+      "title": "Welcome to SiglaCast",
+      "message": "Voting is now open for Student Election 2026.",
+      "createdAt": "2026-05-12T00:04:23.269Z"
+    }
+  ],
+  "notifications": {
+    "s1": [
+      {
+        "id": "n1778546246368",
+        "text": "Your vote was recorded for event Student Election 2026.",
+        "createdAt": "2026-05-12T00:37:26.368Z",
+        "read": false
+      },
+      {
+        "id": "n1",
+        "text": "You are eligible to vote in Student Election 2026.",
+        "createdAt": "2026-05-12T00:04:23.269Z",
+        "read": false
+      }
+    ],
+    "a1": [],
+    "s2": []
+  }
+}
