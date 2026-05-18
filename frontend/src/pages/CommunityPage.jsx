@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
+import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
@@ -19,12 +20,22 @@ const REACTION_MAP = REACTIONS.reduce((acc, r) => {
 
 const TRUNCATE_LIMIT = 280;
 
-export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost, onLikeComment, onDeleteComment }) {
+export default function CommunityPage({
+  posts,
+  currentUser,
+  onPost,
+  onReact,
+  onReactComment,
+  onComment,
+  onDeletePost,
+  onDeleteComment
+}) {
   const isAdmin = currentUser?.role === "admin";
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
+  const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
 
   function pickImage() {
     fileInputRef.current?.click();
@@ -108,23 +119,46 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
               <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" />
             ) : null}
 
-            <ReactionsRow post={post} onReact={onReact} />
+            <ReactionsRow
+              post={post}
+              onReact={onReact}
+              onShowReactors={() =>
+                setRxModal({
+                  open: true,
+                  title: "Post reactions",
+                  path: `/community/posts/${post.id}/reactors`
+                })}
+            />
 
             <CommentsBlock
               post={post}
               currentUser={currentUser}
               onComment={onComment}
-              onLikeComment={onLikeComment}
+              onReactComment={onReactComment}
               onDeleteComment={onDeleteComment}
+              onShowCommentReactors={(commentId) =>
+                setRxModal({
+                  open: true,
+                  title: "Comment reactions",
+                  path: `/community/comments/${commentId}/reactors`
+                })}
             />
           </article>
         );
       })}
+      {rxModal.open ? (
+        <ReactionActorsModal
+          title={rxModal.title}
+          path={rxModal.path}
+          reactionTypes={REACTIONS}
+          onClose={() => setRxModal({ open: false, path: "", title: "" })}
+        />
+      ) : null}
     </section>
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment, onLikeComment, onDeleteComment }) {
+function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const comments = post.comments || [];
 
@@ -152,8 +186,9 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment, onDeleteCo
               currentUser={currentUser}
               onSubmitReply={(payload) => submitReply(c.id, payload)}
               onCancelReply={() => setReplyingTo(null)}
-              onLikeComment={onLikeComment}
+              onReactComment={onReactComment}
               onDeleteComment={onDeleteComment}
+              onShowCommentReactors={onShowCommentReactors}
             />
             {c.replies?.length ? (
               <ul className="reply-list">
@@ -167,8 +202,9 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment, onDeleteCo
                       currentUser={currentUser}
                       onSubmitReply={(payload) => submitReply(r.id, payload)}
                       onCancelReply={() => setReplyingTo(null)}
-                      onLikeComment={onLikeComment}
+                      onReactComment={onReactComment}
                       onDeleteComment={onDeleteComment}
+                      onShowCommentReactors={onShowCommentReactors}
                     />
                   </li>
                 ))}
@@ -187,7 +223,89 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment, onDeleteCo
   );
 }
 
-function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply, onLikeComment, onDeleteComment }) {
+function CommentReactionsRow({ comment, onReact, onShowReactors }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const closeTimer = useRef(null);
+  useEffect(() => () => closeTimer.current && clearTimeout(closeTimer.current), []);
+
+  const myReaction = comment.myReaction ? REACTION_MAP[comment.myReaction] : null;
+  const breakdown = comment.reactionBreakdown || {};
+  const topReactions = REACTIONS.filter((r) => breakdown[r.type])
+    .sort((a, b) => (breakdown[b.type] || 0) - (breakdown[a.type] || 0))
+    .slice(0, 3);
+  const totalCount = comment.reactionCount || 0;
+
+  function openPicker() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setPickerOpen(true);
+  }
+  function deferClose() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setPickerOpen(false), 200);
+  }
+
+  return (
+    <div className="comment-reaction-row">
+      <div className="comment-reaction-host" onMouseEnter={openPicker} onMouseLeave={deferClose}>
+        <button
+          type="button"
+          className={`comment-reaction-trigger ${myReaction ? "reacted" : ""}`}
+          onClick={() => onReact(comment.id, comment.myReaction ? null : "like")}
+          style={myReaction ? { color: myReaction.color } : undefined}
+          title="React"
+        >
+          <span>{myReaction ? myReaction.emoji : "👍"}</span>
+          <span className="sr-only">React</span>
+        </button>
+        {pickerOpen ? (
+          <div className="comment-reaction-picker" onMouseEnter={openPicker} onMouseLeave={deferClose}>
+            {REACTIONS.map((r, idx) => (
+              <button
+                key={r.type}
+                type="button"
+                className={`reaction-emoji-btn sm ${comment.myReaction === r.type ? "is-active" : ""}`}
+                style={{ animationDelay: `${idx * 30}ms` }}
+                title={r.label}
+                onClick={() => {
+                  setPickerOpen(false);
+                  onReact(comment.id, comment.myReaction === r.type ? null : r.type);
+                }}
+              >
+                <span className="reaction-emoji">{r.emoji}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+      {totalCount > 0 ? (
+        <div className="comment-reaction-summary">
+          {topReactions.map((r) => (
+            <span key={r.type}>{r.emoji}</span>
+          ))}
+          <span className="comment-reaction-count">{totalCount}</span>
+        </div>
+      ) : null}
+      {totalCount > 0 ? (
+        <button type="button" className="see-reactors-btn" onClick={() => onShowReactors(comment.id)}>
+          See reactions
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function CommentRow({
+  comment,
+  isReply,
+  onReplyClick,
+  replying,
+  currentUser,
+  onSubmitReply,
+  onCancelReply,
+  onReactComment,
+  onDeleteComment,
+  onShowCommentReactors
+}) {
   const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
   function handleDelete() {
     if (!onDeleteComment) return;
@@ -221,15 +339,11 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
           ) : null}
         </div>
         <div className="comment-meta">
-          <button
-            type="button"
-            className={`comment-like-btn ${comment.likedByMe ? "liked" : ""}`}
-            onClick={() => onLikeComment?.(comment)}
-            title={comment.likedByMe ? "Unlike" : "Like"}
-          >
-            <span className="comment-like-heart">{comment.likedByMe ? "❤️" : "🤍"}</span>
-            {comment.likeCount > 0 ? <span>{comment.likeCount}</span> : <span>Like</span>}
-          </button>
+          <CommentReactionsRow
+            comment={comment}
+            onReact={(cid, reaction) => onReactComment?.(cid, reaction)}
+            onShowReactors={onShowCommentReactors}
+          />
           <button type="button" className="reply-link" onClick={onReplyClick}>
             {replying ? "Cancel" : "Reply"}
           </button>
@@ -322,7 +436,7 @@ function PostText({ text }) {
 // Facebook-style reactions bar. Hovering the trigger reveals a floating picker
 // with six animated emoji buttons. Click picks; clicking the active emoji
 // removes it; clicking a different emoji switches the reaction.
-function ReactionsRow({ post, onReact }) {
+function ReactionsRow({ post, onReact, onShowReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
 
@@ -403,14 +517,21 @@ function ReactionsRow({ post, onReact }) {
         ) : null}
       </div>
 
-      <div className="reaction-summary">
-        {topReactions.map((r) => (
-          <span key={r.type} className="reaction-summary-emoji" title={`${breakdown[r.type]} ${r.label}`}>
-            {r.emoji}
-          </span>
-        ))}
+      <div className="reaction-summary-wrap">
+        <div className="reaction-summary">
+          {topReactions.map((r) => (
+            <span key={r.type} className="reaction-summary-emoji" title={`${breakdown[r.type]} ${r.label}`}>
+              {r.emoji}
+            </span>
+          ))}
+          {post.reactionCount > 0 ? (
+            <span className="reaction-count">{post.reactionCount}</span>
+          ) : null}
+        </div>
         {post.reactionCount > 0 ? (
-          <span className="reaction-count">{post.reactionCount}</span>
+          <button type="button" className="see-reactors-btn" onClick={onShowReactors}>
+            See reactions
+          </button>
         ) : null}
       </div>
     </div>

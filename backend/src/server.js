@@ -261,22 +261,28 @@ async function serializePost(post, viewerId) {
       : null;
 
   let commentAuthors = new Map();
-  let commentLikesByCommentId = new Map();
+  let reactionsByCommentId = new Map();
   if (comments?.length) {
     const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
-    const [{ data: users }, { data: likes }] = await Promise.all([
+    const [{ data: users }, { data: cra }] = await Promise.all([
       supabase.from("users").select("id, name, avatar_url").in("id", authorIds),
-      supabase.from("comment_likes").select("comment_id, user_id").in("comment_id", commentIds)
+      supabase.from("comment_reactions").select("comment_id, user_id, reaction").in("comment_id", commentIds)
     ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
-    for (const l of likes || []) {
-      if (!commentLikesByCommentId.has(l.comment_id)) {
-        commentLikesByCommentId.set(l.comment_id, { count: 0, mine: false });
+    for (const r of cra || []) {
+      if (!reactionsByCommentId.has(r.comment_id)) {
+        reactionsByCommentId.set(r.comment_id, {
+          breakdown: {},
+          mine: null,
+          count: 0
+        });
       }
-      const entry = commentLikesByCommentId.get(l.comment_id);
+      const entry = reactionsByCommentId.get(r.comment_id);
+      const type = ALLOWED_REACTIONS.includes(r.reaction) ? r.reaction : "like";
+      entry.breakdown[type] = (entry.breakdown[type] || 0) + 1;
       entry.count += 1;
-      if (viewerId && l.user_id === viewerId) entry.mine = true;
+      if (viewerId && r.user_id === viewerId) entry.mine = type;
     }
   }
 
@@ -285,7 +291,7 @@ async function serializePost(post, viewerId) {
   // UI stays readable (Facebook style).
   const flat = (comments || []).map((c) => {
     const a = commentAuthors.get(c.author_id);
-    const likeInfo = commentLikesByCommentId.get(c.id) || { count: 0, mine: false };
+    const rxInfo = reactionsByCommentId.get(c.id) || { breakdown: {}, mine: null, count: 0 };
     return {
       id: c.id,
       parentId: c.parent_id || null,
@@ -295,8 +301,10 @@ async function serializePost(post, viewerId) {
       text: c.content,
       imageUrl: c.image_url || null,
       createdAt: c.created_at,
-      likeCount: likeInfo.count,
-      likedByMe: likeInfo.mine
+      reactionCount: rxInfo.count,
+      myReaction: rxInfo.mine,
+      reactionBreakdown: rxInfo.breakdown,
+      reactedByMe: Boolean(rxInfo.mine)
     };
   });
   const byId = new Map(flat.map((c) => [c.id, c]));
@@ -367,12 +375,72 @@ async function notifyMentions(text, label, excludeUserId) {
   const ids = await extractMentionIds(text, excludeUserId);
   if (!ids.length) return;
   const notes = ids.map((uid) => ({
-    id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
+    id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 6)}`,
     user_id: uid,
     text: `You were mentioned in ${label}`,
+    kind: "mention",
+    badge_count: 1,
+    source_key: null,
     read: false
   }));
   await supabase.from("notifications").insert(notes);
+}
+
+// Bump a single unread aggregated row keyed by source_key (same sender etc.)
+async function bumpAggregatedNotification({ userId, sourceKey, kind, textForCount }) {
+  const sk = sourceKey.slice(0, 500);
+  const { data: row } = await supabase
+    .from("notifications")
+    .select("id, badge_count")
+    .eq("user_id", userId)
+    .eq("source_key", sk)
+    .eq("read", false)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const next = (row?.badge_count ?? 0) + 1;
+  const text = typeof textForCount === "function" ? textForCount(next) : `${textForCount}`;
+  if (row) {
+    await supabase.from("notifications").update({ badge_count: next, text }).eq("id", row.id);
+  } else {
+    await supabase.from("notifications").insert({
+      id: `n${Date.now()}-${userId}-${Math.random().toString(36).slice(2, 6)}`,
+      user_id: userId,
+      text,
+      read: false,
+      kind,
+      badge_count: 1,
+      source_key: sk
+    });
+  }
+}
+
+async function insertNotification({ userId, text, kind = "general", badgeCount = 1 }) {
+  await supabase.from("notifications").insert({
+    id: `n${Date.now()}-${userId}-${Math.random().toString(36).slice(2, 6)}`,
+    user_id: userId,
+    text,
+    read: false,
+    kind,
+    badge_count: badgeCount,
+    source_key: null
+  });
+}
+
+async function reactorsBreakdownFromRows(rows) {
+  const userIds = [...new Set((rows || []).map((r) => r.user_id))];
+  if (!userIds.length) return {};
+  const { data: users } = await supabase.from("users").select("id, name, avatar_url").in("id", userIds);
+  const um = new Map((users || []).map((u) => [u.id, { id: u.id, name: u.name, avatarUrl: u.avatar_url }]));
+  const breakdown = {};
+  for (const r of rows || []) {
+    const t = ALLOWED_REACTIONS.includes(r.reaction) ? r.reaction : "like";
+    const u = um.get(r.user_id);
+    if (!u) continue;
+    if (!breakdown[t]) breakdown[t] = [];
+    breakdown[t].push(u);
+  }
+  return breakdown;
 }
 
 async function areFriends(a, b) {
@@ -730,6 +798,16 @@ app.post("/api/events", authenticate, requireAdmin, (req, res, next) => {
     const { error: candErr } = await supabase.from("candidates").insert(candidates);
     if (candErr) return res.status(400).json({ error: candErr.message });
 
+    const { data: subscriberUsers } = await supabase.from("users").select("id");
+    for (const u of subscriberUsers || []) {
+      await bumpAggregatedNotification({
+        userId: u.id,
+        sourceKey: `events:inbox:${u.id}`,
+        kind: "event",
+        textForCount: (n) => `🗓️ (${n}) new event${n === 1 ? "" : "s"} · open Events`
+      });
+    }
+
     res.status(201).json(await fetchEventWithCandidates(id));
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -753,12 +831,6 @@ app.post("/api/events/vote", authenticate, async (req, res) => {
     const { error } = await supabase.from("votes").insert({ id, user_id: userId, event_id: eventId, candidate_id: candidateId, weight });
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("vote.cast", { userId, eventId, candidateId });
-    await supabase.from("notifications").insert({
-      id: `n${Date.now()}-${userId}`,
-      user_id: userId,
-      text: `Your vote was recorded for ${event.title}.`,
-      read: false
-    });
     res.status(201).json({ success: true });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -842,9 +914,12 @@ app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
   if (action === "added" && post.author_id && post.author_id !== req.user.id) {
     const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
     await supabase.from("notifications").insert({
-      id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+      id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 6)}`,
       user_id: post.author_id,
       text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your post`,
+      kind: "reaction_post",
+      badge_count: 1,
+      source_key: null,
       read: false
     });
   }
@@ -893,29 +968,23 @@ app.post(
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
 
-    // Notification fan-out
+    // Notifications: replies only notify the replied-to comment author —
+    // not every top-level comment on someone else's post.
     const notes = [];
-    if (post?.author_id && post.author_id !== req.user.id) {
-      notes.push({
-        id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 5)}`,
-        user_id: post.author_id,
-        text: parentId
-          ? `${req.user.name} replied to a comment on your post`
-          : `${req.user.name} commented on your post`,
-        read: false
-      });
-    }
     if (parentId) {
       const { data: parent } = await supabase
         .from("post_comments")
         .select("author_id")
         .eq("id", parentId)
         .maybeSingle();
-      if (parent?.author_id && parent.author_id !== req.user.id && parent.author_id !== post?.author_id) {
+      if (parent?.author_id && parent.author_id !== req.user.id) {
         notes.push({
-          id: `n${Date.now()}-${parent.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+          id: `n${Date.now()}-${parent.author_id}-${Math.random().toString(36).slice(2, 6)}`,
           user_id: parent.author_id,
           text: `${req.user.name} replied to your comment`,
+          kind: "reply_comment",
+          badge_count: 1,
+          source_key: null,
           read: false
         });
       }
@@ -929,40 +998,53 @@ app.post(
   }
 });
 
-// Toggle a heart "like" on a comment + notify the comment author the first
-// time someone likes it. Returns the updated full post so the UI can patch.
-app.post("/api/community/comments/:id/like", authenticate, async (req, res) => {
+// React to a comment / reply (Facebook-style multi-emoji). Mirrors post reactions.
+app.post("/api/community/comments/:id/react", authenticate, async (req, res) => {
   const commentId = req.params.id;
   const me = req.user.id;
-  const { data: comment } = await supabase
-    .from("post_comments")
-    .select("*")
-    .eq("id", commentId)
-    .maybeSingle();
+  const wantClear = req.body?.reaction === null || req.body?.reaction === "";
+  const requested = String(req.body?.reaction || "like").toLowerCase();
+  const reaction = ALLOWED_REACTIONS.includes(requested) ? requested : "like";
+
+  const { data: comment } = await supabase.from("post_comments").select("*").eq("id", commentId).maybeSingle();
   if (!comment) return res.status(404).json({ error: "Comment not found" });
 
   const { data: existing } = await supabase
-    .from("comment_likes")
-    .select("comment_id")
+    .from("comment_reactions")
+    .select("*")
     .eq("comment_id", commentId)
     .eq("user_id", me)
     .maybeSingle();
 
+  let action = "none";
   if (existing) {
-    await supabase.from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", me);
-  } else {
-    await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: me });
-    if (comment.author_id && comment.author_id !== me) {
-      await supabase.from("notifications").insert({
-        id: `n${Date.now()}-${comment.author_id}-${Math.random().toString(36).slice(2, 5)}`,
-        user_id: comment.author_id,
-        text: `${req.user.name} liked your comment`,
-        read: false
-      });
+    if (wantClear || existing.reaction === reaction) {
+      await supabase.from("comment_reactions").delete().eq("comment_id", commentId).eq("user_id", me);
+      action = "removed";
+    } else {
+      await supabase.from("comment_reactions").update({ reaction }).eq("comment_id", commentId).eq("user_id", me);
+      action = "changed";
     }
+  } else if (!wantClear) {
+    await supabase.from("comment_reactions").insert({ comment_id: commentId, user_id: me, reaction });
+    action = "added";
   }
 
   const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
+  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+
+  if (action === "added" && comment.author_id && comment.author_id !== me) {
+    await supabase.from("notifications").insert({
+      id: `n${Date.now()}-${comment.author_id}-${Math.random().toString(36).slice(2, 6)}`,
+      user_id: comment.author_id,
+      text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your comment`,
+      kind: "reaction_comment",
+      badge_count: 1,
+      source_key: null,
+      read: false
+    });
+  }
+
   res.json(await serializePost(post, me));
 });
 
@@ -981,7 +1063,7 @@ app.delete("/api/community/comments/:id", authenticate, async (req, res) => {
   if (!isAdmin && comment.author_id !== me) {
     return res.status(403).json({ error: "Only the author can delete this comment" });
   }
-  await supabase.from("comment_likes").delete().eq("comment_id", commentId);
+  await supabase.from("comment_reactions").delete().eq("comment_id", commentId);
   await supabase.from("post_comments").delete().eq("id", commentId);
   const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
   res.json(await serializePost(post, me));
@@ -1040,13 +1122,14 @@ app.post("/api/announcements", authenticate, requireAdmin, async (req, res) => {
     const { error } = await supabase.from("announcements").insert({ id, title, message });
     if (error) return res.status(400).json({ error: error.message });
     const { data: users } = await supabase.from("users").select("id");
-    const notes = (users || []).map((u) => ({
-      id: `n${Date.now()}-${u.id}-${Math.random().toString(36).slice(2, 5)}`,
-      user_id: u.id,
-      text: `New announcement: ${title}`,
-      read: false
-    }));
-    if (notes.length) await supabase.from("notifications").insert(notes);
+    for (const u of users || []) {
+      await bumpAggregatedNotification({
+        userId: u.id,
+        sourceKey: `announcements:inbox:${u.id}`,
+        kind: "announcement",
+        textForCount: (n) => `📢 (${n}) new announcement${n === 1 ? "" : "s"} · open Notifications`
+      });
+    }
     await broker.publish("announcement.created", { id, title });
     res.status(201).json({ id, title, message, createdAt: new Date().toISOString() });
   } catch (e) {
@@ -1095,7 +1178,7 @@ app.delete("/api/admin/users/:id", authenticate, requireAdmin, async (req, res) 
   }
   await supabase.from("posts").delete().eq("author_id", id);
   await supabase.from("post_reactions").delete().eq("user_id", id);
-  await supabase.from("comment_likes").delete().eq("user_id", id);
+  await supabase.from("comment_reactions").delete().eq("user_id", id);
   await supabase.from("post_comments").delete().eq("author_id", id);
   await supabase.from("messages").delete().or(`from_user_id.eq.${id},to_user_id.eq.${id}`);
   await supabase.from("friends").delete().or(`user_id.eq.${id},friend_id.eq.${id}`);
@@ -1139,7 +1222,16 @@ app.get("/api/notifications", authenticate, async (req, res) => {
     .select("*")
     .eq("user_id", req.user.id)
     .order("created_at", { ascending: false });
-  res.json((data || []).map((n) => ({ id: n.id, text: n.text, read: n.read, createdAt: n.created_at })));
+  res.json(
+    (data || []).map((n) => ({
+      id: n.id,
+      text: n.text,
+      read: n.read,
+      badgeCount: typeof n.badge_count === "number" ? n.badge_count : 1,
+      kind: n.kind || "general",
+      createdAt: n.created_at
+    }))
+  );
 });
 
 // Messaging + friends
@@ -1366,13 +1458,14 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("message.sent", { id, fromUserId: me, toUserId: otherId });
-    await supabase.from("notifications").insert({
-      id: `n${Date.now()}-${otherId}-${Math.random().toString(36).slice(2, 5)}`,
-      user_id: otherId,
-      text: `New message from ${req.user.name}`,
-      read: false
+    await bumpAggregatedNotification({
+      userId: otherId,
+      sourceKey: `dm:${me}`,
+      kind: "dm",
+      textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`
     });
     if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me);
+
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });
   } catch (e) {
@@ -1441,15 +1534,6 @@ app.post("/api/groups", authenticate, (req, res, next) => {
     ];
     const { error: memErr } = await supabase.from("conversation_members").insert(memberRows);
     if (memErr) return res.status(400).json({ error: memErr.message });
-
-    // Notify added members
-    const notes = filtered.map((uid) => ({
-      id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
-      user_id: uid,
-      text: `${req.user.name} added you to "${name}"`,
-      read: false
-    }));
-    if (notes.length) await supabase.from("notifications").insert(notes);
 
     res.status(201).json(await fetchGroupSummary(id, me));
   } catch (e) {
@@ -1554,21 +1638,24 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("message.sent", { id, fromUserId: me, conversationId: gid });
 
-    // Notify other members
-    const { data: members } = await supabase
-      .from("conversation_members")
-      .select("user_id")
-      .eq("conversation_id", gid);
-    const others = (members || []).map((m) => m.user_id).filter((u) => u !== me);
-    if (others.length) {
-      const { data: conv } = await supabase.from("conversations").select("name").eq("id", gid).maybeSingle();
-      const notes = others.map((uid) => ({
-        id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
-        user_id: uid,
-        text: `New message in "${conv?.name || "group"}" from ${req.user.name}`,
-        read: false
-      }));
-      await supabase.from("notifications").insert(notes);
+    // No broadcast push for every group message — only @mentions (below) and
+    // explicit reply-to notifications (the quoted message author).
+    if (replyToId) {
+      const { data: quoted } = await supabase
+        .from("messages")
+        .select("from_user_id")
+        .eq("id", replyToId)
+        .maybeSingle();
+      const quotedAuthor = quoted?.from_user_id;
+      if (quotedAuthor && quotedAuthor !== me) {
+        const { data: conv } = await supabase.from("conversations").select("name").eq("id", gid).maybeSingle();
+        await insertNotification({
+          userId: quotedAuthor,
+          kind: "reply_message",
+          text: `↩️ ${req.user.name} replied to you in "${conv?.name || "group"}"`,
+          badgeCount: 1
+        });
+      }
     }
 
     if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me);
@@ -1806,19 +1893,61 @@ app.post("/api/messages/:id/react", authenticate, async (req, res) => {
     .eq("user_id", me)
     .maybeSingle();
 
+  let action = "none";
   if (existing) {
     if (wantClear || existing.reaction === reaction) {
       await supabase.from("message_reactions").delete().eq("message_id", mid).eq("user_id", me);
+      action = "removed";
     } else {
       await supabase.from("message_reactions").update({ reaction }).eq("message_id", mid).eq("user_id", me);
+      action = "changed";
     }
   } else if (!wantClear) {
     await supabase.from("message_reactions").insert({ message_id: mid, user_id: me, reaction });
+    action = "added";
   }
 
-  // Return decorated single message
-  const [decorated] = await decorateChatMessages([message], me);
+  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+  if (action === "added" && message.from_user_id && message.from_user_id !== me) {
+    await insertNotification({
+      userId: message.from_user_id,
+      kind: "reaction_message",
+      text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your message`,
+      badgeCount: 1
+    });
+  }
+
+  const { data: fresh } = await supabase.from("messages").select("*").eq("id", mid).maybeSingle();
+  const [decorated] = await decorateChatMessages([fresh], me);
   res.json({ message: decorated });
+});
+
+app.get("/api/community/posts/:postId/reactors", authenticate, async (req, res) => {
+  const postId = req.params.postId;
+  const { data: rows } = await supabase.from("post_reactions").select("user_id, reaction").eq("post_id", postId);
+  const breakdown = await reactorsBreakdownFromRows(rows || []);
+  res.json({ breakdown });
+});
+
+app.get("/api/community/comments/:commentId/reactors", authenticate, async (req, res) => {
+  const cid = req.params.commentId;
+  const { data: rows } = await supabase.from("comment_reactions").select("user_id, reaction").eq("comment_id", cid);
+  const breakdown = await reactorsBreakdownFromRows(rows || []);
+  res.json({ breakdown });
+});
+
+app.get("/api/messages/:id/reactors", authenticate, async (req, res) => {
+  const mid = req.params.id;
+  const me = req.user.id;
+  const { data: message } = await supabase.from("messages").select("*").eq("id", mid).maybeSingle();
+  if (!message) return res.status(404).json({ error: "Not found" });
+  let allowed = false;
+  if (message.conversation_id) allowed = await ensureGroupMember(message.conversation_id, me);
+  else allowed = message.from_user_id === me || message.to_user_id === me;
+  if (!allowed) return res.status(403).json({ error: "Not allowed" });
+  const { data: rows } = await supabase.from("message_reactions").select("user_id, reaction").eq("message_id", mid);
+  const breakdown = await reactorsBreakdownFromRows(rows || []);
+  res.json({ breakdown });
 });
 
 // XML and XSLT

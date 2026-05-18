@@ -190,13 +190,34 @@ export default function App() {
       for (const n of notifications) seenNotificationIds.current.add(n.id);
       return;
     }
+    const PUSH_KINDS = new Set([
+      "mention",
+      "reaction_post",
+      "reaction_comment",
+      "reaction_message",
+      "reply_comment",
+      "reply_message",
+      "dm",
+      "announcement",
+      "event"
+    ]);
     for (const n of notifications) {
       if (seenNotificationIds.current.has(n.id)) continue;
       seenNotificationIds.current.add(n.id);
+      const kind = n.kind || "general";
+      if (!PUSH_KINDS.has(kind)) continue;
       try {
-        const notif = new Notification("SiglaCast", { body: n.text || "You have a new notification", tag: n.id });
-        notif.onclick = () => { window.focus(); };
-      } catch (_) { /* some browsers block unless served from a SW */ }
+        const body =
+          typeof n.badgeCount === "number" && n.badgeCount > 1
+            ? `${n.text} (${n.badgeCount})`
+            : n.text || "Activity";
+        const notif = new Notification("SiglaCast", { body, tag: n.id });
+        notif.onclick = () => {
+          window.focus();
+        };
+      } catch (_) {
+        /* some browsers block unless served from a SW */
+      }
     }
   }, [notifications, user]);
 
@@ -375,9 +396,11 @@ export default function App() {
   }
 
   // Toggle a heart-like on a single comment. Backend returns the patched post.
-  async function likeComment(comment) {
-    if (!comment?.id) return;
-    const res = await api(`/community/comments/${comment.id}/like`, { method: "POST" });
+  async function reactToComment(commentId, reaction) {
+    const res = await api(`/community/comments/${commentId}/react`, {
+      method: "POST",
+      body: { reaction }
+    });
     if (res.error) {
       setNotice(res.error);
       return;
@@ -815,7 +838,7 @@ export default function App() {
               onReact={reactToPost}
               onComment={commentOnPost}
               onDeletePost={deletePost}
-              onLikeComment={likeComment}
+              onReactComment={reactToComment}
               onDeleteComment={deleteComment}
             />
           }

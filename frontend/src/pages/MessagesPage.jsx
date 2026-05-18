@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
+import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -50,6 +51,7 @@ export default function MessagesPage({
   const fileRef = useRef(null);
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
+  const [reactionModal, setReactionModal] = useState({ open: false, messageId: null });
 
   const isGroup = activeChat?.kind === "group";
 
@@ -87,6 +89,9 @@ export default function MessagesPage({
     if ((!text && !draftFile) || sending) return;
     setSending(true);
     await onSendMessage(text, draftFile, replyTarget?.id || null);
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
     setDraft("");
     setDraftFile(null);
     setReplyTarget(null);
@@ -323,6 +328,7 @@ export default function MessagesPage({
                     onReact={onReactToMessage}
                     onReply={handleReply}
                     onUnsend={handleUnsend}
+                    onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
                   />
                 ))}
                 <div ref={threadEndRef} />
@@ -435,6 +441,15 @@ export default function MessagesPage({
           onClose={() => setShowAttachments(false)}
         />
       ) : null}
+
+      {reactionModal.open && reactionModal.messageId ? (
+        <ReactionActorsModal
+          title="Reactions"
+          path={`/messages/${reactionModal.messageId}/reactors`}
+          reactionTypes={CHAT_REACTIONS}
+          onClose={() => setReactionModal({ open: false, messageId: null })}
+        />
+      ) : null}
     </section>
   );
 }
@@ -466,7 +481,7 @@ function formatBytes(n) {
 // a hover reaction picker, quoted-reply preview, and inline Reply/Unsend
 // actions. On touch devices a long-press opens the picker and we cancel the
 // default text-selection menu so it doesn't conflict with reacting.
-function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend }) {
+function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onOpenReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
   const longPressTimer = useRef(null);
@@ -555,12 +570,20 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend }) {
             )}
             <small>{new Date(m.createdAt).toLocaleString()}</small>
             {!unsent && totalCount > 0 ? (
-              <span className="bubble-reaction-chip" title={`${totalCount} reaction${totalCount === 1 ? "" : "s"}`}>
+              <button
+                type="button"
+                className="bubble-reaction-chip bubble-reaction-chip-btn"
+                title={`See who reacted · ${totalCount}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onOpenReactors?.(m.id);
+                }}
+              >
                 {topReactions.slice(0, 3).map((r) => (
                   <span key={r.type}>{r.emoji}</span>
                 ))}
                 {totalCount > 1 ? <small>{totalCount}</small> : null}
-              </span>
+              </button>
             ) : null}
           </div>
 
