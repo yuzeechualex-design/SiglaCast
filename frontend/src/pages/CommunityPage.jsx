@@ -102,20 +102,135 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
 
             <ReactionsRow post={post} onReact={onReact} />
 
-            <div className="comments-block">
-              <ul className="comment-list">
-                {(post.comments || []).map((c) => (
-                  <li key={c.id} className="comment-item">
-                    <strong>{c.author}</strong> {c.text}
-                  </li>
-                ))}
-              </ul>
-              <CommentBox postId={post.id} onComment={onComment} currentUser={currentUser} />
-            </div>
+            <CommentsBlock
+              post={post}
+              currentUser={currentUser}
+              onComment={onComment}
+            />
           </article>
         );
       })}
     </section>
+  );
+}
+
+function CommentsBlock({ post, currentUser, onComment }) {
+  const [replyingTo, setReplyingTo] = useState(null);
+  const comments = post.comments || [];
+
+  async function submitReply(parentId, text) {
+    await onComment(post.id, text, parentId);
+    setReplyingTo(null);
+  }
+
+  return (
+    <div className="comments-block">
+      {post.commentCount > 0 ? (
+        <div className="comment-count-row">
+          {post.commentCount} {post.commentCount === 1 ? "comment" : "comments"}
+        </div>
+      ) : null}
+
+      <ul className="comment-list">
+        {comments.map((c) => (
+          <li key={c.id} className="comment-thread">
+            <CommentRow
+              comment={c}
+              isReply={false}
+              onReplyClick={() => setReplyingTo(c.id === replyingTo ? null : c.id)}
+              replying={replyingTo === c.id}
+              currentUser={currentUser}
+              onSubmitReply={(text) => submitReply(c.id, text)}
+              onCancelReply={() => setReplyingTo(null)}
+            />
+            {c.replies?.length ? (
+              <ul className="reply-list">
+                {c.replies.map((r) => (
+                  <li key={r.id} className="comment-reply">
+                    <CommentRow
+                      comment={r}
+                      isReply
+                      onReplyClick={() => setReplyingTo(r.id === replyingTo ? null : r.id)}
+                      replying={replyingTo === r.id}
+                      currentUser={currentUser}
+                      onSubmitReply={(text) => submitReply(r.id, text)}
+                      onCancelReply={() => setReplyingTo(null)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+
+      <CommentBox
+        postId={post.id}
+        onComment={(postId, text) => onComment(postId, text, null)}
+        currentUser={currentUser}
+      />
+    </div>
+  );
+}
+
+function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply }) {
+  return (
+    <div className={`comment-row ${isReply ? "is-reply" : ""}`}>
+      {comment.authorAvatar ? (
+        <img className="comment-avatar" src={mediaUrl(comment.authorAvatar)} alt="" />
+      ) : (
+        <div className="comment-avatar placeholder">{comment.author?.charAt(0) || "?"}</div>
+      )}
+      <div className="comment-body">
+        <div className="comment-bubble">
+          <strong>{comment.author}</strong>{" "}
+          {comment.replyToAuthor ? (
+            <span className="reply-mention">@{comment.replyToAuthor}</span>
+          ) : null}{" "}
+          <span>{comment.text}</span>
+        </div>
+        <div className="comment-meta">
+          <button type="button" className="reply-link" onClick={onReplyClick}>
+            {replying ? "Cancel" : "Reply"}
+          </button>
+        </div>
+        {replying ? (
+          <ReplyForm
+            currentUser={currentUser}
+            placeholder={`Reply to ${comment.author}…`}
+            onSubmit={onSubmitReply}
+            onCancel={onCancelReply}
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
+  const [text, setText] = useState("");
+  const inputRef = useRef(null);
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, []);
+  async function submit(e) {
+    e.preventDefault();
+    const t = text.trim();
+    if (!t) return;
+    await onSubmit(t);
+    setText("");
+  }
+  return (
+    <form className="comment-form reply-form" onSubmit={submit}>
+      <input
+        ref={inputRef}
+        value={text}
+        placeholder={placeholder || `Reply as ${currentUser.name}…`}
+        onChange={(e) => setText(e.target.value)}
+      />
+      <button type="submit" className="btn btn-secondary btn-sm">↩ Reply</button>
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
+    </form>
   );
 }
 

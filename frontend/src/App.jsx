@@ -259,13 +259,21 @@ export default function App() {
     setPosts((prev) => prev.map((p) => (p.id === res.id ? res : p)));
   }
 
-  async function commentOnPost(postId, text) {
+  async function commentOnPost(postId, text, parentId = null) {
     const res = await api(`/community/posts/${postId}/comments`, {
       method: "POST",
-      body: { text }
+      body: { text, parentId }
     });
-    setNotice(res.error || "Comment added");
-    if (!res.error) await loadCore();
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice(parentId ? "Reply posted" : "Comment added");
+    if (res.post) {
+      setPosts((prev) => prev.map((p) => (p.id === res.post.id ? res.post : p)));
+    } else {
+      await loadCore();
+    }
   }
 
   async function saveProfile(payload) {

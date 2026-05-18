@@ -256,8 +256,53 @@ async function serializePost(post, viewerId) {
   let commentAuthors = new Map();
   if (comments?.length) {
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
-    const { data: users } = await supabase.from("users").select("id, name").in("id", authorIds);
-    commentAuthors = new Map((users || []).map((u) => [u.id, u.name]));
+    const { data: users } = await supabase.from("users").select("id, name, avatar_url").in("id", authorIds);
+    commentAuthors = new Map((users || []).map((u) => [u.id, u]));
+  }
+
+  // Build a 2-level comment tree: top-level comments each get a `replies` array.
+  // Replies of replies are flattened under their nearest top-level parent so the
+  // UI stays readable (Facebook style).
+  const flat = (comments || []).map((c) => {
+    const a = commentAuthors.get(c.author_id);
+    return {
+      id: c.id,
+      parentId: c.parent_id || null,
+      userId: c.author_id,
+      author: a?.name || "Unknown",
+      authorAvatar: a?.avatar_url || null,
+      text: c.content,
+      createdAt: c.created_at
+    };
+  });
+  const byId = new Map(flat.map((c) => [c.id, c]));
+  // Resolve each comment's top-level ancestor id (for flattening deep nesting)
+  function topLevelId(c) {
+    let cur = c;
+    while (cur.parentId && byId.has(cur.parentId)) cur = byId.get(cur.parentId);
+    return cur.id;
+  }
+  const tree = [];
+  const rootById = new Map();
+  for (const c of flat) {
+    if (!c.parentId) {
+      const node = { ...c, replies: [] };
+      tree.push(node);
+      rootById.set(c.id, node);
+    }
+  }
+  for (const c of flat) {
+    if (!c.parentId) continue;
+    const rootId = topLevelId(c);
+    const root = rootById.get(rootId);
+    if (!root) continue;
+    const replyTo = byId.get(c.parentId);
+    root.replies.push({
+      ...c,
+      // Preserve who this reply is addressed to, so UI can show "@Name" prefix.
+      replyToAuthor: replyTo?.author || null,
+      replyToId: c.parentId
+    });
   }
 
   return {
@@ -271,13 +316,8 @@ async function serializePost(post, viewerId) {
     reactedByMe: Boolean(myReaction),
     myReaction,
     reactionBreakdown,
-    comments: (comments || []).map((c) => ({
-      id: c.id,
-      userId: c.author_id,
-      author: commentAuthors.get(c.author_id) || "Unknown",
-      text: c.content,
-      createdAt: c.created_at
-    }))
+    comments: tree,
+    commentCount: flat.length
   };
 }
 async function areFriends(a, b) {
@@ -609,12 +649,28 @@ app.post("/api/community/posts/:id/comments", authenticate, async (req, res) => 
   try {
     const post_id = req.params.id;
     const text = String(req.body?.text || "").trim();
+    const parentId = req.body?.parentId ? String(req.body.parentId) : null;
     if (!text) return res.status(400).json({ error: "Comment text is required" });
+
+    // Validate parent belongs to the same post (prevents replies attaching to other posts)
+    if (parentId) {
+      const { data: parent } = await supabase
+        .from("post_comments")
+        .select("id, post_id")
+        .eq("id", parentId)
+        .maybeSingle();
+      if (!parent || parent.post_id !== post_id) {
+        return res.status(400).json({ error: "Parent comment not found on this post" });
+      }
+    }
+
     const id = `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
-    const { error } = await supabase.from("post_comments").insert({ id, post_id, author_id: req.user.id, content: text });
+    const { error } = await supabase
+      .from("post_comments")
+      .insert({ id, post_id, author_id: req.user.id, content: text, parent_id: parentId });
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
-    res.status(201).json({ comment: { id, text, author: req.user.name }, post: await serializePost(post, req.user.id) });
+    res.status(201).json({ comment: { id, text, author: req.user.name, parentId }, post: await serializePost(post, req.user.id) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

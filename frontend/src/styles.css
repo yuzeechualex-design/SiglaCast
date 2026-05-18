@@ -1135,6 +1135,128 @@ label.btn-secondary:hover {
   font-weight: 700;
 }
 
+.comments-block {
+  margin-top: 12px;
+}
+
+.comment-count-row {
+  font-size: 12px;
+  color: var(--ink-600);
+  margin-bottom: 6px;
+}
+
+.comment-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.reply-list {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 0 38px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: 2px solid var(--line);
+  padding-left: 12px;
+}
+
+.comment-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  animation: fade-in-up 0.25s ease both;
+}
+
+.comment-row.is-reply {
+  font-size: 13px;
+}
+
+.comment-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.comment-row.is-reply .comment-avatar {
+  width: 26px;
+  height: 26px;
+}
+
+.comment-avatar.placeholder {
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, var(--blue-800), var(--yellow-500));
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.comment-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-bubble {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  word-wrap: break-word;
+}
+
+.comment-bubble strong {
+  margin-right: 4px;
+}
+
+.reply-mention {
+  color: var(--blue-700);
+  font-weight: 600;
+  margin-right: 2px;
+}
+
+.comment-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 2px;
+  padding-left: 12px;
+  font-size: 11px;
+  color: var(--ink-600);
+}
+
+.reply-link {
+  background: none;
+  border: none;
+  color: var(--ink-600);
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.reply-link:hover {
+  color: var(--blue-700);
+  text-decoration: underline;
+}
+
+.reply-form {
+  margin-top: 6px;
+}
+
 .post-header {
   position: relative;
 }
