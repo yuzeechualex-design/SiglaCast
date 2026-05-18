@@ -401,19 +401,34 @@ function serializeChatMessage(row, viewerId) {
 }
 
 async function decorateChatMessages(rows, viewerId) {
-  const senderIds = [...new Set((rows || []).map((m) => m.from_user_id))];
-  if (!senderIds.length) return [];
-  const { data: users } = await supabase
-    .from("users")
-    .select("id, name, avatar_url")
-    .in("id", senderIds);
+  if (!rows?.length) return [];
+  const senderIds = [...new Set(rows.map((m) => m.from_user_id))];
+  const messageIds = rows.map((m) => m.id);
+
+  const [{ data: users }, { data: reactionRows }] = await Promise.all([
+    supabase.from("users").select("id, name, avatar_url").in("id", senderIds),
+    supabase.from("message_reactions").select("*").in("message_id", messageIds)
+  ]);
+
   const senderMap = new Map((users || []).map((u) => [u.id, u]));
-  return (rows || []).map((row) => {
+  const reactionsByMessage = new Map();
+  for (const r of reactionRows || []) {
+    const type = ALLOWED_REACTIONS.includes(r.reaction) ? r.reaction : "like";
+    if (!reactionsByMessage.has(r.message_id)) reactionsByMessage.set(r.message_id, { breakdown: {}, mine: null });
+    const entry = reactionsByMessage.get(r.message_id);
+    entry.breakdown[type] = (entry.breakdown[type] || 0) + 1;
+    if (r.user_id === viewerId) entry.mine = type;
+  }
+
+  return rows.map((row) => {
     const sender = senderMap.get(row.from_user_id);
+    const rx = reactionsByMessage.get(row.id) || { breakdown: {}, mine: null };
     return {
       ...serializeChatMessage(row, viewerId),
       author: sender?.name || "Unknown",
-      authorAvatar: sender?.avatar_url || null
+      authorAvatar: sender?.avatar_url || null,
+      reactionBreakdown: rx.breakdown,
+      myReaction: rx.mine
     };
   });
 }
@@ -1337,19 +1352,195 @@ app.get("/api/groups/:id/attachments", authenticate, async (req, res) => {
   res.json(await decorateChatMessages(msgs, me));
 });
 
-// Leave a group
+// Leave a group. If the leaver was the only admin, promote the longest-joined
+// remaining member so the group can keep being managed.
 app.delete("/api/groups/:id/members/me", authenticate, async (req, res) => {
   const me = req.user.id;
   const gid = req.params.id;
-  await supabase.from("conversation_members").delete().eq("conversation_id", gid).eq("user_id", me);
-  const { count } = await supabase
+
+  const { data: myRow } = await supabase
     .from("conversation_members")
-    .select("user_id", { count: "exact", head: true })
-    .eq("conversation_id", gid);
-  if (!count) {
+    .select("role")
+    .eq("conversation_id", gid)
+    .eq("user_id", me)
+    .maybeSingle();
+
+  await supabase.from("conversation_members").delete().eq("conversation_id", gid).eq("user_id", me);
+
+  const { data: remaining } = await supabase
+    .from("conversation_members")
+    .select("user_id, role, joined_at")
+    .eq("conversation_id", gid)
+    .order("joined_at", { ascending: true });
+
+  if (!remaining || !remaining.length) {
     await supabase.from("conversations").delete().eq("id", gid);
+  } else if (myRow?.role === "admin" && !remaining.some((m) => m.role === "admin")) {
+    await supabase
+      .from("conversation_members")
+      .update({ role: "admin" })
+      .eq("conversation_id", gid)
+      .eq("user_id", remaining[0].user_id);
   }
   res.json({ success: true });
+});
+
+// Add members to an existing group (group admin only)
+app.post("/api/groups/:id/members", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return res.status(404).json({ error: "Group not found" });
+  if (!summary.isAdmin && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only group admins can add members" });
+  }
+  let memberIds = req.body?.memberIds;
+  if (typeof memberIds === "string") {
+    try { memberIds = JSON.parse(memberIds); } catch { memberIds = []; }
+  }
+  if (!Array.isArray(memberIds)) memberIds = [];
+  // Filter out existing members and validate
+  const existing = new Set(summary.members.map((m) => m.id));
+  const wanted = [...new Set(memberIds.filter((id) => id && id !== me && !existing.has(id)))];
+  if (!wanted.length) return res.status(400).json({ error: "No new members to add" });
+  const { data: users } = await supabase.from("users").select("id").in("id", wanted);
+  const validIds = (users || []).map((u) => u.id);
+  if (!validIds.length) return res.status(400).json({ error: "No valid members found" });
+
+  await supabase.from("conversation_members").insert(
+    validIds.map((uid) => ({ conversation_id: gid, user_id: uid, role: "member" }))
+  );
+
+  // Notify the newcomers
+  const notes = validIds.map((uid) => ({
+    id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
+    user_id: uid,
+    text: `${req.user.name} added you to "${summary.name}"`,
+    read: false
+  }));
+  if (notes.length) await supabase.from("notifications").insert(notes);
+
+  res.status(201).json(await fetchGroupSummary(gid, me));
+});
+
+// Remove a specific member from the group (group admin only)
+app.delete("/api/groups/:id/members/:userId", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const targetId = req.params.userId;
+  if (targetId === me) return res.status(400).json({ error: "Use leave group to remove yourself" });
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return res.status(404).json({ error: "Group not found" });
+  if (!summary.isAdmin && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only group admins can remove members" });
+  }
+  await supabase
+    .from("conversation_members")
+    .delete()
+    .eq("conversation_id", gid)
+    .eq("user_id", targetId);
+
+  await supabase.from("notifications").insert({
+    id: `n${Date.now()}-${targetId}-${Math.random().toString(36).slice(2, 5)}`,
+    user_id: targetId,
+    text: `You were removed from "${summary.name}"`,
+    read: false
+  });
+
+  res.json(await fetchGroupSummary(gid, me));
+});
+
+// Promote / demote a member (group admin only). Body: { role: "admin" | "member" }
+app.patch("/api/groups/:id/members/:userId", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const targetId = req.params.userId;
+  const role = req.body?.role === "admin" ? "admin" : "member";
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return res.status(404).json({ error: "Group not found" });
+  if (!summary.isAdmin && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only group admins can change roles" });
+  }
+  if (!summary.members.some((m) => m.id === targetId)) {
+    return res.status(404).json({ error: "Member not found in this group" });
+  }
+  // Don't allow demoting yourself if you're the only admin
+  if (targetId === me && role === "member") {
+    const otherAdmins = summary.members.filter((m) => m.id !== me && m.role === "admin");
+    if (!otherAdmins.length) {
+      return res.status(400).json({ error: "Promote someone else to admin before stepping down" });
+    }
+  }
+  await supabase
+    .from("conversation_members")
+    .update({ role })
+    .eq("conversation_id", gid)
+    .eq("user_id", targetId);
+  res.json(await fetchGroupSummary(gid, me));
+});
+
+// Delete a whole group chat (group admin OR app admin)
+app.delete("/api/groups/:id", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return res.status(404).json({ error: "Group not found" });
+  if (!summary.isAdmin && req.user.role !== "admin") {
+    return res.status(403).json({ error: "Only group admins can delete this chat" });
+  }
+  // Cascade: messages, members, reactions, conversation row
+  const { data: msgs } = await supabase.from("messages").select("id").eq("conversation_id", gid);
+  const msgIds = (msgs || []).map((m) => m.id);
+  if (msgIds.length) await supabase.from("message_reactions").delete().in("message_id", msgIds);
+  await supabase.from("messages").delete().eq("conversation_id", gid);
+  await supabase.from("conversation_members").delete().eq("conversation_id", gid);
+  const { error } = await supabase.from("conversations").delete().eq("id", gid);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Toggle a reaction on any message (DM or group). The viewer must be allowed to
+// see the message — i.e. they're either the sender/recipient (DM) or a member
+// (group).
+app.post("/api/messages/:id/react", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const mid = req.params.id;
+  const wantClear = req.body?.reaction === null || req.body?.reaction === "";
+  const requested = String(req.body?.reaction || "like").toLowerCase();
+  const reaction = ALLOWED_REACTIONS.includes(requested) ? requested : "like";
+
+  const { data: message } = await supabase.from("messages").select("*").eq("id", mid).maybeSingle();
+  if (!message) return res.status(404).json({ error: "Message not found" });
+
+  // Authorize
+  let allowed = false;
+  if (message.conversation_id) {
+    allowed = await ensureGroupMember(message.conversation_id, me);
+  } else {
+    allowed = message.from_user_id === me || message.to_user_id === me;
+  }
+  if (!allowed) return res.status(403).json({ error: "Not allowed" });
+
+  const { data: existing } = await supabase
+    .from("message_reactions")
+    .select("*")
+    .eq("message_id", mid)
+    .eq("user_id", me)
+    .maybeSingle();
+
+  if (existing) {
+    if (wantClear || existing.reaction === reaction) {
+      await supabase.from("message_reactions").delete().eq("message_id", mid).eq("user_id", me);
+    } else {
+      await supabase.from("message_reactions").update({ reaction }).eq("message_id", mid).eq("user_id", me);
+    }
+  } else if (!wantClear) {
+    await supabase.from("message_reactions").insert({ message_id: mid, user_id: me, reaction });
+  }
+
+  // Return decorated single message
+  const [decorated] = await decorateChatMessages([message], me);
+  res.json({ message: decorated });
 });
 
 // XML and XSLT

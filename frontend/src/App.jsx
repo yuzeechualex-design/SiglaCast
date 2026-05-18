@@ -396,6 +396,81 @@ export default function App() {
     await loadMessages();
   }
 
+  async function addMembersToGroup(groupId, memberIds) {
+    const res = await api(`/groups/${groupId}/members`, {
+      method: "POST",
+      body: { memberIds }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Member(s) added");
+    setActiveChat((prev) =>
+      prev?.group?.id === groupId ? { ...prev, group: res } : prev
+    );
+    await loadMessages();
+  }
+
+  async function removeMemberFromGroup(groupId, userId) {
+    const res = await api(`/groups/${groupId}/members/${userId}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Member removed");
+    setActiveChat((prev) =>
+      prev?.group?.id === groupId ? { ...prev, group: res } : prev
+    );
+    await loadMessages();
+  }
+
+  async function changeMemberRole(groupId, userId, role) {
+    const res = await api(`/groups/${groupId}/members/${userId}`, {
+      method: "PATCH",
+      body: { role }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice(`Role updated to ${role}`);
+    setActiveChat((prev) =>
+      prev?.group?.id === groupId ? { ...prev, group: res } : prev
+    );
+  }
+
+  async function deleteGroupChat(groupId) {
+    const res = await api(`/groups/${groupId}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Group chat deleted");
+    setActiveChat(null);
+    await loadMessages();
+  }
+
+  async function reactToMessage(messageId, reaction) {
+    const res = await api(`/messages/${messageId}/react`, {
+      method: "POST",
+      body: { reaction: reaction === undefined ? "like" : reaction }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.message) {
+      setActiveChat((prev) => {
+        if (!prev) return prev;
+        const messages = (prev.messages || []).map((m) =>
+          m.id === res.message.id ? { ...m, ...res.message } : m
+        );
+        return { ...prev, messages };
+      });
+    }
+  }
+
   async function loadActiveAttachments() {
     if (!activeChat) return [];
     const url =
@@ -661,6 +736,11 @@ export default function App() {
               onUpdateGroup={updateGroupChat}
               onLeaveGroup={leaveGroupChat}
               onLoadAttachments={loadActiveAttachments}
+              onAddMembers={addMembersToGroup}
+              onRemoveMember={removeMemberFromGroup}
+              onChangeMemberRole={changeMemberRole}
+              onDeleteGroup={deleteGroupChat}
+              onReactToMessage={reactToMessage}
             />
           }
         />
