@@ -24,9 +24,11 @@ const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
+// 25 MB cap — large enough for original-resolution camera shots without re-compression.
+// Files are stored as-is on Supabase Storage (uploadToBucket passes the raw buffer).
 const uploadImage = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 3 * 1024 * 1024 },
+  limits: { fileSize: 25 * 1024 * 1024 },
   fileFilter: (_, file, cb) => {
     if (imageMime.test(file.mimetype)) cb(null, true);
     else cb(new Error("Only JPEG, PNG, GIF, or WebP images are allowed"));
@@ -295,7 +297,7 @@ async function seedIfEmpty() {
 
 const app = express();
 app.use(cors({ origin: FRONTEND_ORIGIN === "*" ? true : FRONTEND_ORIGIN.split(","), credentials: false }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "30mb" }));
 
 await seedIfEmpty();
 
@@ -650,6 +652,83 @@ app.post("/api/announcements", authenticate, requireAdmin, async (req, res) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+app.delete("/api/announcements/:id", authenticate, requireAdmin, async (req, res) => {
+  const { error } = await supabase.from("announcements").delete().eq("id", req.params.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// ==========================================================================
+// Admin moderation endpoints
+// ==========================================================================
+
+// List every user (admins only)
+app.get("/api/admin/users", authenticate, requireAdmin, async (_, res) => {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, role, name, email, course, avatar_url, created_at")
+    .order("created_at", { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(
+    (data || []).map((u) => ({
+      ...toPublicUser(u),
+      createdAt: u.created_at
+    }))
+  );
+});
+
+// Delete a user and all of their data (admins only)
+app.delete("/api/admin/users/:id", authenticate, requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  if (id === req.user.id) return res.status(400).json({ error: "You cannot delete your own admin account" });
+  const target = await fetchUserById(id);
+  if (!target) return res.status(404).json({ error: "User not found" });
+
+  // Wipe everything authored by / about this user. Order matters because of FKs.
+  const { data: userPosts } = await supabase.from("posts").select("id").eq("author_id", id);
+  const postIds = (userPosts || []).map((p) => p.id);
+  if (postIds.length) {
+    await supabase.from("post_reactions").delete().in("post_id", postIds);
+    await supabase.from("post_comments").delete().in("post_id", postIds);
+  }
+  await supabase.from("posts").delete().eq("author_id", id);
+  await supabase.from("post_reactions").delete().eq("user_id", id);
+  await supabase.from("post_comments").delete().eq("author_id", id);
+  await supabase.from("messages").delete().or(`from_user_id.eq.${id},to_user_id.eq.${id}`);
+  await supabase.from("friends").delete().or(`user_id.eq.${id},friend_id.eq.${id}`);
+  await supabase.from("notifications").delete().eq("user_id", id);
+  await supabase.from("votes").delete().eq("user_id", id);
+
+  const { error } = await supabase.from("users").delete().eq("id", id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Delete an event and all dependent rows (admins only)
+app.delete("/api/events/:id", authenticate, requireAdmin, async (req, res) => {
+  const id = req.params.id;
+  await supabase.from("votes").delete().eq("event_id", id);
+  await supabase.from("candidates").delete().eq("event_id", id);
+  const { error } = await supabase.from("events").delete().eq("id", id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+});
+
+// Delete a community post. Admins can delete any post; regular users can only delete their own.
+app.delete("/api/community/posts/:id", authenticate, async (req, res) => {
+  const id = req.params.id;
+  const { data: post } = await supabase.from("posts").select("*").eq("id", id).maybeSingle();
+  if (!post) return res.status(404).json({ error: "Post not found" });
+  if (req.user.role !== "admin" && post.author_id !== req.user.id) {
+    return res.status(403).json({ error: "You can only delete your own posts" });
+  }
+  await supabase.from("post_reactions").delete().eq("post_id", id);
+  await supabase.from("post_comments").delete().eq("post_id", id);
+  const { error } = await supabase.from("posts").delete().eq("id", id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
 });
 
 app.get("/api/notifications", authenticate, async (req, res) => {

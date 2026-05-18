@@ -49,6 +49,7 @@ export default function App() {
   const [activeChat, setActiveChat] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [adminUsers, setAdminUsers] = useState([]);
 
   async function refreshSession() {
     if (isRefreshing) return null;
@@ -109,6 +110,15 @@ export default function App() {
     setDashboard(data?.metrics ? data : null);
   }
 
+  async function loadAdminUsers() {
+    if (!token || !user || user.role !== "admin") {
+      setAdminUsers([]);
+      return;
+    }
+    const list = await api("/admin/users");
+    if (!list.error && Array.isArray(list)) setAdminUsers(list);
+  }
+
   async function loadComms() {
     if (!token) return;
     const [an, no] = await Promise.all([api("/announcements"), api("/notifications")]);
@@ -117,7 +127,7 @@ export default function App() {
   }
 
   async function loadAll() {
-    await Promise.all([loadCore(), loadComms(), loadRoleDashboard()]);
+    await Promise.all([loadCore(), loadComms(), loadRoleDashboard(), loadAdminUsers()]);
   }
 
   useEffect(() => {
@@ -361,6 +371,58 @@ export default function App() {
     }
   }
 
+  async function deleteUser(target) {
+    if (!target?.id) return;
+    if (!window.confirm(`Permanently delete ${target.name || "this user"} and all of their data?`)) return;
+    const res = await api(`/admin/users/${target.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice(`Deleted user ${target.name || target.id}`);
+    await Promise.all([loadAdminUsers(), loadCore(), loadRoleDashboard()]);
+  }
+
+  async function deleteEvent(target) {
+    if (!target?.id) return;
+    if (!window.confirm(`Delete event "${target.title}" and all of its votes?`)) return;
+    const res = await api(`/events/${target.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice(`Deleted event ${target.title}`);
+    if (selectedEventId === target.id) {
+      setSelectedEvent(null);
+      setSelectedEventId("");
+    }
+    await loadAll();
+  }
+
+  async function deletePost(post) {
+    if (!post?.id) return;
+    if (!window.confirm("Delete this post?")) return;
+    const res = await api(`/community/posts/${post.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Post deleted");
+    await loadCore();
+  }
+
+  async function deleteAnnouncement(ann) {
+    if (!ann?.id) return;
+    if (!window.confirm(`Delete announcement "${ann.title}"?`)) return;
+    const res = await api(`/announcements/${ann.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Announcement deleted");
+    await loadComms();
+  }
+
   function logout() {
     const refreshToken = localStorage.getItem("siglacast_refresh_token");
     if (token && refreshToken) {
@@ -432,10 +494,24 @@ export default function App() {
               newEventCoverFile={newEventCoverFile}
               setNewEventCoverFile={setNewEventCoverFile}
               onCreateEvent={createEvent}
+              adminUsers={adminUsers}
+              onDeleteUser={deleteUser}
+              events={events}
+              onDeleteEvent={deleteEvent}
             />
           }
         />
-        <Route path="/events" element={<EventsPage events={events} onOpenEvent={openEvent} />} />
+        <Route
+          path="/events"
+          element={
+            <EventsPage
+              events={events}
+              onOpenEvent={openEvent}
+              currentUser={user}
+              onDeleteEvent={deleteEvent}
+            />
+          }
+        />
         <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} />} />
         <Route
           path="/community"
@@ -446,6 +522,7 @@ export default function App() {
               onPost={postCommunityPost}
               onReact={reactToPost}
               onComment={commentOnPost}
+              onDeletePost={deletePost}
             />
           }
         />
@@ -471,6 +548,7 @@ export default function App() {
               newAnnouncementMessage={newAnnouncementMessage}
               setNewAnnouncementMessage={setNewAnnouncementMessage}
               onCreateAnnouncement={createAnnouncement}
+              onDeleteAnnouncement={deleteAnnouncement}
             />
           }
         />

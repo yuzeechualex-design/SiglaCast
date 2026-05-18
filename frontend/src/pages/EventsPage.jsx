@@ -1,6 +1,7 @@
 import { mediaUrl } from "../services/api.js";
 
-export default function EventsPage({ events, onOpenEvent }) {
+export default function EventsPage({ events, onOpenEvent, currentUser, onDeleteEvent }) {
+  const isAdmin = currentUser?.role === "admin";
   return (
     <section className="panel single">
       <div className="panel-head"><h2>📅 Events</h2><p>Open an event for full details, images, live tally bars, and voting.</p></div>
@@ -27,6 +28,15 @@ export default function EventsPage({ events, onOpenEvent }) {
                 </div>
                 <div className="actions">
                   <button type="button" onClick={() => onOpenEvent(event.id)}>📋 Open detail & vote</button>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => onDeleteEvent?.(event)}
+                    >
+                      🗑️ Delete event
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </div>

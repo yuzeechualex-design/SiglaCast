@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 
-export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment }) {
+export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost }) {
+  const isAdmin = currentUser?.role === "admin";
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -77,6 +78,15 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
             >
               {post.reactedByMe ? "❤️" : "🤍"} {post.reactionCount || 0}
             </button>
+            {(isAdmin || post.authorId === currentUser?.id) && onDeletePost ? (
+              <button
+                type="button"
+                className="btn btn-danger btn-sm"
+                onClick={() => onDeletePost(post)}
+              >
+                🗑️ Delete
+              </button>
+            ) : null}
           </div>
           <div className="comments-block">
             <ul className="comment-list">

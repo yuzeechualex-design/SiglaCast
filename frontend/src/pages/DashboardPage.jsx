@@ -1,3 +1,5 @@
+import { mediaUrl } from "../services/api.js";
+
 export default function DashboardPage({
   user,
   dashboard,
@@ -17,9 +19,14 @@ export default function DashboardPage({
   setNewCandidateImageUrls,
   newEventCoverFile,
   setNewEventCoverFile,
-  onCreateEvent
+  onCreateEvent,
+  adminUsers = [],
+  onDeleteUser,
+  events = [],
+  onDeleteEvent
 }) {
   if (!dashboard) return null;
+  const isAdmin = user.role === "admin";
 
   return (
     <section className="panel single">
@@ -84,6 +91,83 @@ export default function DashboardPage({
           {newEventCoverFile ? <small className="file-picked">Selected: {newEventCoverFile.name}</small> : null}
 
           <button type="button" className="btn btn-primary" onClick={onCreateEvent}>➕ Publish event</button>
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="admin-panel">
+          <h3>🛡️ Moderate events</h3>
+          <p className="form-hint">Delete an event to also remove all of its candidates and votes.</p>
+          {events.length === 0 ? (
+            <p className="empty-row">No events yet.</p>
+          ) : (
+            <ul className="admin-list">
+              {events.map((ev) => (
+                <li key={ev.id} className="admin-row">
+                  <div className="admin-row-main">
+                    {ev.coverImageUrl ? (
+                      <img className="admin-thumb" src={mediaUrl(ev.coverImageUrl)} alt="" />
+                    ) : (
+                      <div className="admin-thumb placeholder">📅</div>
+                    )}
+                    <div>
+                      <strong>{ev.title}</strong>
+                      <div className="muted small">
+                        {ev.candidates?.length || 0} candidates · {ev.status}
+                      </div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-danger btn-sm"
+                    onClick={() => onDeleteEvent?.(ev)}
+                  >
+                    🗑️ Delete
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {isAdmin && (
+        <div className="admin-panel">
+          <h3>👥 Registered users ({adminUsers.length})</h3>
+          <p className="form-hint">Deleting a user removes their posts, comments, votes, messages, and friendships.</p>
+          {adminUsers.length === 0 ? (
+            <p className="empty-row">No users found.</p>
+          ) : (
+            <ul className="admin-list">
+              {adminUsers.map((u) => (
+                <li key={u.id} className="admin-row">
+                  <div className="admin-row-main">
+                    {u.avatarUrl ? (
+                      <img className="admin-thumb" src={mediaUrl(u.avatarUrl)} alt="" />
+                    ) : (
+                      <div className="admin-thumb placeholder">{u.name?.charAt(0) || "?"}</div>
+                    )}
+                    <div>
+                      <strong>{u.name}</strong>
+                      <span className={`pill ${u.role === "admin" ? "pill-admin" : "pill-muted"}`}>{u.role}</span>
+                      <div className="muted small">{u.email}{u.course ? ` · ${u.course}` : ""}</div>
+                    </div>
+                  </div>
+                  {u.id !== user.id ? (
+                    <button
+                      type="button"
+                      className="btn btn-danger btn-sm"
+                      onClick={() => onDeleteUser?.(u)}
+                    >
+                      🗑️ Delete
+                    </button>
+                  ) : (
+                    <span className="muted small">— you —</span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </section>
