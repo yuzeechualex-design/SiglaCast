@@ -1175,11 +1175,18 @@ label.btn-secondary:hover {
 
 .thread-compose {
   display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
   gap: 10px;
   padding: 12px 14px;
   border-top: 1px solid var(--line);
   background: #fff;
   flex-shrink: 0;
+}
+
+.thread-compose .mention-input-wrap {
+  flex: 1;
+  min-width: 0;
 }
 
 .thread-compose input {
@@ -1347,13 +1354,6 @@ label.btn-secondary:hover {
 }
 
 /* ---------- Compose attachment chip ---------- */
-.thread-compose {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
 .draft-file-chip {
   display: inline-flex;
   align-items: center;
@@ -2695,9 +2695,10 @@ label.btn-secondary:hover {
     left: auto;
   }
 
-  /* Room for picker (above) + inline actions strip (below bubble) */
+  /* Reserve vertical space below the row so anchored actions don’t collide with the next bubble.
+     (Padding was inflating the positioned ancestor so top: calc(100% + …px) floated mid-thread.) */
   .bubble-with-actions:has(.bubble-react-picker) {
-    padding-bottom: 44px;
+    margin-bottom: 44px;
   }
 
   .bubble-with-actions:has(.bubble-react-picker) .bubble-quick-actions {
@@ -2943,7 +2944,9 @@ label.btn-secondary:hover {
     width: 100%;
     max-width: none;
     min-height: 0;
-    height: 100dvh;
+    /* Stable small viewport avoids an extra strip under the compose row on mobile browsers. */
+    height: 100vh;
+    height: 100svh;
     border-radius: 0;
     margin: 0;
     padding: 0;
@@ -2976,4 +2979,18 @@ label.btn-secondary:hover {
     border-radius: 0;
     border-width: 0;
   }
+
+  .messages-panel.messages-mobile-fullscreen .thread-compose {
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .messages-panel.messages-mobile-fullscreen .thread-header {
+    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Fullscreen mobile chat: prevent the page behind from scrolling and showing a strip below the panel. */
+body:has(.messages-mobile-fullscreen) {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
