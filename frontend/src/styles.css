@@ -1567,9 +1567,17 @@ input.profile-status-emoji {
   background: rgba(37, 99, 235, 0.08);
 }
 
+.chat-plus-dropdown button {
+  justify-content: flex-start;
+  text-align: left;
+}
+
 .chat-plus-item-row {
   display: flex;
   align-items: center;
+}
+
+.chat-plus-dropdown button.chat-plus-item-row {
   justify-content: space-between;
 }
 
