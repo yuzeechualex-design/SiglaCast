@@ -3,6 +3,7 @@ import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
+import ModalPortal from "../components/ModalPortal.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -755,7 +756,8 @@ function CreateGroupModal({ currentUser, onClose, onCreate }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
       <div className="modal-card" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>👥 Create a groupchat</h3>
@@ -833,7 +835,8 @@ function CreateGroupModal({ currentUser, onClose, onCreate }) {
           </div>
         </form>
       </div>
-    </div>
+      </div>
+    </ModalPortal>
   );
 }
 
@@ -929,8 +932,9 @@ function GroupSettingsModal({
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card wide" onClick={(e) => e.stopPropagation()}>
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>⚙️ Group settings</h3>
           <button type="button" className="modal-close" onClick={onClose}>✕</button>
@@ -1126,8 +1130,9 @@ function GroupSettingsModal({
             ) : null}
           </div>
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
 
@@ -1164,8 +1169,9 @@ function AttachmentsModal({ loader, onClose }) {
   );
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-card wide" onClick={(e) => e.stopPropagation()}>
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card wide" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>🖼️ Files & Images</h3>
           <button type="button" className="modal-close" onClick={onClose}>✕</button>
@@ -1224,7 +1230,8 @@ function AttachmentsModal({ loader, onClose }) {
             </ul>
           )}
         </div>
+        </div>
       </div>
-    </div>
+    </ModalPortal>
   );
 }
