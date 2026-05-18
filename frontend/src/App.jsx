@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
@@ -156,6 +156,50 @@ export default function App() {
     loadAll();
   }, [token, user?.role]);
 
+  // ---------- Desktop / mobile push notifications ----------
+  // We use the browser Notifications API. On first sign-in we politely request
+  // permission; afterwards, every time the polled notifications list grows we
+  // surface a system notification for each newly-seen item.
+  const seenNotificationIds = useRef(new Set());
+  const askedNotificationPermission = useRef(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (askedNotificationPermission.current) return;
+    askedNotificationPermission.current = true;
+    if (Notification.permission === "default") {
+      // Defer to avoid the prompt blocking initial render.
+      setTimeout(() => {
+        Notification.requestPermission().catch(() => {});
+      }, 1500);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+    if (typeof window === "undefined" || !("Notification" in window)) return;
+    if (Notification.permission !== "granted") {
+      // Still track ids so a later permission grant doesn't flood old items.
+      for (const n of notifications) seenNotificationIds.current.add(n.id);
+      return;
+    }
+    // First time we see notifications after login: seed the seen-set silently
+    // so we don't spam the desktop with backlogged items.
+    if (seenNotificationIds.current.size === 0) {
+      for (const n of notifications) seenNotificationIds.current.add(n.id);
+      return;
+    }
+    for (const n of notifications) {
+      if (seenNotificationIds.current.has(n.id)) continue;
+      seenNotificationIds.current.add(n.id);
+      try {
+        const notif = new Notification("SiglaCast", { body: n.text || "You have a new notification", tag: n.id });
+        notif.onclick = () => { window.focus(); };
+      } catch (_) { /* some browsers block unless served from a SW */ }
+    }
+  }, [notifications, user]);
+
   useEffect(() => {
     if (!token) return;
     (async () => {
@@ -286,11 +330,26 @@ export default function App() {
     setPosts((prev) => prev.map((p) => (p.id === res.id ? res : p)));
   }
 
-  async function commentOnPost(postId, text, parentId = null) {
-    const res = await api(`/community/posts/${postId}/comments`, {
-      method: "POST",
-      body: { text, parentId }
-    });
+  // Post a comment (or reply). `payload` is either a plain string (legacy) or
+  // an object { text, photo } so callers can attach a single image.
+  async function commentOnPost(postId, payload, parentId = null) {
+    const isObj = payload && typeof payload === "object" && !Array.isArray(payload);
+    const text = isObj ? (payload.text || "") : String(payload || "");
+    const photo = isObj ? payload.photo : null;
+
+    let res;
+    if (photo) {
+      const formData = new FormData();
+      formData.append("text", text);
+      if (parentId) formData.append("parentId", parentId);
+      formData.append("image", photo);
+      res = await apiForm(`/community/posts/${postId}/comments`, formData);
+    } else {
+      res = await api(`/community/posts/${postId}/comments`, {
+        method: "POST",
+        body: { text, parentId }
+      });
+    }
     if (res.error) {
       setNotice(res.error);
       return;
@@ -301,6 +360,18 @@ export default function App() {
     } else {
       await loadCore();
     }
+  }
+
+  // Delete a comment (author + admin). Returns the updated post.
+  async function deleteComment(comment) {
+    if (!comment?.id) return;
+    const res = await api(`/community/comments/${comment.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Comment deleted");
+    setPosts((prev) => prev.map((p) => (p.id === res.id ? res : p)));
   }
 
   // Toggle a heart-like on a single comment. Backend returns the patched post.
@@ -365,11 +436,14 @@ export default function App() {
   }
 
   // Unified send (DM or group). file is optional.
-  async function sendChatMessage(text, file) {
+  // Send a chat message. Optionally attach a file and/or quote-reply another
+  // message via replyToId.
+  async function sendChatMessage(text, file, replyToId = null) {
     if (!activeChat) return;
     const formData = new FormData();
     if (text) formData.append("text", text);
     if (file) formData.append("attachment", file);
+    if (replyToId) formData.append("replyToId", replyToId);
     const url =
       activeChat.kind === "group"
         ? `/groups/${activeChat.group.id}/messages`
@@ -379,12 +453,31 @@ export default function App() {
       setNotice(res.error);
       return;
     }
-    // Refresh the thread + conversation list
     const refreshed =
       activeChat.kind === "group"
         ? await api(`/groups/${activeChat.group.id}`)
         : await api(`/messages/with/${activeChat.user.id}`);
     if (!refreshed.error) setActiveChat({ ...refreshed, kind: activeChat.kind });
+    await loadMessages();
+  }
+
+  // Soft-unsend one of my own messages. The thread is refreshed so the
+  // tombstone ("This message was unsent") appears in place of the original.
+  async function unsendMessage(message) {
+    if (!message?.id) return;
+    const res = await api(`/messages/${message.id}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Message unsent");
+    const refreshed =
+      activeChat?.kind === "group"
+        ? await api(`/groups/${activeChat.group.id}`)
+        : activeChat?.user
+          ? await api(`/messages/with/${activeChat.user.id}`)
+          : null;
+    if (refreshed && !refreshed.error) setActiveChat({ ...refreshed, kind: activeChat.kind });
     await loadMessages();
   }
 
@@ -723,6 +816,7 @@ export default function App() {
               onComment={commentOnPost}
               onDeletePost={deletePost}
               onLikeComment={likeComment}
+              onDeleteComment={deleteComment}
             />
           }
         />
@@ -777,6 +871,7 @@ export default function App() {
               onChangeMemberRole={changeMemberRole}
               onDeleteGroup={deleteGroupChat}
               onReactToMessage={reactToMessage}
+              onUnsendMessage={unsendMessage}
             />
           }
         />

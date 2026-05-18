@@ -36,7 +36,8 @@ export default function MessagesPage({
   onRemoveMember,        // (groupId, userId)
   onChangeMemberRole,    // (groupId, userId, role)
   onDeleteGroup,         // (groupId)
-  onReactToMessage       // (messageId, reaction|null)
+  onReactToMessage,      // (messageId, reaction|null)
+  onUnsendMessage        // (message)
 }) {
   const [draft, setDraft] = useState("");
   const [draftFile, setDraftFile] = useState(null);
@@ -45,6 +46,7 @@ export default function MessagesPage({
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [replyTarget, setReplyTarget] = useState(null);
   const fileRef = useRef(null);
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
@@ -55,6 +57,7 @@ export default function MessagesPage({
     setDraft("");
     setDraftFile(null);
     setMenuOpen(false);
+    setReplyTarget(null);
   }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id]);
 
   useEffect(() => {
@@ -83,11 +86,27 @@ export default function MessagesPage({
     const text = draft.trim();
     if ((!text && !draftFile) || sending) return;
     setSending(true);
-    await onSendMessage(text, draftFile);
+    await onSendMessage(text, draftFile, replyTarget?.id || null);
     setDraft("");
     setDraftFile(null);
+    setReplyTarget(null);
     if (fileRef.current) fileRef.current.value = "";
     setSending(false);
+  }
+
+  // Reply / unsend on a single message bubble. `onUnsendMessage` handles confirm.
+  function handleReply(message) {
+    setReplyTarget({
+      id: message.id,
+      author: message.author || (message.fromMe ? currentUser?.name : (isGroup ? "member" : activeChat?.user?.name)),
+      text: message.text || (message.attachment?.isImage ? "📷 Photo" : message.attachment ? "📁 File" : "")
+    });
+  }
+  async function handleUnsend(message) {
+    if (!onUnsendMessage) return;
+    if (window.confirm("Unsend this message? Others will see that it was unsent.")) {
+      await onUnsendMessage(message);
+    }
   }
 
   function pickAttachment(e) {
@@ -302,10 +321,29 @@ export default function MessagesPage({
                     message={m}
                     showAuthor={isGroup && !m.fromMe}
                     onReact={onReactToMessage}
+                    onReply={handleReply}
+                    onUnsend={handleUnsend}
                   />
                 ))}
                 <div ref={threadEndRef} />
               </div>
+
+              {replyTarget ? (
+                <div className="reply-banner">
+                  <div className="reply-banner-info">
+                    <span className="reply-banner-label">Replying to {replyTarget.author}</span>
+                    <span className="reply-banner-text">{replyTarget.text || "(message)"}</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="reply-banner-close"
+                    onClick={() => setReplyTarget(null)}
+                    title="Cancel reply"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ) : null}
 
               <form className="thread-compose" onSubmit={handleSend}>
                 <input
@@ -425,13 +463,20 @@ function formatBytes(n) {
 }
 
 // One chat bubble row: avatar (for incoming group messages), the bubble itself,
-// a hover reaction picker, and a small summary of reactions underneath.
-function MessageBubble({ message: m, showAuthor, onReact }) {
+// a hover reaction picker, quoted-reply preview, and inline Reply/Unsend
+// actions. On touch devices a long-press opens the picker and we cancel the
+// default text-selection menu so it doesn't conflict with reacting.
+function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
+  const longPressTimer = useRef(null);
 
-  useEffect(() => () => closeTimer.current && clearTimeout(closeTimer.current), []);
+  useEffect(() => () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }, []);
 
+  const unsent = !!m.isUnsent;
   const breakdown = m.reactionBreakdown || {};
   const topReactions = CHAT_REACTIONS
     .filter((r) => breakdown[r.type])
@@ -452,8 +497,22 @@ function MessageBubble({ message: m, showAuthor, onReact }) {
     await onReact?.(m.id, type);
   }
 
+  // Touch: long-press to open the reaction picker. preventDefault on the
+  // native contextmenu so "Copy / Select" doesn't appear underneath.
+  function handleTouchStart() {
+    if (unsent) return;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => setPickerOpen(true), 400);
+  }
+  function handleTouchEnd() {
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+  }
+  function suppressContext(e) {
+    if (!unsent) e.preventDefault();
+  }
+
   return (
-    <div className={`bubble-row ${m.fromMe ? "row-me" : "row-them"}`}>
+    <div className={`bubble-row ${m.fromMe ? "row-me" : "row-them"} ${unsent ? "is-unsent" : ""}`}>
       {!m.fromMe ? (
         m.authorAvatar ? (
           <img className="msg-avatar sm" src={mediaUrl(m.authorAvatar)} alt="" />
@@ -464,16 +523,38 @@ function MessageBubble({ message: m, showAuthor, onReact }) {
 
       <div
         className="bubble-stack"
-        onMouseEnter={openPicker}
-        onMouseLeave={deferClose}
+        onMouseEnter={!unsent ? openPicker : undefined}
+        onMouseLeave={!unsent ? deferClose : undefined}
       >
         <div className="bubble-with-actions">
-          <div className={`bubble ${m.fromMe ? "bubble-me" : "bubble-them"}`}>
+          <div
+            className={`bubble ${m.fromMe ? "bubble-me" : "bubble-them"} ${unsent ? "bubble-unsent" : ""}`}
+            onContextMenu={suppressContext}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchCancel={handleTouchEnd}
+          >
             {showAuthor ? <p className="bubble-author">{m.author}</p> : null}
-            {m.attachment ? <MessageAttachment att={m.attachment} /> : null}
-            {m.text ? <p><MentionText text={m.text} /></p> : null}
+
+            {m.replyTo ? (
+              <div className="bubble-reply-quote">
+                <span className="bubble-reply-quote-author">{m.replyTo.author}</span>
+                <span className="bubble-reply-quote-text">
+                  {m.replyTo.isUnsent ? "(message unsent)" : (m.replyTo.text || "(message)")}
+                </span>
+              </div>
+            ) : null}
+
+            {unsent ? (
+              <p className="bubble-unsent-text">🚫 This message was unsent</p>
+            ) : (
+              <>
+                {m.attachment ? <MessageAttachment att={m.attachment} /> : null}
+                {m.text ? <p><MentionText text={m.text} /></p> : null}
+              </>
+            )}
             <small>{new Date(m.createdAt).toLocaleString()}</small>
-            {totalCount > 0 ? (
+            {!unsent && totalCount > 0 ? (
               <span className="bubble-reaction-chip" title={`${totalCount} reaction${totalCount === 1 ? "" : "s"}`}>
                 {topReactions.slice(0, 3).map((r) => (
                   <span key={r.type}>{r.emoji}</span>
@@ -483,7 +564,30 @@ function MessageBubble({ message: m, showAuthor, onReact }) {
             ) : null}
           </div>
 
-          {pickerOpen ? (
+          {!unsent ? (
+            <div className={`bubble-quick-actions ${m.fromMe ? "side-left" : "side-right"}`}>
+              <button
+                type="button"
+                className="bubble-quick-btn"
+                title="Reply"
+                onClick={() => onReply?.(m)}
+              >
+                ↩
+              </button>
+              {m.fromMe ? (
+                <button
+                  type="button"
+                  className="bubble-quick-btn"
+                  title="Unsend"
+                  onClick={() => onUnsend?.(m)}
+                >
+                  🗑
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+
+          {pickerOpen && !unsent ? (
             <div
               className={`bubble-react-picker ${m.fromMe ? "side-left" : "side-right"}`}
               onMouseEnter={openPicker}

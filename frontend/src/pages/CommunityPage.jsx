@@ -19,7 +19,7 @@ const REACTION_MAP = REACTIONS.reduce((acc, r) => {
 
 const TRUNCATE_LIMIT = 280;
 
-export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost, onLikeComment }) {
+export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost, onLikeComment, onDeleteComment }) {
   const isAdmin = currentUser?.role === "admin";
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -115,6 +115,7 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
               currentUser={currentUser}
               onComment={onComment}
               onLikeComment={onLikeComment}
+              onDeleteComment={onDeleteComment}
             />
           </article>
         );
@@ -123,12 +124,12 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment, onLikeComment }) {
+function CommentsBlock({ post, currentUser, onComment, onLikeComment, onDeleteComment }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const comments = post.comments || [];
 
-  async function submitReply(parentId, text) {
-    await onComment(post.id, text, parentId);
+  async function submitReply(parentId, payload) {
+    await onComment(post.id, payload, parentId);
     setReplyingTo(null);
   }
 
@@ -149,9 +150,10 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment }) {
               onReplyClick={() => setReplyingTo(c.id === replyingTo ? null : c.id)}
               replying={replyingTo === c.id}
               currentUser={currentUser}
-              onSubmitReply={(text) => submitReply(c.id, text)}
+              onSubmitReply={(payload) => submitReply(c.id, payload)}
               onCancelReply={() => setReplyingTo(null)}
               onLikeComment={onLikeComment}
+              onDeleteComment={onDeleteComment}
             />
             {c.replies?.length ? (
               <ul className="reply-list">
@@ -163,9 +165,10 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment }) {
                       onReplyClick={() => setReplyingTo(r.id === replyingTo ? null : r.id)}
                       replying={replyingTo === r.id}
                       currentUser={currentUser}
-                      onSubmitReply={(text) => submitReply(r.id, text)}
+                      onSubmitReply={(payload) => submitReply(r.id, payload)}
                       onCancelReply={() => setReplyingTo(null)}
                       onLikeComment={onLikeComment}
+                      onDeleteComment={onDeleteComment}
                     />
                   </li>
                 ))}
@@ -177,14 +180,21 @@ function CommentsBlock({ post, currentUser, onComment, onLikeComment }) {
 
       <CommentBox
         postId={post.id}
-        onComment={(postId, text) => onComment(postId, text, null)}
+        onComment={(postId, payload) => onComment(postId, payload, null)}
         currentUser={currentUser}
       />
     </div>
   );
 }
 
-function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply, onLikeComment }) {
+function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply, onLikeComment, onDeleteComment }) {
+  const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
+  function handleDelete() {
+    if (!onDeleteComment) return;
+    if (window.confirm("Delete this comment? Any replies will also be removed.")) {
+      onDeleteComment(comment);
+    }
+  }
   return (
     <div className={`comment-row ${isReply ? "is-reply" : ""}`}>
       {comment.authorAvatar ? (
@@ -198,7 +208,17 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
           {comment.replyToAuthor ? (
             <span className="reply-mention">@{comment.replyToAuthor}</span>
           ) : null}{" "}
-          <MentionText text={comment.text} />
+          {comment.text ? <MentionText text={comment.text} /> : null}
+          {comment.imageUrl ? (
+            <a
+              href={mediaUrl(comment.imageUrl)}
+              target="_blank"
+              rel="noreferrer"
+              className="comment-image-link"
+            >
+              <img className="comment-image" src={mediaUrl(comment.imageUrl)} alt="" />
+            </a>
+          ) : null}
         </div>
         <div className="comment-meta">
           <button
@@ -213,6 +233,11 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
           <button type="button" className="reply-link" onClick={onReplyClick}>
             {replying ? "Cancel" : "Reply"}
           </button>
+          {canDelete ? (
+            <button type="button" className="reply-link comment-delete-link" onClick={handleDelete} title="Delete">
+              Delete
+            </button>
+          ) : null}
         </div>
         {replying ? (
           <ReplyForm
@@ -229,12 +254,16 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
 
 function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
   const [text, setText] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const photoUrl = photo ? URL.createObjectURL(photo) : null;
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
-    if (!t) return;
-    await onSubmit(t);
+    if (!t && !photo) return;
+    await onSubmit({ text: t, photo });
     setText("");
+    setPhoto(null);
   }
   return (
     <form className="comment-form reply-form" onSubmit={submit}>
@@ -244,6 +273,21 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
         placeholder={placeholder || `Reply as ${currentUser.name}…`}
         autoFocus
       />
+      <label className="btn btn-ghost btn-sm photo-pick-btn" title="Attach a photo">
+        📷
+        <input
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+        />
+      </label>
+      {photoUrl ? (
+        <div className="comment-photo-preview">
+          <img src={photoUrl} alt="preview" />
+          <button type="button" className="comment-photo-clear" onClick={() => setPhoto(null)}>✕</button>
+        </div>
+      ) : null}
       <button type="submit" className="btn btn-secondary btn-sm">↩ Reply</button>
       <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
     </form>
@@ -375,12 +419,16 @@ function ReactionsRow({ post, onReact }) {
 
 function CommentBox({ postId, onComment, currentUser }) {
   const [text, setText] = useState("");
+  const [photo, setPhoto] = useState(null);
+  const photoUrl = photo ? URL.createObjectURL(photo) : null;
+  useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
-    if (!t) return;
-    await onComment(postId, t);
+    if (!t && !photo) return;
+    await onComment(postId, { text: t, photo });
     setText("");
+    setPhoto(null);
   }
   return (
     <form className="comment-form" onSubmit={submit}>
@@ -389,6 +437,21 @@ function CommentBox({ postId, onComment, currentUser }) {
         onChange={setText}
         placeholder={`Comment as ${currentUser.name}… use @ to mention`}
       />
+      <label className="btn btn-ghost btn-sm photo-pick-btn" title="Attach a photo">
+        📷
+        <input
+          type="file"
+          accept="image/*"
+          hidden
+          onChange={(e) => setPhoto(e.target.files?.[0] || null)}
+        />
+      </label>
+      {photoUrl ? (
+        <div className="comment-photo-preview">
+          <img src={photoUrl} alt="preview" />
+          <button type="button" className="comment-photo-clear" onClick={() => setPhoto(null)}>✕</button>
+        </div>
+      ) : null}
       <button type="submit" className="btn btn-secondary btn-sm">💬 Comment</button>
     </form>
   );

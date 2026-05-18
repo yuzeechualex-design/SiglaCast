@@ -293,6 +293,7 @@ async function serializePost(post, viewerId) {
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
       text: c.content,
+      imageUrl: c.image_url || null,
       createdAt: c.created_at,
       likeCount: likeInfo.count,
       likedByMe: likeInfo.mine
@@ -429,21 +430,24 @@ async function fetchGroupSummary(conversationId, viewerId) {
 }
 
 function serializeChatMessage(row, viewerId) {
+  const unsent = !!row.is_unsent;
   return {
     id: row.id,
-    text: row.text || "",
+    text: unsent ? "" : (row.text || ""),
     fromUserId: row.from_user_id,
     fromMe: row.from_user_id === viewerId,
     createdAt: row.created_at,
-    attachment: row.attachment_url
-      ? {
+    isUnsent: unsent,
+    replyToId: row.reply_to_id || null,
+    attachment: unsent || !row.attachment_url
+      ? null
+      : {
           url: row.attachment_url,
           type: row.attachment_type,
           name: row.attachment_name,
           size: row.attachment_size,
           isImage: row.attachment_type === "image"
         }
-      : null
   };
 }
 
@@ -451,13 +455,48 @@ async function decorateChatMessages(rows, viewerId) {
   if (!rows?.length) return [];
   const senderIds = [...new Set(rows.map((m) => m.from_user_id))];
   const messageIds = rows.map((m) => m.id);
+  const replyTargetIds = [...new Set(rows.map((m) => m.reply_to_id).filter(Boolean))];
 
-  const [{ data: users }, { data: reactionRows }] = await Promise.all([
+  const [{ data: users }, { data: reactionRows }, replyTargetsRes] = await Promise.all([
     supabase.from("users").select("id, name, avatar_url").in("id", senderIds),
-    supabase.from("message_reactions").select("*").in("message_id", messageIds)
+    supabase.from("message_reactions").select("*").in("message_id", messageIds),
+    replyTargetIds.length
+      ? supabase.from("messages").select("id, from_user_id, text, attachment_type, is_unsent").in("id", replyTargetIds)
+      : Promise.resolve({ data: [] })
   ]);
 
   const senderMap = new Map((users || []).map((u) => [u.id, u]));
+
+  // For reply quotes we also need the original sender names — fetch any IDs we
+  // haven't already collected from the main message list.
+  const replyTargets = replyTargetsRes.data || [];
+  const missingSenderIds = replyTargets
+    .map((r) => r.from_user_id)
+    .filter((id) => id && !senderMap.has(id));
+  if (missingSenderIds.length) {
+    const { data: extraUsers } = await supabase
+      .from("users")
+      .select("id, name, avatar_url")
+      .in("id", [...new Set(missingSenderIds)]);
+    for (const u of extraUsers || []) senderMap.set(u.id, u);
+  }
+  const replyMap = new Map(
+    replyTargets.map((r) => {
+      const sender = senderMap.get(r.from_user_id);
+      let snippet = r.is_unsent ? "(message unsent)" : (r.text || "").slice(0, 120);
+      if (!snippet) {
+        if (r.attachment_type === "image") snippet = "📷 Photo";
+        else if (r.attachment_type === "file") snippet = "📁 File";
+      }
+      return [r.id, {
+        id: r.id,
+        author: sender?.name || "Unknown",
+        text: snippet,
+        isUnsent: !!r.is_unsent
+      }];
+    })
+  );
+
   const reactionsByMessage = new Map();
   for (const r of reactionRows || []) {
     const type = ALLOWED_REACTIONS.includes(r.reaction) ? r.reaction : "like";
@@ -474,8 +513,9 @@ async function decorateChatMessages(rows, viewerId) {
       ...serializeChatMessage(row, viewerId),
       author: sender?.name || "Unknown",
       authorAvatar: sender?.avatar_url || null,
-      reactionBreakdown: rx.breakdown,
-      myReaction: rx.mine
+      reactionBreakdown: row.is_unsent ? {} : rx.breakdown,
+      myReaction: row.is_unsent ? null : rx.mine,
+      replyTo: row.reply_to_id ? (replyMap.get(row.reply_to_id) || null) : null
     };
   });
 }
@@ -812,12 +852,27 @@ app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
   res.json(await serializePost(post, req.user.id));
 });
 
-app.post("/api/community/posts/:id/comments", authenticate, async (req, res) => {
+// Create a comment (or reply). Accepts multipart form data so users can attach
+// a photo alongside text. Either text or an image is required.
+app.post(
+  "/api/community/posts/:id/comments",
+  authenticate,
+  (req, res, next) => {
+    uploadImage.single("image")(req, res, (err) => {
+      if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+      next();
+    });
+  },
+  async (req, res) => {
   try {
     const post_id = req.params.id;
     const text = String(req.body?.text || "").trim();
     const parentId = req.body?.parentId ? String(req.body.parentId) : null;
-    if (!text) return res.status(400).json({ error: "Comment text is required" });
+
+    let image_url = null;
+    if (req.file) image_url = await uploadToBucket("posts", req.file);
+
+    if (!text && !image_url) return res.status(400).json({ error: "Comment text or photo is required" });
 
     // Validate parent belongs to the same post (prevents replies attaching to other posts)
     if (parentId) {
@@ -834,7 +889,7 @@ app.post("/api/community/posts/:id/comments", authenticate, async (req, res) => 
     const id = `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
     const { error } = await supabase
       .from("post_comments")
-      .insert({ id, post_id, author_id: req.user.id, content: text, parent_id: parentId });
+      .insert({ id, post_id, author_id: req.user.id, content: text || "", parent_id: parentId, image_url });
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
 
@@ -907,6 +962,27 @@ app.post("/api/community/comments/:id/like", authenticate, async (req, res) => {
     }
   }
 
+  const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
+  res.json(await serializePost(post, me));
+});
+
+// Delete a comment. The original author can always delete; admins can delete
+// any comment. Replies cascade via FK ON DELETE CASCADE. Returns the updated post.
+app.delete("/api/community/comments/:id", authenticate, async (req, res) => {
+  const commentId = req.params.id;
+  const me = req.user.id;
+  const isAdmin = req.user.role === "admin";
+  const { data: comment } = await supabase
+    .from("post_comments")
+    .select("id, post_id, author_id")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment) return res.status(404).json({ error: "Comment not found" });
+  if (!isAdmin && comment.author_id !== me) {
+    return res.status(403).json({ error: "Only the author can delete this comment" });
+  }
+  await supabase.from("comment_likes").delete().eq("comment_id", commentId);
+  await supabase.from("post_comments").delete().eq("id", commentId);
   const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
   res.json(await serializePost(post, me));
 });
@@ -1255,6 +1331,22 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
     let attachment = null;
     if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
 
+    // Optional reply-to: must reference a message in this same DM thread.
+    let replyToId = null;
+    const rawReplyTo = req.body?.replyToId ? String(req.body.replyToId) : "";
+    if (rawReplyTo) {
+      const { data: target } = await supabase
+        .from("messages")
+        .select("id, from_user_id, to_user_id, conversation_id")
+        .eq("id", rawReplyTo)
+        .maybeSingle();
+      const sameThread = target
+        && !target.conversation_id
+        && ((target.from_user_id === me && target.to_user_id === otherId) ||
+            (target.from_user_id === otherId && target.to_user_id === me));
+      if (sameThread) replyToId = target.id;
+    }
+
     const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
     const { data: message, error } = await supabase
       .from("messages")
@@ -1264,6 +1356,7 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
         to_user_id: otherId,
         text: text || null,
         read: false,
+        reply_to_id: replyToId,
         attachment_url: attachment?.url || null,
         attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null,
         attachment_name: attachment?.name || null,
@@ -1280,7 +1373,8 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       read: false
     });
     if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me);
-    res.status(201).json({ message: serializeChatMessage(message, me) });
+    const [decorated] = await decorateChatMessages([message], me);
+    res.status(201).json({ message: decorated });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -1427,6 +1521,18 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
     let attachment = null;
     if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
 
+    // Optional reply-to: must reference a message in this same group.
+    let replyToId = null;
+    const rawReplyTo = req.body?.replyToId ? String(req.body.replyToId) : "";
+    if (rawReplyTo) {
+      const { data: target } = await supabase
+        .from("messages")
+        .select("id, conversation_id")
+        .eq("id", rawReplyTo)
+        .maybeSingle();
+      if (target && target.conversation_id === gid) replyToId = target.id;
+    }
+
     const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
     const { data: message, error } = await supabase
       .from("messages")
@@ -1437,6 +1543,7 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
         to_user_id: null,
         text: text || null,
         read: false,
+        reply_to_id: replyToId,
         attachment_url: attachment?.url || null,
         attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null,
         attachment_name: attachment?.name || null,
@@ -1637,6 +1744,41 @@ app.delete("/api/groups/:id", authenticate, async (req, res) => {
 // Toggle a reaction on any message (DM or group). The viewer must be allowed to
 // see the message — i.e. they're either the sender/recipient (DM) or a member
 // (group).
+// Unsend a chat message (DM or group). Soft-deletes by setting is_unsent=true
+// and clearing text/attachment metadata so the row stays as a tombstone
+// (renders "This message was unsent" in the UI). Only the message author can
+// unsend their own message. Also drops any reactions on it.
+app.delete("/api/messages/:id", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const mid = req.params.id;
+  const { data: message } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("id", mid)
+    .maybeSingle();
+  if (!message) return res.status(404).json({ error: "Message not found" });
+  if (message.from_user_id !== me) {
+    return res.status(403).json({ error: "You can only unsend your own messages" });
+  }
+  await supabase.from("message_reactions").delete().eq("message_id", mid);
+  const { error } = await supabase
+    .from("messages")
+    .update({
+      is_unsent: true,
+      text: null,
+      attachment_url: null,
+      attachment_type: null,
+      attachment_name: null,
+      attachment_size: null
+    })
+    .eq("id", mid);
+  if (error) return res.status(400).json({ error: error.message });
+
+  const { data: refreshed } = await supabase.from("messages").select("*").eq("id", mid).maybeSingle();
+  const [decorated] = await decorateChatMessages([refreshed], me);
+  res.json({ message: decorated });
+});
+
 app.post("/api/messages/:id/react", authenticate, async (req, res) => {
   const me = req.user.id;
   const mid = req.params.id;
@@ -1646,6 +1788,7 @@ app.post("/api/messages/:id/react", authenticate, async (req, res) => {
 
   const { data: message } = await supabase.from("messages").select("*").eq("id", mid).maybeSingle();
   if (!message) return res.status(404).json({ error: "Message not found" });
+  if (message.is_unsent) return res.status(400).json({ error: "Cannot react to an unsent message" });
 
   // Authorize
   let allowed = false;

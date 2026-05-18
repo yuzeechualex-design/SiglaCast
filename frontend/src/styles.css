@@ -2382,6 +2382,223 @@ label.btn-secondary:hover {
   font-size: 11px;
 }
 
+/* ---------- Comment photo upload + delete ---------- */
+.photo-pick-btn {
+  position: relative;
+  padding: 6px 10px;
+  font-size: 15px;
+}
+
+.comment-photo-preview {
+  position: relative;
+  margin-top: 6px;
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.comment-photo-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.comment-photo-clear {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+  display: grid;
+  place-items: center;
+}
+
+.comment-image-link {
+  display: block;
+  margin-top: 6px;
+}
+
+.comment-image {
+  max-width: 220px;
+  max-height: 220px;
+  border-radius: 10px;
+  display: block;
+  border: 1px solid var(--line);
+}
+
+.comment-delete-link {
+  color: #e11d48;
+}
+
+.comment-delete-link:hover {
+  color: #be123c;
+}
+
+/* ---------- Chat reply banner ---------- */
+.reply-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(37, 99, 235, 0.08);
+  border-left: 3px solid var(--blue-700);
+  margin: 0 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  animation: fade-in-up 160ms ease;
+}
+
+.reply-banner-info {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.reply-banner-label {
+  font-weight: 700;
+  color: var(--blue-700);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.reply-banner-text {
+  color: var(--ink-600);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.reply-banner-close {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-600);
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+
+.reply-banner-close:hover {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--ink-900);
+}
+
+/* ---------- Chat quoted reply inside a bubble ---------- */
+.bubble-reply-quote {
+  margin: 0 0 6px 0;
+  padding: 6px 10px;
+  border-left: 3px solid currentColor;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
+  opacity: 0.9;
+  max-width: 100%;
+}
+
+.bubble-me .bubble-reply-quote {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.bubble-reply-quote-author {
+  font-weight: 700;
+  font-size: 11px;
+}
+
+.bubble-reply-quote-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---------- Unsent message tombstone ---------- */
+.bubble-unsent {
+  opacity: 0.7;
+  font-style: italic;
+}
+
+.bubble-unsent-text {
+  margin: 0;
+  color: inherit;
+  font-style: italic;
+}
+
+/* ---------- Chat quick actions (Reply / Unsend) ---------- */
+.bubble-quick-actions {
+  display: flex;
+  gap: 4px;
+  align-self: center;
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.bubble-with-actions:hover .bubble-quick-actions,
+.bubble-quick-actions:focus-within {
+  opacity: 1;
+}
+
+.bubble-quick-actions.side-left {
+  order: -1;
+}
+
+.bubble-quick-btn {
+  background: var(--card);
+  border: 1px solid var(--line);
+  cursor: pointer;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--ink-600);
+  box-shadow: 0 4px 10px rgba(13, 71, 161, 0.1);
+  transition: transform 0.15s ease, color 0.15s ease;
+}
+
+.bubble-quick-btn:hover {
+  color: var(--blue-700);
+  transform: scale(1.08);
+}
+
+/* Mobile: surface the quick actions next to the bubble at all times since
+   :hover is unreliable on touch devices. */
+@media (hover: none) {
+  .bubble-quick-actions {
+    opacity: 1;
+  }
+}
+
+/* ---------- Mobile long-press: lock context menu on chat bubbles ---------- */
+.bubble,
+.bubble-with-actions,
+.bubble-react-picker {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Re-allow selection inside the inline text so users can long-press to react
+   without selecting individual words. Keeping links tappable. */
+.bubble a,
+.bubble small {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
 /* ---------- Comment like button ---------- */
 .comment-like-btn {
   background: transparent;
