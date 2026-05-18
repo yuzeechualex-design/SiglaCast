@@ -49,6 +49,7 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState([]);
+  const [friendIncomingRequests, setFriendIncomingRequests] = useState([]);
   /** Idle / waiting / matched state for sidebar + anonymous thread (polled on /messages). */
   const [userPhoneState, setUserPhoneState] = useState({
     phase: "idle",
@@ -415,7 +416,8 @@ export default function App() {
       "reply_message",
       "dm",
       "announcement",
-      "event"
+      "event",
+      "friend_request"
     ]);
     for (const n of notifications) {
       if (seenNotificationIds.current.has(n.id)) continue;
@@ -454,9 +456,21 @@ export default function App() {
 
   async function loadMessages() {
     if (!token) return;
-    const list = await api("/messages/conversations");
+    const [list, reqs] = await Promise.all([api("/messages/conversations"), api("/friend-requests")]);
     if (!list.error) setConversations(Array.isArray(list) ? list : []);
+    if (!reqs.error && Array.isArray(reqs)) setFriendIncomingRequests(reqs);
+    else setFriendIncomingRequests([]);
   }
+
+  useEffect(() => {
+    if (!token) return undefined;
+    async function beat() {
+      await api("/presence/heartbeat", { method: "POST", body: {} });
+    }
+    beat();
+    const iv = setInterval(beat, 25000);
+    return () => clearInterval(iv);
+  }, [token]);
 
   // Poll DM unread counts for nav badge even when Messages tab is inactive.
   useEffect(() => {
@@ -716,18 +730,58 @@ export default function App() {
 
   async function addFriend(friendId) {
     const res = await api(`/friends/${friendId}`, { method: "POST" });
-    setNotice(res.error || "Friend added");
-    if (!res.error) {
-      await loadMessages();
-      await searchUsers();
-      if (
-        activeChat?.kind !== "group" &&
-        activeChat?.kind !== "userphone" &&
-        activeChat?.user?.id === friendId
-      ) {
-        const thread = await api(`/messages/with/${friendId}`);
-        if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
-      }
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.pending) {
+      setNotice(res.message || "Friend request sent");
+    } else {
+      setNotice(res.matched ? "You’re now friends" : "Friend added");
+    }
+    await loadMessages();
+    await searchUsers();
+    if (
+      activeChat?.kind !== "group" &&
+      activeChat?.kind !== "userphone" &&
+      activeChat?.user?.id === friendId
+    ) {
+      const thread = await api(`/messages/with/${friendId}`);
+      if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
+    }
+  }
+
+  async function acceptFriendRequest(requestId) {
+    const res = await api(`/friend-requests/${requestId}/accept`, {
+      method: "POST",
+      body: {}
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Friend added");
+    await loadMessages();
+    await searchUsers();
+    const fid = res.friend?.id;
+    if (fid && activeChat?.kind === "dm" && activeChat?.user?.id === fid) {
+      const thread = await api(`/messages/with/${fid}`);
+      if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
+    }
+  }
+
+  async function rejectFriendRequest(requestId) {
+    const res = await api(`/friend-requests/${requestId}`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Request declined");
+    await loadMessages();
+    await searchUsers();
+    if (activeChat?.kind === "dm" && activeChat?.incomingRequestId === requestId) {
+      const thread = await api(`/messages/with/${activeChat.user.id}`);
+      if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
     }
   }
 
@@ -1234,6 +1288,9 @@ export default function App() {
               currentUser={user}
               conversations={conversationsWithUserphone}
               activeChat={activeChat}
+              friendIncomingRequests={friendIncomingRequests}
+              onAcceptFriendRequest={acceptFriendRequest}
+              onRejectFriendRequest={rejectFriendRequest}
               searchResults={searchResults}
               searchQuery={searchQuery}
               setSearchQuery={setSearchQuery}

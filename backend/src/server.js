@@ -453,6 +453,32 @@ async function areFriends(a, b) {
   return Boolean(data?.length);
 }
 
+const PRESENCE_ONLINE_SEC = 120;
+
+async function upsertUserPresence(userId) {
+  await supabase.from("user_presence").upsert(
+    { user_id: userId, last_seen_at: new Date().toISOString() },
+    { onConflict: "user_id" }
+  );
+}
+
+async function presenceOnlineSetForUserIds(userIds) {
+  const uniq = [...new Set(userIds)].filter(Boolean);
+  if (!uniq.length) return new Set();
+  const cutoff = new Date(Date.now() - PRESENCE_ONLINE_SEC * 1000).toISOString();
+  const { data } = await supabase
+    .from("user_presence")
+    .select("user_id")
+    .in("user_id", uniq)
+    .gte("last_seen_at", cutoff);
+  return new Set((data || []).map((r) => r.user_id));
+}
+
+function withOnline(user, onlineSet) {
+  if (!user) return user;
+  return { ...user, isOnline: onlineSet.has(user.id) };
+}
+
 // ---------- Group chat helpers ----------
 
 async function ensureGroupMember(conversationId, userId) {
@@ -481,8 +507,9 @@ async function fetchGroupSummary(conversationId, viewerId) {
     ? await supabase.from("users").select("*").in("id", memberIds)
     : { data: [] };
   const userMap = new Map((users || []).map((u) => [u.id, u]));
+  const onlineSet = await presenceOnlineSetForUserIds(memberIds);
   const members = (memberRows || []).map((m) => ({
-    ...toPublicUser(userMap.get(m.user_id)),
+    ...withOnline(toPublicUser(userMap.get(m.user_id)), onlineSet),
     role: m.role
   }));
   return {
@@ -721,6 +748,15 @@ await broker.consume("post.created", (m) => console.log("[post.created]", m.id))
 await broker.consume("message.sent", (m) => console.log("[message.sent]", m.fromUserId, "->", m.toUserId));
 
 app.get("/api/health", (_, res) => res.json({ ok: true }));
+
+app.post("/api/presence/heartbeat", authenticate, async (req, res) => {
+  try {
+    await upsertUserPresence(req.user.id);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
 
 function authenticate(req, res, next) {
   const auth = req.headers.authorization || "";
@@ -1424,19 +1460,97 @@ app.post("/api/userphone/:sessionId/messages", authenticate, async (req, res) =>
 
 // Messaging + friends
 app.get("/api/users/search", authenticate, async (req, res) => {
+  const me = req.user.id;
   const q = String(req.query.q || "").trim();
   if (!q) return res.json([]);
   const { data } = await supabase
     .from("users")
     .select("id, name, email, role, course, avatar_url")
-    .neq("id", req.user.id)
+    .neq("id", me)
     .or(`name.ilike.%${q}%,email.ilike.%${q}%,course.ilike.%${q}%`)
     .limit(12);
+  const rows = data || [];
+  if (!rows.length) return res.json([]);
+
+  const ids = rows.map((u) => u.id);
+  const [{ data: friendsRows }, { data: toMeReqs }, { data: fromMeReqs }] = await Promise.all([
+    supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
+    supabase.from("friend_requests").select("id, from_user_id").eq("to_user_id", me).in("from_user_id", ids),
+    supabase.from("friend_requests").select("id, to_user_id").eq("from_user_id", me).in("to_user_id", ids)
+  ]);
+
+  const friendIdSet = new Set();
+  for (const f of friendsRows || []) {
+    friendIdSet.add(f.user_id === me ? f.friend_id : f.user_id);
+  }
+  const incomingByFrom = new Map((toMeReqs || []).map((r) => [r.from_user_id, r.id]));
+  const outgoingToSet = new Set((fromMeReqs || []).map((r) => r.to_user_id));
+  const onlineSet = await presenceOnlineSetForUserIds(ids);
+
   const out = [];
-  for (const u of data || []) {
-    out.push({ ...toPublicUser(u), isFriend: await areFriends(req.user.id, u.id) });
+  for (const u of rows) {
+    out.push({
+      ...withOnline(toPublicUser(u), onlineSet),
+      isFriend: friendIdSet.has(u.id),
+      incomingRequestId: incomingByFrom.get(u.id) || null,
+      outgoingRequestPending: outgoingToSet.has(u.id)
+    });
   }
   res.json(out);
+});
+
+app.get("/api/friend-requests", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const { data: rows } = await supabase
+    .from("friend_requests")
+    .select("*")
+    .eq("to_user_id", me)
+    .order("created_at", { ascending: false });
+  const fromIds = [...new Set((rows || []).map((r) => r.from_user_id))];
+  if (!fromIds.length) return res.json([]);
+  const { data: users } = await supabase.from("users").select("*").in("id", fromIds);
+  const userMap = new Map((users || []).map((u) => [u.id, u]));
+  const onlineSet = await presenceOnlineSetForUserIds(fromIds);
+  res.json(
+    (rows || []).map((r) => ({
+      id: r.id,
+      from: withOnline(toPublicUser(userMap.get(r.from_user_id)), onlineSet),
+      createdAt: r.created_at
+    }))
+  );
+});
+
+app.post("/api/friend-requests/:requestId/accept", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const { data: row } = await supabase.from("friend_requests").select("*").eq("id", req.params.requestId).maybeSingle();
+  if (!row || row.to_user_id !== me) return res.status(404).json({ error: "Request not found" });
+  if (await areFriends(me, row.from_user_id)) {
+    await supabase.from("friend_requests").delete().eq("id", row.id);
+    const buddy = await fetchUserById(row.from_user_id);
+    return res.json({ friend: toPublicUser(buddy) });
+  }
+  const fid = `fr${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+  const { error } = await supabase.from("friends").insert({
+    id: fid,
+    user_id: row.from_user_id,
+    friend_id: row.to_user_id
+  });
+  if (error) return res.status(400).json({ error: error.message });
+  await supabase.from("friend_requests").delete().eq("id", row.id);
+  const buddy = await fetchUserById(row.from_user_id);
+  res.json({ friend: toPublicUser(buddy) });
+});
+
+app.delete("/api/friend-requests/:requestId", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const { data: row } = await supabase.from("friend_requests").select("*").eq("id", req.params.requestId).maybeSingle();
+  if (!row) return res.status(404).json({ error: "Request not found" });
+  if (row.to_user_id !== me && row.from_user_id !== me) {
+    return res.status(403).json({ error: "Not allowed" });
+  }
+  const { error } = await supabase.from("friend_requests").delete().eq("id", row.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
 });
 
 app.get("/api/friends", authenticate, async (req, res) => {
@@ -1450,19 +1564,58 @@ app.get("/api/friends", authenticate, async (req, res) => {
   }
   if (!ids.size) return res.json([]);
   const { data: users } = await supabase.from("users").select("*").in("id", [...ids]);
-  res.json((users || []).map(toPublicUser));
+  const onlineSet = await presenceOnlineSetForUserIds([...ids]);
+  res.json((users || []).map((u) => withOnline(toPublicUser(u), onlineSet)));
 });
 
 app.post("/api/friends/:friendId", authenticate, async (req, res) => {
+  const me = req.user.id;
   const friendId = req.params.friendId;
-  if (friendId === req.user.id) return res.status(400).json({ error: "You cannot add yourself" });
+  if (friendId === me) return res.status(400).json({ error: "You cannot add yourself" });
   const friend = await fetchUserById(friendId);
   if (!friend) return res.status(404).json({ error: "User not found" });
-  if (await areFriends(req.user.id, friendId)) return res.status(400).json({ error: "Already friends" });
-  const id = `fr${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
-  const { error } = await supabase.from("friends").insert({ id, user_id: req.user.id, friend_id: friendId });
-  if (error) return res.status(400).json({ error: error.message });
-  res.status(201).json({ friend: toPublicUser(friend) });
+  if (await areFriends(me, friendId)) return res.status(400).json({ error: "Already friends" });
+
+  const { data: theyRequested } = await supabase
+    .from("friend_requests")
+    .select("id")
+    .eq("from_user_id", friendId)
+    .eq("to_user_id", me)
+    .maybeSingle();
+  if (theyRequested) {
+    const fid = `fr${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const { error } = await supabase.from("friends").insert({
+      id: fid,
+      user_id: friendId,
+      friend_id: me
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    await supabase.from("friend_requests").delete().eq("id", theyRequested.id);
+    return res.status(201).json({ friend: toPublicUser(friend), matched: true });
+  }
+
+  const { data: iRequested } = await supabase
+    .from("friend_requests")
+    .select("id")
+    .eq("from_user_id", me)
+    .eq("to_user_id", friendId)
+    .maybeSingle();
+  if (iRequested) return res.status(400).json({ error: "Friend request already sent" });
+
+  const rid = `freq${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const { error: insErr } = await supabase.from("friend_requests").insert({
+    id: rid,
+    from_user_id: me,
+    to_user_id: friendId
+  });
+  if (insErr) return res.status(400).json({ error: insErr.message });
+  await insertNotification({
+    userId: friendId,
+    text: `👋 ${req.user.name} sent you a friend request`,
+    kind: "friend_request",
+    badgeCount: 1
+  });
+  res.status(201).json({ pending: true, message: "Friend request sent" });
 });
 
 app.delete("/api/friends/:friendId", authenticate, async (req, res) => {
@@ -1499,6 +1652,7 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
   if (partners.size) {
     const { data: users } = await supabase.from("users").select("*").in("id", [...partners]);
     const userMap = new Map((users || []).map((u) => [u.id, u]));
+    const onlineSet = await presenceOnlineSetForUserIds([...partners]);
     for (const pid of partners) {
       const partner = userMap.get(pid);
       if (!partner) continue;
@@ -1510,7 +1664,7 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
       list.push({
         kind: "dm",
         id: `dm:${pid}`,
-        user: toPublicUser(partner),
+        user: withOnline(toPublicUser(partner), onlineSet),
         isFriend: (friendsRows || []).some(
           (f) => (f.user_id === me && f.friend_id === pid) || (f.user_id === pid && f.friend_id === me)
         ),
@@ -1585,9 +1739,27 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
     .order("created_at", { ascending: true });
   const unreadIds = (msgs || []).filter((m) => m.to_user_id === me && !m.read).map((m) => m.id);
   if (unreadIds.length) await supabase.from("messages").update({ read: true }).in("id", unreadIds);
+  const onlineSet = await presenceOnlineSetForUserIds([otherId]);
+  const [{ data: incomingReq }, { data: outgoingReq }] = await Promise.all([
+    supabase
+      .from("friend_requests")
+      .select("id")
+      .eq("to_user_id", me)
+      .eq("from_user_id", otherId)
+      .maybeSingle(),
+    supabase
+      .from("friend_requests")
+      .select("id")
+      .eq("from_user_id", me)
+      .eq("to_user_id", otherId)
+      .maybeSingle()
+  ]);
+  const isFriend = await areFriends(me, otherId);
   res.json({
-    user: toPublicUser(other),
-    isFriend: await areFriends(me, otherId),
+    user: withOnline(toPublicUser(other), onlineSet),
+    isFriend,
+    incomingRequestId: incomingReq?.id || null,
+    outgoingRequestPending: !!(outgoingReq && !isFriend),
     messages: await decorateChatMessages(msgs, me)
   });
 });

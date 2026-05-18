@@ -22,12 +22,15 @@ export default function MessagesPage({
   currentUser,
   conversations,
   activeChat,
+  friendIncomingRequests = [],
+  onAcceptFriendRequest,
+  onRejectFriendRequest,
   searchResults,
   searchQuery,
   setSearchQuery,
   onSearch,
   onAddFriend,
-  onOpenChat,            // (kind, id)  kind: "dm" | "group" | "userphone"
+  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
@@ -49,6 +52,8 @@ export default function MessagesPage({
   setUserPhoneAutoReconnect
 }) {
   const [draft, setDraft] = useState("");
+  const [plusMenuOpen, setPlusMenuOpen] = useState(false);
+  const [plusMenuPane, setPlusMenuPane] = useState("main");
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -59,6 +64,7 @@ export default function MessagesPage({
   const fileRef = useRef(null);
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
+  const plusMenuRef = useRef(null);
   const [reactionModal, setReactionModal] = useState({ open: false, messageId: null });
   const [isNarrowViewport, setIsNarrowViewport] = useState(
     typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false
@@ -119,12 +125,41 @@ export default function MessagesPage({
     return () => document.removeEventListener("mousedown", handleClick);
   }, [menuOpen]);
 
-  function renderAvatar(entity, size = "md") {
+  const incomingFriendCount = Array.isArray(friendIncomingRequests) ? friendIncomingRequests.length : 0;
+
+  useEffect(() => {
+    if (!plusMenuOpen) return undefined;
+    function handleDoc(e) {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(e.target)) {
+        setPlusMenuOpen(false);
+        setPlusMenuPane("main");
+      }
+    }
+    document.addEventListener("mousedown", handleDoc);
+    return () => document.removeEventListener("mousedown", handleDoc);
+  }, [plusMenuOpen]);
+
+  function renderAvatar(entity, size = "md", opts = {}) {
+    const showPresence = !!(opts.showPresence && entity && !entity?.isGroup);
     const cls = size === "sm" ? "msg-avatar sm" : "msg-avatar";
     const url = entity?.avatarUrl || entity?.photoUrl;
-    if (url) return <img className={cls} src={mediaUrl(url)} alt="" />;
-    const ch = entity?.name?.charAt(0) || "?";
-    return <div className={`${cls} placeholder`}>{ch}</div>;
+    const inner = url ? (
+      <img className={cls} src={mediaUrl(url)} alt="" />
+    ) : (
+      <div className={`${cls} placeholder`}>{entity?.name?.charAt(0) || "?"}</div>
+    );
+    if (!showPresence) return inner;
+    const online = entity?.isOnline === true;
+    return (
+      <span className="avatar-with-presence">
+        {inner}
+        <span
+          className={`presence-dot ${online ? "presence-online" : "presence-offline"}`}
+          title={online ? "Online" : "Offline"}
+          aria-hidden
+        />
+      </span>
+    );
   }
 
   async function handleSend(e) {
@@ -177,14 +212,99 @@ export default function MessagesPage({
         <aside className="messages-sidebar">
           <div className="sidebar-top-row">
             <p className="sidebar-title">Chats</p>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm chat-plus-btn"
-              onClick={() => setShowCreateGroup(true)}
-              title="Create a groupchat"
-            >
-              ＋
-            </button>
+            <div className="sidebar-plus-wrap" ref={plusMenuRef}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm chat-plus-btn"
+                onClick={() => {
+                  setPlusMenuOpen((o) => !o);
+                  setPlusMenuPane("main");
+                }}
+                aria-expanded={plusMenuOpen}
+                aria-haspopup="menu"
+                title="New chat menu"
+              >
+                ＋
+                {incomingFriendCount > 0 ? (
+                  <span className="nav-ping chat-plus-ping" aria-label={`${incomingFriendCount} friend requests`}>
+                    {incomingFriendCount > 99 ? "99+" : incomingFriendCount}
+                  </span>
+                ) : null}
+              </button>
+              {plusMenuOpen ? (
+                <div className="chat-plus-dropdown" role="menu">
+                  {plusMenuPane === "main" ? (
+                    <>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="chat-plus-item"
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          setShowCreateGroup(true);
+                        }}
+                      >
+                        Add a group chat
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="chat-plus-item chat-plus-item-row"
+                        onClick={() => setPlusMenuPane("requests")}
+                      >
+                        <span className="chat-plus-item-label">Friend requests</span>
+                        {incomingFriendCount > 0 ? (
+                          <span className="nav-ping chat-dropdown-ping">{incomingFriendCount}</span>
+                        ) : null}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="chat-plus-back"
+                        onClick={() => setPlusMenuPane("main")}
+                      >
+                        ← Back
+                      </button>
+                      {incomingFriendCount === 0 ? (
+                        <p className="muted small chat-plus-empty">No pending requests.</p>
+                      ) : (
+                        <ul className="friend-requests-menu-list">
+                          {friendIncomingRequests.map((r) => (
+                            <li key={r.id} className="friend-requests-menu-row">
+                              {renderAvatar(r.from, "sm", { showPresence: true })}
+                              <div className="friend-requests-menu-meta">
+                                <strong>{r.from?.name}</strong>
+                                <small>{r.from?.email}</small>
+                              </div>
+                              <div className="friend-requests-menu-actions">
+                                <button
+                                  type="button"
+                                  className="btn btn-primary btn-sm"
+                                  onClick={() => onAcceptFriendRequest?.(r.id)}
+                                  title="Accept"
+                                >
+                                  ✓
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-ghost btn-sm"
+                                  onClick={() => onRejectFriendRequest?.(r.id)}
+                                  title="Decline"
+                                >
+                                  ✕
+                                </button>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
 
           <div className="friend-search">
@@ -204,18 +324,37 @@ export default function MessagesPage({
               <p className="search-results-title">Search results</p>
               {searchResults.map((u) => (
                 <div key={u.id} className="search-result-row">
-                  {renderAvatar(u, "sm")}
+                  {renderAvatar(u, "sm", { showPresence: true })}
                   <div className="search-result-info">
                     <strong>{u.name}</strong>
                     <small>{u.email}</small>
                   </div>
                   <div className="search-result-actions">
-                    {!u.isFriend ? (
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddFriend(u.id)}>
-                        ➕ Add
-                      </button>
-                    ) : (
+                    {u.isFriend ? (
                       <span className="pill pill-you">Friends</span>
+                    ) : u.incomingRequestId ? (
+                      <>
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => onAcceptFriendRequest?.(u.incomingRequestId)}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => onRejectFriendRequest?.(u.incomingRequestId)}
+                        >
+                          Decline
+                        </button>
+                      </>
+                    ) : u.outgoingRequestPending ? (
+                      <span className="pill pill-muted small">Requested</span>
+                    ) : (
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddFriend(u.id)}>
+                        Request
+                      </button>
                     )}
                     <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenChat("dm", u.id)}>
                       💬
@@ -228,7 +367,7 @@ export default function MessagesPage({
 
           <div className="conv-list">
             {(conversations || []).length === 0 ? (
-              <p className="empty-hint">No conversations yet. Search someone or try Userphone.</p>
+              <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
             ) : (
               conversations.map((c) => {
                 const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
@@ -252,6 +391,8 @@ export default function MessagesPage({
                       <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
                         📞
                       </div>
+                    ) : c.kind === "dm" ? (
+                      renderAvatar(target, "sm", { showPresence: true })
                     ) : (
                       renderAvatar(target, "sm")
                     )}
@@ -280,7 +421,7 @@ export default function MessagesPage({
         <div className="messages-thread">
           {!activeChat ? (
             <div className="thread-empty">
-              <p>Select a chat from the left or tap ＋ to start a group chat.</p>
+              <p>Select a chat from the left or use the ＋ menu to start a group or review friend requests.</p>
             </div>
           ) : (
             <>
@@ -300,16 +441,16 @@ export default function MessagesPage({
                     📞
                   </div>
                 ) : (
-                  renderAvatar(isGroup ? activeChat.group : activeChat.user)
+                  renderAvatar(isGroup ? activeChat.group : activeChat.user, "md", {
+                    showPresence: !isGroup
+                  })
                 )}
                 <div className="thread-header-info">
                   <strong>{isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}</strong>
                   {isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
-                    <small>
-                      {activeChat.group?.members?.length || 0} members
-                    </small>
+                    <small>{activeChat.group?.members?.length || 0} members</small>
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}
@@ -317,13 +458,34 @@ export default function MessagesPage({
                     <span className="pill pill-you">Friends</span>
                   ) : null}
                   {!isGroup && !isUserphone ? (
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => onAddFriend(activeChat.user.id)}
-                    >
-                      ➕ Add friend
-                    </button>
+                    activeChat.incomingRequestId ? (
+                      <span className="thread-header-inline-actions">
+                        <button
+                          type="button"
+                          className="btn btn-primary btn-sm"
+                          onClick={() => onAcceptFriendRequest?.(activeChat.incomingRequestId)}
+                        >
+                          Accept
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm"
+                          onClick={() => onRejectFriendRequest?.(activeChat.incomingRequestId)}
+                        >
+                          Decline
+                        </button>
+                      </span>
+                    ) : activeChat.outgoingRequestPending ? (
+                      <span className="pill pill-muted small">Request sent</span>
+                    ) : !activeChat.isFriend ? (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => onAddFriend(activeChat.user.id)}
+                      >
+                        Request friend
+                      </button>
+                    ) : null
                   ) : null}
                 </div>
 
@@ -1196,11 +1358,18 @@ function GroupSettingsModal({
               const isMemberAdmin = m.role === "admin";
               return (
                 <li key={m.id} className="member-row">
-                  {m.avatarUrl ? (
-                    <img className="msg-avatar sm" src={mediaUrl(m.avatarUrl)} alt="" />
-                  ) : (
-                    <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
-                  )}
+                  <span className="avatar-with-presence">
+                    {m.avatarUrl ? (
+                      <img className="msg-avatar sm" src={mediaUrl(m.avatarUrl)} alt="" />
+                    ) : (
+                      <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
+                    )}
+                    <span
+                      className={`presence-dot ${m.isOnline === true ? "presence-online" : "presence-offline"}`}
+                      title={m.isOnline === true ? "Online" : "Offline"}
+                      aria-hidden
+                    />
+                  </span>
                   <div className="member-info">
                     <strong>
                       {m.name} {isMe ? <span className="muted small">(you)</span> : null}
