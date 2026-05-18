@@ -231,7 +231,13 @@ export default function App() {
     return () => clearInterval(id);
   }, [userPhoneState.phase]);
 
-  const conversationsWithUserphone = useMemo(() => {
+  const [siglacastAiPreview, setSiglacastAiPreview] = useState({
+    previewLine: "Ask about campus, classes, or SiglaCast.",
+    previewAt: new Date(0).toISOString(),
+    configured: false
+  });
+
+  const conversationsWithExtras = useMemo(() => {
     const lp =
       userPhoneState.phase === "matched" &&
       Array.isArray(userPhoneState.messages) &&
@@ -268,6 +274,25 @@ export default function App() {
     }
     return [
       {
+        kind: "siglacast-ai",
+        id: "siglacast-ai",
+        user: {
+          id: "siglacast-ai",
+          name: "SiglaCast AI",
+          email: "",
+          course: "",
+          avatarUrl: null
+        },
+        isFriend: false,
+        lastMessage: {
+          text: siglacastAiPreview.previewLine,
+          createdAt: siglacastAiPreview.previewAt,
+          fromMe: false
+        },
+        unreadCount: 0,
+        aiConfigured: siglacastAiPreview.configured
+      },
+      {
         kind: "userphone",
         id: "userphone",
         user: { id: "userphone", name: "Userphone", email: "", course: "", avatarUrl: null },
@@ -277,7 +302,17 @@ export default function App() {
       },
       ...(conversations || [])
     ];
-  }, [conversations, userPhoneState.phase, userPhoneState.messages, userPhoneState.waitExpiresAt, userphoneTick, userPhoneAutoReconnect]);
+  }, [
+    conversations,
+    userPhoneState.phase,
+    userPhoneState.messages,
+    userPhoneState.waitExpiresAt,
+    userphoneTick,
+    userPhoneAutoReconnect,
+    siglacastAiPreview.previewLine,
+    siglacastAiPreview.previewAt,
+    siglacastAiPreview.configured
+  ]);
 
   async function loadCore() {
     if (!token) return;
@@ -456,10 +491,21 @@ export default function App() {
 
   async function loadMessages() {
     if (!token) return;
-    const [list, reqs] = await Promise.all([api("/messages/conversations"), api("/friend-requests")]);
+    const [list, reqs, ai] = await Promise.all([
+      api("/messages/conversations"),
+      api("/friend-requests"),
+      api("/siglacast-ai/thread")
+    ]);
     if (!list.error) setConversations(Array.isArray(list) ? list : []);
     if (!reqs.error && Array.isArray(reqs)) setFriendIncomingRequests(reqs);
     else setFriendIncomingRequests([]);
+    if (!ai.error && typeof ai.previewLine === "string") {
+      setSiglacastAiPreview({
+        previewLine: ai.previewLine,
+        previewAt: ai.previewAt || new Date(0).toISOString(),
+        configured: !!ai.configured
+      });
+    }
   }
 
   useEffect(() => {
@@ -538,10 +584,10 @@ export default function App() {
     });
   }, [userPhoneState]);
 
-  // Poll the active thread (DM or group) every 3 seconds while the page is open.
+  // Poll the active thread every 3 seconds while the page is open (not Userphone / AI).
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;
-    if (activeChat.kind === "userphone") return undefined;
+    if (activeChat.kind === "userphone" || activeChat.kind === "siglacast-ai") return undefined;
     const interval = setInterval(async () => {
       const refreshed =
         activeChat.kind === "group"
@@ -744,6 +790,7 @@ export default function App() {
     if (
       activeChat?.kind !== "group" &&
       activeChat?.kind !== "userphone" &&
+      activeChat?.kind !== "siglacast-ai" &&
       activeChat?.user?.id === friendId
     ) {
       const thread = await api(`/messages/with/${friendId}`);
@@ -800,6 +847,19 @@ export default function App() {
         messages: next.messages || [],
         waitExpiresAt: next.waitExpiresAt ?? null,
         waitStartedAt: next.waitStartedAt ?? null
+      });
+      setSearchResults([]);
+      await loadMessages();
+      return;
+    } else if (kind === "siglacast-ai") {
+      const thread = await api("/siglacast-ai/thread");
+      if (thread.error) return setNotice(thread.error);
+      setActiveChat({
+        kind: "siglacast-ai",
+        configured: !!thread.configured,
+        messages: thread.messages || [],
+        previewLine: thread.previewLine,
+        previewAt: thread.previewAt
       });
       setSearchResults([]);
       await loadMessages();
@@ -883,6 +943,31 @@ export default function App() {
   // message via replyToId.
   async function sendChatMessage(text, file, replyToId = null) {
     if (!activeChat) return;
+    if (activeChat.kind === "siglacast-ai") {
+      if (!text?.trim()) return;
+      if (file || replyToId) {
+        setNotice("Only text messages are supported in SiglaCast AI.");
+        return;
+      }
+      if (!activeChat.configured) {
+        setNotice("SiglaCast AI is not configured. Add OPENAI_API_KEY on the server.");
+        return;
+      }
+      const res = await api("/siglacast-ai/messages", { method: "POST", body: { text: text.trim() } });
+      if (res.error) {
+        setNotice(res.error);
+        return;
+      }
+      setActiveChat({
+        kind: "siglacast-ai",
+        configured: !!res.configured,
+        messages: res.messages || [],
+        previewLine: res.previewLine,
+        previewAt: res.previewAt
+      });
+      await loadMessages();
+      return;
+    }
     if (activeChat.kind === "userphone") {
       if (!activeChat.sessionId) {
         setNotice("Wait until you’re matched with someone.");
@@ -928,7 +1013,7 @@ export default function App() {
   // Soft-unsend one of my own messages. The thread is refreshed so the
   // tombstone ("This message was unsent") appears in place of the original.
   async function unsendMessage(message) {
-    if (!message?.id || activeChat?.kind === "userphone") return;
+    if (!message?.id || activeChat?.kind === "userphone" || activeChat?.kind === "siglacast-ai") return;
     const res = await api(`/messages/${message.id}`, { method: "DELETE" });
     if (res.error) {
       setNotice(res.error);
@@ -1042,7 +1127,7 @@ export default function App() {
   }
 
   async function reactToMessage(messageId, reaction) {
-    if (activeChat?.kind === "userphone") return;
+    if (activeChat?.kind === "userphone" || activeChat?.kind === "siglacast-ai") return;
     const res = await api(`/messages/${messageId}/react`, {
       method: "POST",
       body: { reaction: reaction === undefined ? "like" : reaction }
@@ -1064,7 +1149,7 @@ export default function App() {
 
   async function loadActiveAttachments() {
     if (!activeChat) return [];
-    if (activeChat.kind === "userphone") return [];
+    if (activeChat.kind === "userphone" || activeChat.kind === "siglacast-ai") return [];
     const url =
       activeChat.kind === "group"
         ? `/groups/${activeChat.group.id}/attachments`
@@ -1326,7 +1411,7 @@ export default function App() {
           element={
             <MessagesPage
               currentUser={user}
-              conversations={conversationsWithUserphone}
+              conversations={conversationsWithExtras}
               activeChat={activeChat}
               friendIncomingRequests={friendIncomingRequests}
               onAcceptFriendRequest={acceptFriendRequest}

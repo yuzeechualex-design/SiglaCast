@@ -36,7 +36,7 @@ export default function MessagesPage({
   setSearchQuery,
   onSearch,
   onAddFriend,
-  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
+  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone" | "siglacast-ai"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
@@ -108,6 +108,7 @@ export default function MessagesPage({
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
+  const isSiglacastAi = activeChat?.kind === "siglacast-ai";
   const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
   const gpu = isGroup ? activeChat?.groupUserphone : null;
   const groupUserphoneWaiting = gpu?.phase === "waiting";
@@ -455,26 +456,34 @@ export default function MessagesPage({
               <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
             ) : (
               conversations.map((c) => {
-                const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
+                const isDmOrPhoneAi =
+                  c.kind === "dm" || c.kind === "userphone" || c.kind === "siglacast-ai";
                 const target = c.kind === "group" ? c.group : c.user;
                 const isActive =
                   (isGroup && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
                   (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
-                  (c.kind === "userphone" && activeChat?.kind === "userphone");
+                  (c.kind === "userphone" && activeChat?.kind === "userphone") ||
+                  (c.kind === "siglacast-ai" && activeChat?.kind === "siglacast-ai");
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
+                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${c.kind === "siglacast-ai" ? "conv-siglacast-ai" : ""} ${isActive ? "active" : ""}`}
                     onClick={() =>
                       c.kind === "userphone"
                         ? onOpenChat("userphone", "userphone")
-                        : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
+                        : c.kind === "siglacast-ai"
+                          ? onOpenChat("siglacast-ai", "siglacast-ai")
+                          : onOpenChat(c.kind, isDmOrPhoneAi && c.kind === "dm" ? c.user.id : c.group.id)
                     }
                   >
                     {c.kind === "userphone" ? (
                       <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
                         📞
+                      </div>
+                    ) : c.kind === "siglacast-ai" ? (
+                      <div className="msg-avatar sm placeholder conv-siglacast-ai-avatar" aria-hidden>
+                        ✨
                       </div>
                     ) : c.kind === "dm" ? (
                       renderAvatar(target, "sm", { showPresence: true })
@@ -484,9 +493,12 @@ export default function MessagesPage({
                     <div className="conv-item-body">
                       <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
                         {target?.name || "Unknown"}{" "}
-                        {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
+                        {!isDmOrPhoneAi ? <span className="pill pill-muted small">group</span> : null}
                         {c.kind === "userphone" ? (
                           <span className="pill pill-muted small">anonymous</span>
+                        ) : null}
+                        {c.kind === "siglacast-ai" ? (
+                          <span className="pill pill-muted small">assistant</span>
                         ) : null}
                         {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
                       </strong>
@@ -531,20 +543,36 @@ export default function MessagesPage({
                   <div className="msg-avatar placeholder thread-userphone-icon" aria-hidden>
                     📞
                   </div>
+                ) : isSiglacastAi ? (
+                  <div className="msg-avatar placeholder thread-siglacast-ai-icon" aria-hidden>
+                    ✨
+                  </div>
                 ) : (
                   renderAvatar(isGroup ? activeChat.group : activeChat.user, "md", {
                     showPresence: !isGroup
                   })
                 )}
                 <div className="thread-header-info">
-                  <strong className={!isGroup && !isUserphone ? "user-line-name" : undefined}>
-                    {isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}
-                    {!isGroup && !isUserphone ? (
+                  <strong className={!isGroup && !isUserphone && !isSiglacastAi ? "user-line-name" : undefined}>
+                    {isUserphone
+                      ? "Userphone"
+                      : isSiglacastAi
+                        ? "SiglaCast AI"
+                        : isGroup
+                          ? activeChat.group?.name
+                          : activeChat.user?.name}
+                    {!isGroup && !isUserphone && !isSiglacastAi ? (
                       <StatusEmojiChip emoji={activeChat.user?.statusEmoji} />
                     ) : null}
                   </strong>
                   {isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
+                  ) : isSiglacastAi ? (
+                    <small>
+                      {activeChat.configured
+                        ? "Powered by OpenAI — answers are AI-generated, not official campus policy."
+                        : "Not available — the server needs OPENAI_API_KEY to enable chat."}
+                    </small>
                   ) : isGroup ? (
                     <small>{activeChat.group?.members?.length || 0} members</small>
                   ) : activeChat.user?.statusNote ? (
@@ -555,10 +583,10 @@ export default function MessagesPage({
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}
-                  {!isGroup && !isUserphone && activeChat.isFriend ? (
+                  {!isGroup && !isUserphone && !isSiglacastAi && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>
                   ) : null}
-                  {!isGroup && !isUserphone ? (
+                  {!isGroup && !isUserphone && !isSiglacastAi ? (
                     activeChat.incomingRequestId ? (
                       <span className="thread-header-inline-actions">
                         <button
@@ -598,7 +626,7 @@ export default function MessagesPage({
                 >
                   ↻
                 </button>
-                {!isUserphone ? (
+                {!isUserphone && !isSiglacastAi ? (
                 <div className="thread-menu-wrap" ref={menuRef}>
                   <button
                     type="button"
@@ -795,7 +823,7 @@ export default function MessagesPage({
                       key={m.id}
                       message={m}
                       showAuthor={isGroup && !m.fromMe}
-                      minimal={isUserphone}
+                      minimal={isUserphone || isSiglacastAi}
                       onReact={onReactToMessage}
                       onReply={handleReply}
                       onUnsend={handleUnsend}
@@ -807,7 +835,7 @@ export default function MessagesPage({
               </>
               )}
 
-              {replyTarget && !isUserphone ? (
+              {replyTarget && !isUserphone && !isSiglacastAi ? (
                 <div className="reply-banner">
                   <div className="reply-banner-info">
                     <span className="reply-banner-label">Replying to {replyTarget.author}</span>
@@ -826,7 +854,7 @@ export default function MessagesPage({
 
               {(!isUserphone || userphonePhase === "matched") ? (
               <form className="thread-compose" onSubmit={handleSend}>
-                {!isUserphone ? (
+                {!isUserphone && !isSiglacastAi ? (
                 <input
                   ref={fileRef}
                   type="file"
@@ -834,7 +862,7 @@ export default function MessagesPage({
                   onChange={pickAttachment}
                 />
                 ) : null}
-                {!isUserphone ? (
+                {!isUserphone && !isSiglacastAi ? (
                 <div className="compose-plus-wrap" ref={composePlusRef}>
                   <button
                     type="button"
@@ -885,7 +913,7 @@ export default function MessagesPage({
                   ) : null}
                 </div>
                 ) : null}
-                {!isUserphone ? (
+                {!isUserphone && !isSiglacastAi ? (
                 <button
                   type="button"
                   className="btn btn-icon"
@@ -895,7 +923,7 @@ export default function MessagesPage({
                   📎
                 </button>
                 ) : null}
-                {!isUserphone && draftFile ? (
+                {!isUserphone && !isSiglacastAi && draftFile ? (
                   <div className="draft-file-chip">
                     <span>📁 {draftFile.name}</span>
                     <button
@@ -915,7 +943,11 @@ export default function MessagesPage({
                   value={draft}
                   onChange={setDraft}
                   placeholder={
-                    isUserphone
+                    isSiglacastAi
+                      ? activeChat.configured
+                        ? "Message SiglaCast AI…"
+                        : "AI chat disabled until the server is configured."
+                      : isUserphone
                       ? "Message anonymously…"
                       : isGroup
                         ? `Message ${activeChat.group?.name}… use @ to mention`
@@ -925,7 +957,7 @@ export default function MessagesPage({
                 <button
                   type="submit"
                   className="btn btn-primary btn-send-msg"
-                  disabled={sending}
+                  disabled={sending || (isSiglacastAi && !activeChat.configured)}
                   aria-label="Send message"
                 >
                   {sending ? "…" : "➤"}
