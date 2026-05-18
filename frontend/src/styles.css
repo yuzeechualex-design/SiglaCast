@@ -1037,6 +1037,11 @@ label.btn-secondary:hover {
   width: 100%;
 }
 
+.friend-search .people-search-hint {
+  margin: 0;
+  line-height: 1.35;
+}
+
 .search-results {
   border-top: 1px solid var(--line);
   padding-top: 10px;

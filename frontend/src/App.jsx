@@ -74,6 +74,7 @@ export default function App() {
   }, [userPhoneAutoReconnect]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
+  const [peopleSearchHint, setPeopleSearchHint] = useState("");
   const [adminUsers, setAdminUsers] = useState([]);
   /** Bumps nav badge calculations after localStorage changes (announcements seen). */
   const [navBadgeTick, setNavBadgeTick] = useState(0);
@@ -720,12 +721,26 @@ export default function App() {
 
   async function searchUsers() {
     const q = searchQuery.trim();
+    setPeopleSearchHint("");
     if (!q) {
       setSearchResults([]);
       return;
     }
     const res = await api(`/users/search?q=${encodeURIComponent(q)}`);
-    setSearchResults(res.error ? [] : res);
+    if (res.error) {
+      setSearchResults([]);
+      setNotice(res.error);
+      return;
+    }
+    if (!Array.isArray(res)) {
+      setSearchResults([]);
+      setNotice("Could not load search results.");
+      return;
+    }
+    setSearchResults(res);
+    if (!res.length) {
+      setPeopleSearchHint(`No users matched "${q}". Try another name or email.`);
+    }
   }
 
   async function addFriend(friendId) {
@@ -786,6 +801,7 @@ export default function App() {
   }
 
   async function openChat(kind, id) {
+    setPeopleSearchHint("");
     if (kind === "group") {
       const thread = await api(`/groups/${id}`);
       if (thread.error) return setNotice(thread.error);
@@ -1333,7 +1349,9 @@ export default function App() {
               onRejectFriendRequest={rejectFriendRequest}
               searchResults={searchResults}
               searchQuery={searchQuery}
+              peopleSearchHint={peopleSearchHint}
               setSearchQuery={setSearchQuery}
+              onSearchQueryEdited={() => setPeopleSearchHint("")}
               onSearch={searchUsers}
               onAddFriend={addFriend}
               onOpenChat={openChat}

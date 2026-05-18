@@ -1624,13 +1624,24 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const me = req.user.id;
   const q = String(req.query.q || "").trim();
   if (!q) return res.json([]);
-  const { data } = await supabase
-    .from("users")
-    .select("id, name, email, role, course, avatar_url, status_emoji, status_note")
-    .neq("id", me)
-    .or(`name.ilike.%${q}%,email.ilike.%${q}%,course.ilike.%${q}%`)
-    .limit(12);
-  const rows = data || [];
+  /** Strip LIKE wildcards from `q` so we match a literal substring. */
+  const cleaned = q.replace(/[%_\\]/g, "").trim();
+  if (!cleaned) return res.json([]);
+  const pattern = `%${cleaned}%`;
+  const selectCols = "id, name, email, role, course, avatar_url, status_emoji, status_note";
+  const [byName, byEmail, byCourse] = await Promise.all([
+    supabase.from("users").select(selectCols).neq("id", me).ilike("name", pattern).limit(12),
+    supabase.from("users").select(selectCols).neq("id", me).ilike("email", pattern).limit(12),
+    supabase.from("users").select(selectCols).neq("id", me).ilike("course", pattern).limit(12)
+  ]);
+  const firstErr = [byName, byEmail, byCourse].find((r) => r.error)?.error;
+  if (firstErr) return res.status(400).json({ error: firstErr.message });
+
+  const byId = new Map();
+  for (const row of [...(byName.data || []), ...(byEmail.data || []), ...(byCourse.data || [])]) {
+    byId.set(row.id, row);
+  }
+  const rows = [...byId.values()].slice(0, 12);
   if (!rows.length) return res.json([]);
 
   const ids = rows.map((u) => u.id);

@@ -33,7 +33,9 @@ export default function MessagesPage({
   onRejectFriendRequest,
   searchResults,
   searchQuery,
+  peopleSearchHint = "",
   setSearchQuery,
+  onSearchQueryEdited,
   onSearch,
   onAddFriend,
   onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
@@ -385,19 +387,31 @@ export default function MessagesPage({
             </div>
           </div>
 
-          <div className="friend-search">
+          <form
+            className="friend-search"
+            onSubmit={(e) => {
+              e.preventDefault();
+              onSearch?.();
+            }}
+          >
             <input
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && onSearch()}
+              onChange={(e) => {
+                onSearchQueryEdited?.();
+                setSearchQuery(e.target.value);
+              }}
               placeholder="Search people…"
+              aria-label="Search people by name or email"
             />
-            <button type="button" className="btn btn-secondary btn-sm" onClick={onSearch}>
+            <button type="submit" className="btn btn-secondary btn-sm">
               🔍
             </button>
-          </div>
+            {peopleSearchHint ? (
+              <p className="people-search-hint muted small">{peopleSearchHint}</p>
+            ) : null}
+          </form>
 
-          {searchResults.length > 0 && (
+          {(searchResults || []).length > 0 ? (
             <div className="search-results">
               <p className="search-results-title">Search results</p>
               {searchResults.map((u) => (
@@ -448,7 +462,7 @@ export default function MessagesPage({
                 </div>
               ))}
             </div>
-          )}
+          ) : null}
 
           <div className="conv-list">
             {(conversations || []).length === 0 ? (
