@@ -245,10 +245,18 @@ export default function App() {
     if (!res.error) await loadCore();
   }
 
-  async function reactToPost(postId) {
-    const res = await api(`/community/posts/${postId}/react`, { method: "POST" });
-    setNotice(res.error || "");
-    if (!res.error) await loadCore();
+  async function reactToPost(postId, reaction) {
+    // reaction can be one of: "like", "love", "haha", "wow", "sad", "angry", null (clear)
+    const res = await api(`/community/posts/${postId}/react`, {
+      method: "POST",
+      body: { reaction: reaction === undefined ? "like" : reaction }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    // Backend returns the updated post — patch it into local state without a full reload.
+    setPosts((prev) => prev.map((p) => (p.id === res.id ? res : p)));
   }
 
   async function commentOnPost(postId, text) {

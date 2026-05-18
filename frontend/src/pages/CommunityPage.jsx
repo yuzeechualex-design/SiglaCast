@@ -1,5 +1,21 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
+
+const REACTIONS = [
+  { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
+  { type: "love", emoji: "❤️", label: "Love", color: "#e11d48" },
+  { type: "haha", emoji: "😂", label: "Haha", color: "#f59e0b" },
+  { type: "wow",  emoji: "😮", label: "Wow",  color: "#f59e0b" },
+  { type: "sad",  emoji: "😢", label: "Sad",  color: "#0ea5e9" },
+  { type: "angry", emoji: "😡", label: "Angry", color: "#dc2626" }
+];
+
+const REACTION_MAP = REACTIONS.reduce((acc, r) => {
+  acc[r.type] = r;
+  return acc;
+}, {});
+
+const TRUNCATE_LIMIT = 280;
 
 export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost }) {
   const isAdmin = currentUser?.role === "admin";
@@ -53,54 +69,176 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
         </div>
       </div>
 
-      {posts.map((post) => (
-        <article key={post.id} className="tile post-card">
-          <div className="post-header">
-            {post.authorAvatar ? (
-              <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-            ) : (
-              <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
-            )}
-            <div>
-              <strong className="author">{post.author}</strong>
-              <div className="post-meta">Campus post</div>
+      {posts.map((post) => {
+        const canDelete = isAdmin || post.authorId === currentUser?.id;
+        return (
+          <article key={post.id} className="tile post-card">
+            <div className="post-header">
+              {post.authorAvatar ? (
+                <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+              ) : (
+                <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+              )}
+              <div className="post-header-meta">
+                <strong className="author">{post.author}</strong>
+                <div className="post-meta">Campus post</div>
+              </div>
+              {canDelete && onDeletePost ? (
+                <button
+                  type="button"
+                  className="btn btn-danger btn-sm post-delete-btn"
+                  onClick={() => onDeletePost(post)}
+                  title="Delete post"
+                >
+                  🗑️
+                </button>
+              ) : null}
             </div>
-          </div>
-          {post.content ? <p className="post-body">{post.content}</p> : null}
-          {post.imageUrl ? (
-            <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" />
-          ) : null}
-          <div className="post-actions">
-            <button
-              type="button"
-              className={`btn btn-ghost btn-sm ${post.reactedByMe ? "reacted" : ""}`}
-              onClick={() => onReact(post.id)}
-            >
-              {post.reactedByMe ? "❤️" : "🤍"} {post.reactionCount || 0}
-            </button>
-            {(isAdmin || post.authorId === currentUser?.id) && onDeletePost ? (
-              <button
-                type="button"
-                className="btn btn-danger btn-sm"
-                onClick={() => onDeletePost(post)}
-              >
-                🗑️ Delete
-              </button>
+
+            {post.content ? <PostText text={post.content} /> : null}
+            {post.imageUrl ? (
+              <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" />
             ) : null}
-          </div>
-          <div className="comments-block">
-            <ul className="comment-list">
-              {(post.comments || []).map((c) => (
-                <li key={c.id} className="comment-item">
-                  <strong>{c.author}</strong> {c.text}
-                </li>
-              ))}
-            </ul>
-            <CommentBox postId={post.id} onComment={onComment} currentUser={currentUser} />
-          </div>
-        </article>
-      ))}
+
+            <ReactionsRow post={post} onReact={onReact} />
+
+            <div className="comments-block">
+              <ul className="comment-list">
+                {(post.comments || []).map((c) => (
+                  <li key={c.id} className="comment-item">
+                    <strong>{c.author}</strong> {c.text}
+                  </li>
+                ))}
+              </ul>
+              <CommentBox postId={post.id} onComment={onComment} currentUser={currentUser} />
+            </div>
+          </article>
+        );
+      })}
     </section>
+  );
+}
+
+// Expandable post body. Posts longer than TRUNCATE_LIMIT chars are clamped
+// with a "See more…" toggle. Toggling re-expands without re-fetching.
+function PostText({ text }) {
+  const [expanded, setExpanded] = useState(false);
+  const tooLong = text.length > TRUNCATE_LIMIT;
+  const displayed = expanded || !tooLong ? text : text.slice(0, TRUNCATE_LIMIT).trimEnd() + "…";
+  return (
+    <p className={`post-body ${expanded || !tooLong ? "" : "post-body-clamped"}`}>
+      {displayed}
+      {tooLong ? (
+        <>
+          {" "}
+          <button
+            type="button"
+            className="see-more-btn"
+            onClick={() => setExpanded((v) => !v)}
+          >
+            {expanded ? "See less" : "See more…"}
+          </button>
+        </>
+      ) : null}
+    </p>
+  );
+}
+
+// Facebook-style reactions bar. Hovering the trigger reveals a floating picker
+// with six animated emoji buttons. Click picks; clicking the active emoji
+// removes it; clicking a different emoji switches the reaction.
+function ReactionsRow({ post, onReact }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const closeTimer = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  function openPicker() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setPickerOpen(true);
+  }
+  function deferClose() {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setPickerOpen(false), 220);
+  }
+
+  const myReaction = post.myReaction ? REACTION_MAP[post.myReaction] : null;
+  const triggerEmoji = myReaction ? myReaction.emoji : "👍";
+  const triggerLabel = myReaction ? myReaction.label : "Like";
+  const triggerColor = myReaction ? myReaction.color : undefined;
+
+  const breakdown = post.reactionBreakdown || {};
+  const topReactions = REACTIONS
+    .filter((r) => breakdown[r.type])
+    .sort((a, b) => (breakdown[b.type] || 0) - (breakdown[a.type] || 0))
+    .slice(0, 3);
+
+  async function handlePick(type) {
+    setPickerOpen(false);
+    await onReact(post.id, type);
+  }
+
+  async function handleTriggerClick() {
+    setPickerOpen(false);
+    // Click on trigger: if no reaction yet, set "like"; otherwise remove current
+    await onReact(post.id, post.myReaction ? null : "like");
+  }
+
+  return (
+    <div className="post-actions">
+      <div
+        className="reaction-host"
+        onMouseEnter={openPicker}
+        onMouseLeave={deferClose}
+      >
+        <button
+          type="button"
+          className={`btn btn-ghost btn-sm reaction-trigger ${myReaction ? "reacted" : ""}`}
+          onClick={handleTriggerClick}
+          style={myReaction ? { color: triggerColor } : undefined}
+        >
+          <span className="reaction-trigger-emoji">{triggerEmoji}</span>
+          <span className="reaction-trigger-label">{triggerLabel}</span>
+        </button>
+
+        {pickerOpen ? (
+          <div
+            className="reaction-picker"
+            onMouseEnter={openPicker}
+            onMouseLeave={deferClose}
+          >
+            {REACTIONS.map((r, idx) => (
+              <button
+                key={r.type}
+                type="button"
+                className={`reaction-emoji-btn ${post.myReaction === r.type ? "is-active" : ""}`}
+                style={{ animationDelay: `${idx * 40}ms` }}
+                title={r.label}
+                onClick={() => handlePick(r.type)}
+              >
+                <span className="reaction-emoji">{r.emoji}</span>
+                <span className="reaction-tooltip">{r.label}</span>
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="reaction-summary">
+        {topReactions.map((r) => (
+          <span key={r.type} className="reaction-summary-emoji" title={`${breakdown[r.type]} ${r.label}`}>
+            {r.emoji}
+          </span>
+        ))}
+        {post.reactionCount > 0 ? (
+          <span className="reaction-count">{post.reactionCount}</span>
+        ) : null}
+      </div>
+    </div>
   );
 }
 

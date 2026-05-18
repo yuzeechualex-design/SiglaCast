@@ -231,13 +231,27 @@ async function serializeEventDetail(event, viewerId) {
         : `${event.maxVotesPerUser} vote${event.maxVotesPerUser === 1 ? "" : "s"} per person`
   };
 }
+const ALLOWED_REACTIONS = ["like", "love", "haha", "wow", "sad", "angry"];
+
 async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }] = await Promise.all([
-    supabase.from("post_reactions").select("user_id").eq("post_id", post.id),
+    supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
     supabase.from("users").select("id, name, avatar_url").eq("id", post.author_id).maybeSingle()
   ]);
-  const reactionUserIds = (reactions || []).map((r) => r.user_id);
+
+  const reactionBreakdown = {};
+  for (const r of reactions || []) {
+    const type = ALLOWED_REACTIONS.includes(r.reaction) ? r.reaction : "like";
+    reactionBreakdown[type] = (reactionBreakdown[type] || 0) + 1;
+  }
+  const myReactionRow = (reactions || []).find((r) => viewerId && r.user_id === viewerId);
+  const myReaction =
+    myReactionRow && ALLOWED_REACTIONS.includes(myReactionRow.reaction)
+      ? myReactionRow.reaction
+      : myReactionRow
+      ? "like"
+      : null;
 
   let commentAuthors = new Map();
   if (comments?.length) {
@@ -253,8 +267,10 @@ async function serializePost(post, viewerId) {
     authorAvatar: author?.avatar_url || null,
     content: post.content || "",
     imageUrl: post.image_url || null,
-    reactionCount: reactionUserIds.length,
-    reactedByMe: Boolean(viewerId && reactionUserIds.includes(viewerId)),
+    reactionCount: (reactions || []).length,
+    reactedByMe: Boolean(myReaction),
+    myReaction,
+    reactionBreakdown,
     comments: (comments || []).map((c) => ({
       id: c.id,
       userId: c.author_id,
@@ -557,19 +573,36 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
 
 app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
   const post_id = req.params.id;
+  const requested = String(req.body?.reaction || "like").toLowerCase();
+  // If the client sends an empty string we treat it as "remove my reaction".
+  const wantClear = req.body?.reaction === null || req.body?.reaction === "";
+  const reaction = ALLOWED_REACTIONS.includes(requested) ? requested : "like";
+
   const { data: existing } = await supabase
     .from("post_reactions")
     .select("*")
     .eq("post_id", post_id)
     .eq("user_id", req.user.id)
     .maybeSingle();
+
   if (existing) {
-    await supabase.from("post_reactions").delete().eq("post_id", post_id).eq("user_id", req.user.id);
-  } else {
-    await supabase.from("post_reactions").insert({ post_id, user_id: req.user.id });
+    if (wantClear || existing.reaction === reaction) {
+      // Toggle off if same reaction or explicit clear
+      await supabase.from("post_reactions").delete().eq("post_id", post_id).eq("user_id", req.user.id);
+    } else {
+      await supabase
+        .from("post_reactions")
+        .update({ reaction })
+        .eq("post_id", post_id)
+        .eq("user_id", req.user.id);
+    }
+  } else if (!wantClear) {
+    await supabase.from("post_reactions").insert({ post_id, user_id: req.user.id, reaction });
   }
-  const { count } = await supabase.from("post_reactions").select("*", { count: "exact", head: true }).eq("post_id", post_id);
-  res.json({ reactionCount: count || 0, reactedByMe: !existing });
+
+  const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
+  if (!post) return res.status(404).json({ error: "Post not found" });
+  res.json(await serializePost(post, req.user.id));
 });
 
 app.post("/api/community/posts/:id/comments", authenticate, async (req, res) => {
