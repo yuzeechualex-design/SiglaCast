@@ -1,4 +1,4 @@
-import { API_ORIGIN } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 
 export default function EventDetailPage({ selectedEvent, onVote }) {
   if (!selectedEvent) {
@@ -37,7 +37,7 @@ export default function EventDetailPage({ selectedEvent, onVote }) {
 
       {coverImageUrl ? (
         <div className="event-cover-wrap">
-          <img className="event-cover" src={`${API_ORIGIN}${coverImageUrl}`} alt="" />
+          <img className="event-cover" src={mediaUrl(coverImageUrl)} alt="" />
         </div>
       ) : null}
 
@@ -77,7 +77,7 @@ export default function EventDetailPage({ selectedEvent, onVote }) {
             <div className="tally-card-top">
               <div className="tally-candidate">
                 {candidate.imageUrl ? (
-                  <img className="tally-cand-img" src={`${API_ORIGIN}${candidate.imageUrl}`} alt="" />
+                  <img className="tally-cand-img" src={mediaUrl(candidate.imageUrl)} alt="" />
                 ) : (
                   <div className="tally-cand-img placeholder">{candidate.name?.charAt(0) || "?"}</div>
                 )}

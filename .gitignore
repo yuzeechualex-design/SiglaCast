@@ -22,9 +22,11 @@ npm-debug.log*
 .DS_Store
 Thumbs.db
 
-# Uploads (user-generated runtime files)
-backend/uploads/*
-!backend/uploads/.gitkeep
+# Local-only uploads (replaced by Supabase Storage)
+backend/uploads/
+
+# Legacy JSON store (replaced by Supabase)
+backend/src/data/db.json
 
 # Temporary
 *.tmp

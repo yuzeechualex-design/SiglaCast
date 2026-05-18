@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { API_ORIGIN } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 
 export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment }) {
   const [content, setContent] = useState("");
@@ -56,7 +56,7 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
         <article key={post.id} className="tile post-card">
           <div className="post-header">
             {post.authorAvatar ? (
-              <img className="post-avatar" src={`${API_ORIGIN}${post.authorAvatar}`} alt="" />
+              <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
             ) : (
               <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
             )}
@@ -67,7 +67,7 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
           </div>
           {post.content ? <p className="post-body">{post.content}</p> : null}
           {post.imageUrl ? (
-            <img className="post-image" src={`${API_ORIGIN}${post.imageUrl}`} alt="" />
+            <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" />
           ) : null}
           <div className="post-actions">
             <button

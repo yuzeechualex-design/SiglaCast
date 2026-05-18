@@ -16,7 +16,7 @@
       "name": "System Admin",
       "email": "admin@dorsu.edu.ph",
       "passwordHash": "$2a$10$YYx.HbNKYs0T75oBueuWiO5EFsTGSu9nBB/BZzxzzwnoPIAHUkZAa",
-      "refreshTokenHash": "$2a$10$0MaVZ20c4SO6PyXXJ8Qdpuwa8PSUhS.LgpFxPphWn2bAfHgYzxCaS",
+      "refreshTokenHash": "$2a$10$pRibWlSmOaYCWOlEHCbg3uIxINGEZuHkUY3nRGPTkSZjlIkM06.ia",
       "permissions": [
         "all"
       ],
@@ -48,7 +48,7 @@
       "name": "ramil",
       "email": "ramil@dorsu.edu.ph",
       "passwordHash": "$2a$10$w/je.PHcjSRwq5IWKqqwpOINFymg14Mah6NFF2fEyfvuSpa8HCb5C",
-      "refreshTokenHash": "$2a$10$ezy5w5t/lq6GSOAy96zJTOg742T8ZU6tleUnAfkrvflY.2c4W7Sy.",
+      "refreshTokenHash": "$2a$10$JMUbWj9XDeHyiqBRyfnWm.SW3c5iBJT0erl4Nk951A0yIUR5ivugS",
       "avatarUrl": null,
       "course": "BSIT"
     }

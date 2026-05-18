@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { API_ORIGIN } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 
 export default function MessagesPage({
   conversations,
@@ -28,7 +28,7 @@ export default function MessagesPage({
   function renderAvatar(user, size = "md") {
     const cls = size === "sm" ? "msg-avatar sm" : "msg-avatar";
     if (user?.avatarUrl) {
-      return <img className={cls} src={`${API_ORIGIN}${user.avatarUrl}`} alt="" />;
+      return <img className={cls} src={mediaUrl(user.avatarUrl)} alt="" />;
     }
     return <div className={`${cls} placeholder`}>{user?.name?.charAt(0) || "?"}</div>;
   }

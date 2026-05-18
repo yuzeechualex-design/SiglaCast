@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_ORIGIN } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 
 export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNotice }) {
   const [name, setName] = useState(user.name);
@@ -46,7 +46,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
     await onAvatarUpload(file);
   }
 
-  const avatarSrc = user.avatarUrl ? `${API_ORIGIN}${user.avatarUrl}` : null;
+  const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
 
   return (
     <section className="panel single">
