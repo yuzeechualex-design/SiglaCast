@@ -44,7 +44,9 @@ export default function MessagesPage({
   onUserphoneStart,
   onUserphoneEnd,
   onUserphoneSwitch,
-  onUserphoneCancelWaiting
+  onUserphoneCancelWaiting,
+  userPhoneAutoReconnect,
+  setUserPhoneAutoReconnect
 }) {
   const [draft, setDraft] = useState("");
   const [draftFile, setDraftFile] = useState(null);
@@ -417,6 +419,14 @@ export default function MessagesPage({
                         Match with anyone else who opens Userphone. You will both appear as{" "}
                         <strong>Anonymous</strong>.
                       </p>
+                      <label className="userphone-auto-row">
+                        <input
+                          type="checkbox"
+                          checked={!!userPhoneAutoReconnect}
+                          onChange={(e) => setUserPhoneAutoReconnect(e.target.checked)}
+                        />
+                        <span>Keep joining the queue automatically until someone matches</span>
+                      </label>
                       <button type="button" className="btn btn-primary userphone-big-btn" onClick={() => onUserphoneStart?.()}>
                         Call anonymous
                       </button>
@@ -435,7 +445,9 @@ export default function MessagesPage({
                         )}
                       </p>
                       <p className="userphone-timeout-hint muted small">
-                        If no one joins in time, tap <strong>Call anonymous</strong> again when someone might be online.
+                        {userPhoneAutoReconnect
+                          ? "Each round lasts 10s; you’ll stay in queue automatically until you match or tap Cancel."
+                          : "If no one joins in time, tap Call anonymous again when someone might be online."}
                       </p>
                       {userphoneCountdownPct != null ? (
                         <div className="userphone-queue-meter" aria-label="Time left in queue">
@@ -449,6 +461,14 @@ export default function MessagesPage({
                       ) : (
                         <div className="userphone-spinner" aria-busy />
                       )}
+                      <label className="userphone-auto-row userphone-auto-row-inline">
+                        <input
+                          type="checkbox"
+                          checked={!!userPhoneAutoReconnect}
+                          onChange={(e) => setUserPhoneAutoReconnect(e.target.checked)}
+                        />
+                        <span>Keep auto-rejoining after each round</span>
+                      </label>
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => onUserphoneCancelWaiting?.()}>
                         Cancel search
                       </button>

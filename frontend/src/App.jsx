@@ -58,6 +58,19 @@ export default function App() {
     waitStartedAt: null
   });
   const [activeChat, setActiveChat] = useState(null);
+  const STORAGE_USERPHONE_AUTO_QUEUE = "siglacast_userphone_auto_queue";
+  const [userPhoneAutoReconnect, setUserPhoneAutoReconnect] = useState(() => {
+    try {
+      return localStorage.getItem(STORAGE_USERPHONE_AUTO_QUEUE) === "1";
+    } catch (_) {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_USERPHONE_AUTO_QUEUE, userPhoneAutoReconnect ? "1" : "0");
+    } catch (_) { /* ignore */ }
+  }, [userPhoneAutoReconnect]);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
@@ -129,21 +142,84 @@ export default function App() {
       onUnauthorizedRetry
     });
 
-  async function refreshUserPhoneFromServer() {
-    const st = await api("/userphone/state");
-    if (st.error || !st.phase) return null;
-    if (st.waitTimedOut) {
-      setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
-    }
-    const next = {
+  const activeChatRef = useRef(activeChat);
+  activeChatRef.current = activeChat;
+  const pathnameRef = useRef(location.pathname);
+  pathnameRef.current = location.pathname;
+  const userPhoneAutoReconnectRef = useRef(userPhoneAutoReconnect);
+  userPhoneAutoReconnectRef.current = userPhoneAutoReconnect;
+  const userphoneReconnectBusyRef = useRef(false);
+
+  function snapshotUserPhoneState(st) {
+    return {
       phase: st.phase,
       sessionId: st.sessionId || null,
       messages: Array.isArray(st.messages) ? st.messages : [],
       waitExpiresAt: st.waitExpiresAt ?? null,
       waitStartedAt: st.waitStartedAt ?? null
     };
+  }
+
+  /** Apply `/userphone/state` or `/userphone/start` payload; optionally chain retries when auto-queue is on. */
+  function applyUserPhoneServerPayload(st) {
+    if (st.error || !st.phase) {
+      if (st.error) setNotice(st.error);
+      return null;
+    }
+    const next = snapshotUserPhoneState(st);
     setUserPhoneState(next);
+    if (!st.waitTimedOut) return next;
+
+    const allowAutoChain =
+      userPhoneAutoReconnectRef.current &&
+      pathnameRef.current === "/messages" &&
+      activeChatRef.current?.kind === "userphone";
+
+    if (allowAutoChain) {
+      setNotice("No match yet — staying in queue…");
+      if (!userphoneReconnectBusyRef.current) void runUserPhoneAutoReconnectLoop();
+    } else {
+      setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
+    }
     return next;
+  }
+
+  async function runUserPhoneAutoReconnectLoop() {
+    if (userphoneReconnectBusyRef.current) return;
+    if (
+      !userPhoneAutoReconnectRef.current ||
+      pathnameRef.current !== "/messages" ||
+      activeChatRef.current?.kind !== "userphone"
+    ) {
+      return;
+    }
+    userphoneReconnectBusyRef.current = true;
+    try {
+      await new Promise((r) => setTimeout(r, 500));
+      while (
+        userPhoneAutoReconnectRef.current &&
+        pathnameRef.current === "/messages" &&
+        activeChatRef.current?.kind === "userphone"
+      ) {
+        const res = await api("/userphone/start", { method: "POST", body: {} });
+        if (res.error || !res.phase) {
+          if (res.error) setNotice(res.error);
+          break;
+        }
+        setUserPhoneState(snapshotUserPhoneState(res));
+        if (!res.waitTimedOut) break;
+        if (!userPhoneAutoReconnectRef.current) break;
+        setNotice("No match yet — staying in queue…");
+        await new Promise((r) => setTimeout(r, 450));
+      }
+    } finally {
+      userphoneReconnectBusyRef.current = false;
+    }
+  }
+
+  async function refreshUserPhoneFromServer() {
+    const st = await api("/userphone/state");
+    return applyUserPhoneServerPayload(st);
   }
 
   /** Re-render sidebar countdown while queued (server poll ~1.1s; this ticks every 250ms for smooth list text). */
@@ -184,7 +260,7 @@ export default function App() {
       };
     } else {
       lastMessage = {
-        text: "Tap Call anonymous",
+        text: userPhoneAutoReconnect ? "Auto-queue on — tap Call anonymous" : "Tap Call anonymous",
         createdAt: new Date(0).toISOString(),
         fromMe: false
       };
@@ -200,7 +276,7 @@ export default function App() {
       },
       ...(conversations || [])
     ];
-  }, [conversations, userPhoneState.phase, userPhoneState.messages, userPhoneState.waitExpiresAt, userphoneTick]);
+  }, [conversations, userPhoneState.phase, userPhoneState.messages, userPhoneState.waitExpiresAt, userphoneTick, userPhoneAutoReconnect]);
 
   async function loadCore() {
     if (!token) return;
@@ -424,16 +500,7 @@ export default function App() {
     async function poll() {
       const st = await api("/userphone/state");
       if (cancelled || st.error || !st.phase) return;
-      if (st.waitTimedOut) {
-        setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
-      }
-      setUserPhoneState({
-        phase: st.phase,
-        sessionId: st.sessionId || null,
-        messages: Array.isArray(st.messages) ? st.messages : [],
-        waitExpiresAt: st.waitExpiresAt ?? null,
-        waitStartedAt: st.waitStartedAt ?? null
-      });
+      applyUserPhoneServerPayload(st);
     }
     poll();
     const iv = setInterval(poll, 1100);
@@ -694,20 +761,7 @@ export default function App() {
 
   async function startUserphoneCall() {
     const st = await api("/userphone/start", { method: "POST", body: {} });
-    if (st.error) {
-      setNotice(st.error);
-      return;
-    }
-    if (st.waitTimedOut) {
-      setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
-    }
-    setUserPhoneState({
-      phase: st.phase,
-      sessionId: st.sessionId || null,
-      messages: Array.isArray(st.messages) ? st.messages : [],
-      waitExpiresAt: st.waitExpiresAt ?? null,
-      waitStartedAt: st.waitStartedAt ?? null
-    });
+    applyUserPhoneServerPayload(st);
   }
 
   async function endUserphoneCallAction() {
@@ -724,6 +778,7 @@ export default function App() {
   }
 
   async function cancelUserphoneWaitingAction() {
+    setUserPhoneAutoReconnect(false);
     await api("/userphone/waiting", { method: "DELETE" });
     await refreshUserPhoneFromServer();
     setNotice("Stopped searching");
@@ -1202,6 +1257,8 @@ export default function App() {
               onUserphoneEnd={endUserphoneCallAction}
               onUserphoneSwitch={switchUserphoneCallAction}
               onUserphoneCancelWaiting={cancelUserphoneWaitingAction}
+              userPhoneAutoReconnect={userPhoneAutoReconnect}
+              setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
             />
           }
         />

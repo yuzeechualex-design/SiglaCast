@@ -1222,6 +1222,28 @@ label.btn-secondary:hover {
   transition: width 0.2s ease;
 }
 
+.userphone-auto-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  max-width: 320px;
+  text-align: left;
+  font-size: 0.88rem;
+  color: var(--ink-700);
+  cursor: pointer;
+  user-select: none;
+}
+
+.userphone-auto-row input {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.userphone-auto-row-inline {
+  max-width: 280px;
+  justify-content: center;
+}
+
 @keyframes spin-avatar {
   to { transform: rotate(360deg); }
 }
