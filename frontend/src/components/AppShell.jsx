@@ -9,7 +9,6 @@ function formatNavPing(n) {
 export default function AppShell({
   user,
   notice,
-  stats,
   onLogout,
   theme,
   onToggleTheme,
@@ -26,18 +25,13 @@ export default function AppShell({
       <header className="hero">
         <div className="hero-main">
           <p className="eyebrow">Davao Oriental State University</p>
-          <h1>SiglaCast</h1>
+          <div className="hero-title-row">
+            <h1>SiglaCast</h1>
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          </div>
           <p className="hero-subtitle">
             {user.role === "admin" ? "Admin Operations Dashboard" : "Student Dashboard"} — {user.name}
           </p>
-          <div className="hero-theme-row">
-            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-          </div>
-        </div>
-        <div className="hero-stats">
-          <article className="stat"><span>Open Events</span><strong>{stats.openEvents}</strong></article>
-          <article className="stat"><span>Posts</span><strong>{stats.posts}</strong></article>
-          <article className="stat"><span>Notifications</span><strong>{stats.notifications}</strong></article>
         </div>
         <div className="nav-row">
           <NavLink to="/" className="nav-btn" end>📊 Dashboard</NavLink>

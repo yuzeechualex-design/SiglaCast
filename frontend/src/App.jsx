@@ -1239,11 +1239,6 @@ export default function App() {
       onLogout={logout}
       theme={theme}
       onToggleTheme={toggleTheme}
-      stats={{
-        openEvents: events.filter((e) => e.status === "open").length,
-        posts: posts.length,
-        notifications: notifications.length
-      }}
       navBadges={{
         events: navBadges.events,
         messages: navBadges.messages,

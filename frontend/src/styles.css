@@ -203,6 +203,22 @@ p {
   font-size: clamp(1.8rem, 2vw, 2.2rem);
 }
 
+.hero-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px 20px;
+}
+
+.hero-title-row h1 {
+  margin: 0;
+  line-height: 1.15;
+}
+
+.hero-title-row .theme-toggle {
+  flex-shrink: 0;
+}
+
 .eyebrow {
   margin-bottom: 8px;
   text-transform: uppercase;
@@ -216,32 +232,6 @@ p {
   color: #e8f0ff;
   max-width: 700px;
   line-height: 1.45;
-}
-
-.hero-stats {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-}
-
-.stat {
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  border-radius: 12px;
-  padding: 11px 12px;
-}
-
-.stat span {
-  font-size: 0.78rem;
-  opacity: 0.86;
-}
-
-.stat strong {
-  display: block;
-  margin-top: 5px;
-  font-size: 1.24rem;
-  font-weight: 700;
 }
 
 .badge {
@@ -3518,10 +3508,6 @@ input.profile-status-emoji {
   }
 
   .grid {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-stats {
     grid-template-columns: 1fr;
   }
 
