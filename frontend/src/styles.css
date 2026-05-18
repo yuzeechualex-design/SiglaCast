@@ -1486,6 +1486,63 @@ input.profile-status-emoji {
   flex-shrink: 0;
 }
 
+.compose-plus-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.compose-plus-dropdown {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  min-width: 220px;
+  max-width: min(340px, 92vw);
+  background: var(--surface, #fff);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  box-shadow: 0 -10px 32px rgba(13, 71, 161, 0.2);
+  z-index: 60;
+  overflow: hidden;
+  animation: fade-in-up 160ms ease both;
+}
+
+.compose-plus-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 4px;
+  width: 100%;
+  padding: 11px 14px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  font-size: inherit;
+  font-family: inherit;
+}
+
+.compose-plus-dropdown .compose-plus-item {
+  justify-content: flex-start;
+}
+
+.compose-plus-item-title {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--ink-900, #14203a);
+}
+
+.compose-plus-item-desc {
+  font-size: 0.78rem;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--ink-600);
+}
+
+.compose-plus-item:hover {
+  background: rgba(37, 99, 235, 0.08);
+}
+
 .msg-avatar {
   width: 42px;
   height: 42px;
@@ -2674,6 +2731,7 @@ input.profile-status-emoji {
 [data-theme="dark"] .search-result-row,
 [data-theme="dark"] .thread-menu,
 [data-theme="dark"] .chat-plus-dropdown,
+[data-theme="dark"] .compose-plus-dropdown,
 [data-theme="dark"] .mention-popover,
 [data-theme="dark"] .reaction-picker,
 [data-theme="dark"] .bubble-react-picker,
@@ -2682,6 +2740,10 @@ input.profile-status-emoji {
 [data-theme="dark"] .comment-bubble {
   background-color: var(--card);
   color: var(--ink-900);
+}
+
+[data-theme="dark"] .compose-plus-item:hover {
+  background: rgba(147, 197, 253, 0.12);
 }
 
 [data-theme="dark"] .chat-plus-item:hover,

@@ -60,6 +60,7 @@ export default function MessagesPage({
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
+  const [composePlusOpen, setComposePlusOpen] = useState(false);
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -71,6 +72,7 @@ export default function MessagesPage({
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
   const plusMenuRef = useRef(null);
+  const composePlusRef = useRef(null);
   const [reactionModal, setReactionModal] = useState({ open: false, messageId: null });
   const [isNarrowViewport, setIsNarrowViewport] = useState(
     typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false
@@ -128,6 +130,7 @@ export default function MessagesPage({
     setDraftFile(null);
     setMenuOpen(false);
     setReplyTarget(null);
+    setComposePlusOpen(false);
   }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, activeChat?.sessionId, activeChat?.phase]);
 
   useEffect(() => {
@@ -169,6 +172,17 @@ export default function MessagesPage({
     document.addEventListener("mousedown", handleDoc);
     return () => document.removeEventListener("mousedown", handleDoc);
   }, [plusMenuOpen]);
+
+  useEffect(() => {
+    if (!composePlusOpen) return undefined;
+    function handleDoc(e) {
+      if (composePlusRef.current && !composePlusRef.current.contains(e.target)) {
+        setComposePlusOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDoc);
+    return () => document.removeEventListener("mousedown", handleDoc);
+  }, [composePlusOpen]);
 
   function renderAvatar(entity, size = "md", opts = {}) {
     const showPresence = !!(opts.showPresence && entity && !entity?.isGroup);
@@ -742,6 +756,39 @@ export default function MessagesPage({
                   className="sr-only"
                   onChange={pickAttachment}
                 />
+                ) : null}
+                {!isUserphone ? (
+                <div className="compose-plus-wrap" ref={composePlusRef}>
+                  <button
+                    type="button"
+                    className="btn btn-icon"
+                    aria-expanded={composePlusOpen}
+                    aria-haspopup="menu"
+                    title="More — Userphone quick start"
+                    onClick={() => setComposePlusOpen((o) => !o)}
+                  >
+                    ＋
+                  </button>
+                  {composePlusOpen ? (
+                    <div className="compose-plus-dropdown" role="menu">
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="compose-plus-item"
+                        onClick={async () => {
+                          setComposePlusOpen(false);
+                          await onOpenChat?.("userphone", "userphone");
+                          await onUserphoneStart?.();
+                        }}
+                      >
+                        <span className="compose-plus-item-title">📞 Userphone</span>
+                        <span className="compose-plus-item-desc">
+                          Anonymous 1-on-1 queue when someone else is on Userphone too. Leaves this DM or group for the Userphone tab.
+                        </span>
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
                 ) : null}
                 {!isUserphone ? (
                 <button
