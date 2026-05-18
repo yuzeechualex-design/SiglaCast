@@ -284,6 +284,9 @@ p {
   position: absolute;
   top: -6px;
   right: -4px;
+}
+
+.nav-ping {
   min-width: 18px;
   height: 18px;
   padding: 0 5px;
@@ -1599,6 +1602,7 @@ input.profile-status-emoji {
 }
 
 .chat-plus-ping.nav-ping {
+  position: absolute;
   top: -5px;
   right: -5px;
 }
