@@ -38,7 +38,8 @@ export default function MessagesPage({
   onChangeMemberRole,    // (groupId, userId, role)
   onDeleteGroup,         // (groupId)
   onReactToMessage,      // (messageId, reaction|null)
-  onUnsendMessage        // (message)
+  onUnsendMessage,       // (message)
+  onCloseMobileChat      // () clears activeChat (mobile back out of thread)
 }) {
   const [draft, setDraft] = useState("");
   const [draftFile, setDraftFile] = useState(null);
@@ -52,8 +53,12 @@ export default function MessagesPage({
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
   const [reactionModal, setReactionModal] = useState({ open: false, messageId: null });
+  const [isNarrowViewport, setIsNarrowViewport] = useState(
+    typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false
+  );
 
   const isGroup = activeChat?.kind === "group";
+  const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
 
   useEffect(() => {
     setDraft("");
@@ -63,8 +68,21 @@ export default function MessagesPage({
   }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id]);
 
   useEffect(() => {
-    threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeChat?.messages]);
+    const mq = window.matchMedia("(max-width: 900px)");
+    const sync = () => setIsNarrowViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // Jump to bottom when switching threads only (not on every poll / inbound message).
+  useEffect(() => {
+    if (!activeChat) return;
+    const id = requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id]);
 
   // Click outside hamburger menu closes it
   useEffect(() => {
@@ -121,7 +139,9 @@ export default function MessagesPage({
   }
 
   return (
-    <section className="panel single messages-panel">
+    <section
+      className={`panel single messages-panel ${mobileThreadFullscreen ? "messages-mobile-fullscreen" : ""}`}
+    >
       <div className="panel-head">
         <h2>✉️ Messages</h2>
         <p>Direct messages, group chats, and shared files.</p>
@@ -225,6 +245,16 @@ export default function MessagesPage({
           ) : (
             <>
               <div className="thread-header">
+                {mobileThreadFullscreen && onCloseMobileChat ? (
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm thread-back-btn"
+                    onClick={() => onCloseMobileChat()}
+                    aria-label="Back to chat list"
+                  >
+                    ← Back
+                  </button>
+                ) : null}
                 {renderAvatar(isGroup ? activeChat.group : activeChat.user)}
                 <div className="thread-header-info">
                   <strong>{isGroup ? activeChat.group?.name : activeChat.user?.name}</strong>

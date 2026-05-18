@@ -902,17 +902,36 @@ label.btn-secondary:hover {
   margin-bottom: 8px;
 }
 
+.messages-panel.panel.single {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 112px);
+  min-height: 0;
+  overflow: hidden;
+}
+
 .messages-panel .panel-head {
   margin-bottom: 12px;
+  flex-shrink: 0;
 }
 
 .messages-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 320px) 1fr;
+  grid-template-columns: minmax(260px, 320px) minmax(280px, 560px);
   gap: 16px;
+  flex: 1;
   min-height: 0;
-  max-height: min(78vh, calc(100vh - 180px));
   align-items: stretch;
+  justify-content: center;
+  width: 100%;
+  max-width: 920px;
+  margin-inline: auto;
+}
+
+@media (min-width: 901px) {
+  .messages-layout {
+    grid-template-columns: minmax(240px, 300px) minmax(260px, 520px);
+  }
 }
 
 .messages-sidebar {
@@ -1077,6 +1096,12 @@ label.btn-secondary:hover {
   padding: 14px 16px;
   border-bottom: 1px solid var(--line);
   background: #f8fbff;
+  flex-shrink: 0;
+}
+
+.thread-back-btn {
+  flex-shrink: 0;
+  margin-inline-end: 2px;
 }
 
 .thread-header-info {
@@ -1152,6 +1177,7 @@ label.btn-secondary:hover {
   padding: 12px 14px;
   border-top: 1px solid var(--line);
   background: #fff;
+  flex-shrink: 0;
 }
 
 .thread-compose input {
@@ -2244,6 +2270,20 @@ label.btn-secondary:hover {
   background: rgba(255, 255, 255, 0.06);
 }
 
+[data-theme="dark"] .auth-tagline {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+[data-theme="dark"] .auth-tabs button:not(.active) {
+  background: var(--yellow-500);
+  color: #1b1f29;
+}
+
+[data-theme="dark"] .auth-tabs button:not(.active):hover {
+  background: var(--yellow-300);
+  color: #1b1f29;
+}
+
 [data-theme="dark"] .modal-backdrop {
   background: rgba(0, 0, 0, 0.7);
 }
@@ -2490,6 +2530,7 @@ label.btn-secondary:hover {
   border-radius: 6px;
   font-size: 12px;
   animation: fade-in-up 160ms ease;
+  flex-shrink: 0;
 }
 
 .reply-banner-info {
@@ -2826,17 +2867,64 @@ label.btn-secondary:hover {
     grid-template-columns: 1fr;
   }
 
-  .messages-layout {
-    grid-template-columns: 1fr;
+  /* Messages: list fills the pane; opened chat is full-screen overlay (see MessagesPage). */
+  .messages-panel.panel.single:not(.messages-mobile-fullscreen) {
+    max-height: none;
+    overflow: visible;
   }
 
   .messages-layout {
     grid-template-columns: 1fr;
-    max-height: min(82vh, calc(100vh - 120px));
+    max-width: none;
+    margin-inline: 0;
+    flex: 1;
+    min-height: 0;
   }
 
-  .messages-thread {
-    min-height: 280px;
-    max-height: 56vh;
+  .messages-panel:not(.messages-mobile-fullscreen) .messages-thread {
+    display: none;
+  }
+
+  .messages-panel.messages-mobile-fullscreen {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    max-height: none;
+    overflow: hidden;
+    width: 100%;
+    max-width: none;
+    min-height: 0;
+    height: 100dvh;
+    border-radius: 0;
+    margin: 0;
+    padding: 0;
+    left: 0;
+    top: 0;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .panel-head {
+    display: none;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .messages-layout {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+    gap: 0;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .messages-sidebar {
+    display: none !important;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .messages-thread {
+    display: flex !important;
+    flex: 1;
+    min-height: 0;
+    max-height: none;
+    border-radius: 0;
+    border-width: 0;
   }
 }

@@ -895,6 +895,7 @@ export default function App() {
               onDeleteGroup={deleteGroupChat}
               onReactToMessage={reactToMessage}
               onUnsendMessage={unsendMessage}
+              onCloseMobileChat={() => setActiveChat(null)}
             />
           }
         />
