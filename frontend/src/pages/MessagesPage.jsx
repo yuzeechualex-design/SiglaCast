@@ -417,8 +417,13 @@ export default function MessagesPage({
                   onChange={setDraft}
                   placeholder={isGroup ? `Message ${activeChat.group?.name}… use @ to mention` : `Message ${activeChat.user?.name}… use @ to mention`}
                 />
-                <button type="submit" className="btn btn-primary" disabled={sending}>
-                  {sending ? "…" : "📤"}
+                <button
+                  type="submit"
+                  className="btn btn-primary btn-send-msg"
+                  disabled={sending}
+                  aria-label="Send message"
+                >
+                  {sending ? "…" : "➤"}
                 </button>
               </form>
             </>

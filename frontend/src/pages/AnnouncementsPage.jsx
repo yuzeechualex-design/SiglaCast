@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+
 export default function AnnouncementsPage({
   user,
   announcements,
@@ -6,9 +8,15 @@ export default function AnnouncementsPage({
   newAnnouncementMessage,
   setNewAnnouncementMessage,
   onCreateAnnouncement,
-  onDeleteAnnouncement
+  onDeleteAnnouncement,
+  onVisited
 }) {
   const isAdmin = user.role === "admin";
+
+  useEffect(() => {
+    if (!announcements.length) return;
+    onVisited?.(announcements);
+  }, [announcements, onVisited]);
   return (
     <section className="panel single">
         <div className="panel-head"><h2>📣 Announcements</h2><p>Official event broadcasts and updates.</p></div>

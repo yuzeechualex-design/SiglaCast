@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
 import { request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
@@ -12,6 +12,8 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
+
+const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 
 export default function App() {
   const navigate = useNavigate();
@@ -51,6 +53,9 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
+  /** Bumps nav badge calculations after localStorage changes (announcements seen). */
+  const [navBadgeTick, setNavBadgeTick] = useState(0);
+
   const [theme, setTheme] = useState(() => {
     try {
       const saved = localStorage.getItem("siglacast_theme");
@@ -157,6 +162,59 @@ export default function App() {
     loadAll();
   }, [token, user?.role]);
 
+  // First load: baseline current announcements as "already seen" so only new rows ping the nav.
+  useEffect(() => {
+    if (!announcements.length) return;
+    try {
+      if (!localStorage.getItem(STORAGE_SEEN_ANNOUNCEMENT_IDS)) {
+        localStorage.setItem(STORAGE_SEEN_ANNOUNCEMENT_IDS, JSON.stringify(announcements.map((a) => a.id)));
+        setNavBadgeTick((t) => t + 1);
+      }
+    } catch (_) { /* ignore */ }
+  }, [announcements]);
+
+  const markAnnouncementsSeen = useCallback((list) => {
+    if (!Array.isArray(list) || !list.length) return;
+    try {
+      const raw = localStorage.getItem(STORAGE_SEEN_ANNOUNCEMENT_IDS);
+      let prev = [];
+      try {
+        const parsed = raw ? JSON.parse(raw) : [];
+        prev = Array.isArray(parsed) ? parsed : [];
+      } catch (_) {
+        prev = [];
+      }
+      const merged = [...new Set([...prev, ...list.map((a) => a.id)])];
+      localStorage.setItem(STORAGE_SEEN_ANNOUNCEMENT_IDS, JSON.stringify(merged));
+      setNavBadgeTick((t) => t + 1);
+    } catch (_) { /* ignore */ }
+  }, []);
+
+  const navBadges = useMemo(() => {
+    let announcementUnseen = 0;
+    try {
+      const raw = localStorage.getItem(STORAGE_SEEN_ANNOUNCEMENT_IDS);
+      if (!raw) announcementUnseen = 0;
+      else {
+        const seen = new Set(JSON.parse(raw));
+        announcementUnseen = announcements.filter((a) => a.id && !seen.has(a.id)).length;
+      }
+    } catch {
+      announcementUnseen = announcements.length;
+    }
+
+    const notificationUnread = notifications.filter((n) => n.read !== true).length;
+    const messagesUnread = conversations.reduce((acc, c) => acc + (Number(c.unreadCount) || 0), 0);
+    const openEvents = events.filter((e) => e.status === "open").length;
+
+    return {
+      announcements: announcementUnseen,
+      notifications: notificationUnread,
+      messages: messagesUnread,
+      events: openEvents
+    };
+  }, [announcements, notifications, conversations, events, navBadgeTick]);
+
   // ---------- Desktop / mobile push notifications ----------
   // We use the browser Notifications API. On first sign-in we politely request
   // permission; afterwards, every time the polled notifications list grows we
@@ -243,12 +301,19 @@ export default function App() {
     if (!list.error) setConversations(Array.isArray(list) ? list : []);
   }
 
+  // Poll DM unread counts for nav badge even when Messages tab is inactive.
   useEffect(() => {
-    if (!token || location.pathname !== "/messages") return undefined;
+    if (!token) return undefined;
     loadMessages();
-    const interval = setInterval(loadMessages, 4000);
+    const interval = setInterval(loadMessages, 6000);
     return () => clearInterval(interval);
-  }, [token, location.pathname]);
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    const interval = setInterval(loadComms, 15000);
+    return () => clearInterval(interval);
+  }, [token]);
 
   // Poll the active thread (DM or group) every 3 seconds while the page is open.
   useEffect(() => {
@@ -793,6 +858,12 @@ export default function App() {
         posts: posts.length,
         notifications: notifications.length
       }}
+      navBadges={{
+        events: navBadges.events,
+        messages: navBadges.messages,
+        announcements: navBadges.announcements,
+        notifications: navBadges.notifications
+      }}
     >
       <Routes>
         <Route
@@ -875,6 +946,7 @@ export default function App() {
               setNewAnnouncementMessage={setNewAnnouncementMessage}
               onCreateAnnouncement={createAnnouncement}
               onDeleteAnnouncement={deleteAnnouncement}
+              onVisited={markAnnouncementsSeen}
             />
           }
         />
