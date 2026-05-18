@@ -315,6 +315,27 @@ export default function App() {
     return () => clearInterval(interval);
   }, [token]);
 
+  // Clearing the bell badge: visiting Notifications marks all current rows read; new inserts stay unread.
+  useEffect(() => {
+    if (!token || location.pathname !== "/notifications") return undefined;
+    let cancelled = false;
+    (async () => {
+      const res = await request("/notifications/read-all", {
+        method: "POST",
+        body: {},
+        token,
+        onUnauthorizedRetry
+      });
+      if (cancelled || res.error) return;
+      const no = await request("/notifications", { token, onUnauthorizedRetry });
+      if (cancelled || no.error || !Array.isArray(no)) return;
+      setNotifications(no);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, location.pathname]);
+
   // Poll the active thread (DM or group) every 3 seconds while the page is open.
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;

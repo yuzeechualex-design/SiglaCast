@@ -1245,6 +1245,16 @@ app.get("/api/notifications", authenticate, async (req, res) => {
   );
 });
 
+app.post("/api/notifications/read-all", authenticate, async (req, res) => {
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read: true })
+    .eq("user_id", req.user.id)
+    .eq("read", false);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ success: true });
+});
+
 // Messaging + friends
 app.get("/api/users/search", authenticate, async (req, res) => {
   const q = String(req.query.q || "").trim();
