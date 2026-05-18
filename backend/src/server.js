@@ -271,27 +271,16 @@ async function areFriends(a, b) {
   return Boolean(data?.length);
 }
 
-// Seed demo data if users table is empty
+// Seed an admin account only if the users table is completely empty.
+// Demo student accounts are no longer auto-created.
 async function seedIfEmpty() {
   const { count } = await supabase.from("users").select("*", { count: "exact", head: true });
   if (count && count > 0) return;
-  const studentHash = await bcrypt.hash("student123", 10);
   const adminHash = await bcrypt.hash("admin123", 10);
   await supabase.from("users").insert([
-    { id: "s1", role: "student", name: "Ana Cruz", email: "ana@dorsu.edu.ph", password_hash: studentHash, course: "BSIT", permissions: [] },
     { id: "a1", role: "admin", name: "System Admin", email: "admin@dorsu.edu.ph", password_hash: adminHash, permissions: ["all"] }
   ]);
-  await supabase.from("events").insert([
-    { id: "e1", title: "Student Election 2026", description: "Campus-wide election for student council officers.", status: "open", strategy: "single", max_votes_per_user: 1 }
-  ]);
-  await supabase.from("candidates").insert([
-    { id: "c1", event_id: "e1", name: "Team Sigla", position: 0 },
-    { id: "c2", event_id: "e1", name: "Team Bagani", position: 1 }
-  ]);
-  await supabase.from("announcements").insert([
-    { id: "an1", title: "Welcome to SiglaCast", message: "Voting is now open for Student Election 2026." }
-  ]);
-  console.log("[seed] demo users + event created");
+  console.log("[seed] default admin account created");
 }
 
 const app = express();

@@ -16,8 +16,8 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState("ana@dorsu.edu.ph");
-  const [password, setPassword] = useState("student123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [course, setCourse] = useState("BSIT");
   const [token, setToken] = useState(() => localStorage.getItem("siglacast_token") || "");
