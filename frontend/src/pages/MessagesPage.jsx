@@ -766,43 +766,6 @@ export default function MessagesPage({
                 </div>
               ) : (
               <>
-                {isGroup && groupUserphoneWaiting ? (
-                  <div className="userphone-cta-wrap gc-userphone-connecting" role="status">
-                    <p className="userphone-intro userphone-countdown-line">
-                      {queueSecondsLeft != null ? (
-                        <>
-                          Connecting anonymous Userphone…{" "}
-                          <span className="userphone-countdown-digits">{queueSecondsLeft}</span>s left in this search
-                          round.
-                        </>
-                      ) : (
-                        <>Connecting anonymous Userphone — searching for another group chat…</>
-                      )}
-                    </p>
-                    <p className="userphone-timeout-hint muted small">
-                      When matched, messages from people in the other group appear here as Anonymous.
-                    </p>
-                    {queueCountdownPct != null ? (
-                      <div className="userphone-queue-meter" aria-label="Time left in queue">
-                        <div
-                          className="userphone-queue-meter-fill"
-                          style={{
-                            width: `${Math.round(Math.min(100, Math.max(0, queueCountdownPct * 100)))}%`
-                          }}
-                        />
-                      </div>
-                    ) : (
-                      <div className="userphone-spinner" aria-busy />
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn-ghost btn-sm"
-                      onClick={() => onCancelGroupUserphoneWaiting?.(activeChat.group.id)}
-                    >
-                      Cancel search
-                    </button>
-                  </div>
-                ) : null}
                 <div className="thread-messages">
                   {(activeChat.messages || []).map((m) => (
                     <MessageBubble
@@ -816,6 +779,14 @@ export default function MessagesPage({
                       onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
                     />
                   ))}
+                  {isGroup && groupUserphoneWaiting ? (
+                    <GroupUserphoneQueueBubbleRow
+                      displayName={currentUser?.name || "You"}
+                      secondsLeft={queueSecondsLeft}
+                      pct={queueCountdownPct}
+                      onCancel={() => onCancelGroupUserphoneWaiting?.(activeChat.group.id)}
+                    />
+                  ) : null}
                   <div ref={threadEndRef} />
                 </div>
               </>
@@ -1030,6 +1001,43 @@ function formatBytes(n) {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Inline “queued for 10s” status for group Userphone — visually matches outbound chat bubbles. */
+function GroupUserphoneQueueBubbleRow({ displayName, secondsLeft, pct, onCancel }) {
+  const lineMain =
+    secondsLeft != null
+      ? `Connecting anonymous Userphone… ${secondsLeft}s left in this search round.`
+      : "Connecting anonymous Userphone — searching for another group chat…";
+  const meterPct = pct != null ? `${Math.round(Math.min(100, Math.max(0, pct * 100)))}%` : null;
+  return (
+    <div className="bubble-row row-me gc-userphone-queue-msg" role="status" aria-live="polite">
+      <div className="bubble-stack">
+        <div className="bubble-with-actions">
+          <div className="bubble bubble-me gc-userphone-queue-bubble-inner">
+            <p className="bubble-author">{displayName}</p>
+            <p className="gc-userphone-queue-text">{lineMain}</p>
+            <p className="gc-userphone-queue-sub muted small">
+              When matched, messages from people in the other group appear here as Anonymous.
+            </p>
+            {meterPct != null ? (
+              <div className="userphone-queue-meter gc-userphone-queue-meter" aria-label="Time left in queue">
+                <div className="userphone-queue-meter-fill" style={{ width: meterPct }} />
+              </div>
+            ) : (
+              <div className="userphone-spinner gc-userphone-queue-spinner" aria-busy />
+            )}
+            <div className="bubble-meta-row gc-userphone-queue-meta">
+              <small className="bubble-time">{new Date().toLocaleString()}</small>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm gc-userphone-queue-cancel-btn" onClick={onCancel}>
+              Cancel search
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // One chat bubble row: avatar (for incoming group messages), the bubble itself,

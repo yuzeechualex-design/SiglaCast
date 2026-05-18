@@ -626,6 +626,166 @@ async function decorateChatMessages(rows, viewerId) {
 /** Max time to stay in the Userphone match queue before auto-dropping to idle (ms). */
 const USERPHONE_WAIT_MS = 10_000;
 
+/** In-process queue when Postgres table `anon_userphone_conv_waiting` is missing (migrate 0008 for production). */
+const convWaitingMemory = new Map();
+/** @type {"db"|"memory"|undefined} */
+let convWaitingResolvedMode;
+
+function convWaitingLooksLikeMissingTable(err) {
+  const msg = String(err?.message || "").toLowerCase();
+  return (
+    msg.includes("anon_userphone_conv_waiting") ||
+    msg.includes("conv_waiting") ||
+    (msg.includes("could not find the table") && msg.includes("userphone"))
+  );
+}
+
+async function resolveConvWaitingMode() {
+  if (convWaitingResolvedMode) return convWaitingResolvedMode;
+  const { error } = await supabase.from("anon_userphone_conv_waiting").select("conversation_id").limit(1);
+  if (error && convWaitingLooksLikeMissingTable(error)) {
+    convWaitingResolvedMode = "memory";
+    console.warn(
+      "[userphone] anon_userphone_conv_waiting is unavailable — using in-memory bridge queue.",
+      "Apply supabase/migrations/0008_userphone_group_bridge.sql for a persistent queue."
+    );
+  } else {
+    convWaitingResolvedMode = "db";
+    if (error) console.warn("[userphone] conv_waiting probe:", error.message);
+  }
+  return convWaitingResolvedMode;
+}
+
+function convWaitingMemoryPruneStale() {
+  const cutoffMs = Date.now() - USERPHONE_WAIT_MS;
+  for (const [cid, row] of convWaitingMemory.entries()) {
+    if (new Date(row.joined_at).getTime() < cutoffMs) convWaitingMemory.delete(cid);
+  }
+}
+
+async function convWaitingFetchAllSorted() {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemoryPruneStale();
+    return [...convWaitingMemory.entries()]
+      .map(([conversation_id, v]) => ({
+        conversation_id,
+        queued_by_user_id: v.queued_by_user_id,
+        joined_at: v.joined_at
+      }))
+      .sort((a, b) => new Date(a.joined_at) - new Date(b.joined_at));
+  }
+  const { data } = await supabase
+    .from("anon_userphone_conv_waiting")
+    .select("*")
+    .order("joined_at", { ascending: true });
+  return data || [];
+}
+
+async function convWaitingFindByConversationId(gid) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemoryPruneStale();
+    const row = convWaitingMemory.get(gid);
+    return row ? { conversation_id: gid, queued_by_user_id: row.queued_by_user_id, joined_at: row.joined_at } : null;
+  }
+  const { data } = await supabase.from("anon_userphone_conv_waiting").select("*").eq("conversation_id", gid).maybeSingle();
+  return data || null;
+}
+
+async function convWaitingUpsertEnqueue(row) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemoryPruneStale();
+    convWaitingMemory.set(row.conversation_id, {
+      queued_by_user_id: row.queued_by_user_id,
+      joined_at: row.joined_at
+    });
+    return null;
+  }
+  const { error } = await supabase.from("anon_userphone_conv_waiting").upsert(
+    {
+      conversation_id: row.conversation_id,
+      queued_by_user_id: row.queued_by_user_id,
+      joined_at: row.joined_at
+    },
+    { onConflict: "conversation_id" }
+  );
+  if (error && convWaitingLooksLikeMissingTable(error)) {
+    convWaitingResolvedMode = "memory";
+    convWaitingMemoryPruneStale();
+    convWaitingMemory.set(row.conversation_id, {
+      queued_by_user_id: row.queued_by_user_id,
+      joined_at: row.joined_at
+    });
+    console.warn("[userphone] conv_waiting unavailable on upsert — using in-memory:", error.message);
+    return null;
+  }
+  return error;
+}
+
+async function convWaitingDeleteByConversationId(gid) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemory.delete(gid);
+    return;
+  }
+  await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", gid);
+}
+
+async function convWaitingDeleteByQueuedUserId(uid) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    for (const [k, v] of [...convWaitingMemory.entries()]) {
+      if (v.queued_by_user_id === uid) convWaitingMemory.delete(k);
+    }
+    return;
+  }
+  await supabase.from("anon_userphone_conv_waiting").delete().eq("queued_by_user_id", uid);
+}
+
+async function convWaitingDeleteConversationReturning(cid) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    if (!convWaitingMemory.has(cid)) return [];
+    convWaitingMemory.delete(cid);
+    return [{ conversation_id: cid }];
+  }
+  const { data } = await supabase
+    .from("anon_userphone_conv_waiting")
+    .delete()
+    .eq("conversation_id", cid)
+    .select("conversation_id");
+  return data || [];
+}
+
+async function convWaitingReinsertPair(firstRow, secondRow) {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemory.set(firstRow.conversation_id, {
+      queued_by_user_id: firstRow.queued_by_user_id,
+      joined_at: firstRow.joined_at
+    });
+    convWaitingMemory.set(secondRow.conversation_id, {
+      queued_by_user_id: secondRow.queued_by_user_id,
+      joined_at: secondRow.joined_at
+    });
+    return;
+  }
+  await supabase.from("anon_userphone_conv_waiting").insert([
+    {
+      conversation_id: firstRow.conversation_id,
+      queued_by_user_id: firstRow.queued_by_user_id,
+      joined_at: firstRow.joined_at
+    },
+    {
+      conversation_id: secondRow.conversation_id,
+      queued_by_user_id: secondRow.queued_by_user_id,
+      joined_at: secondRow.joined_at
+    }
+  ]);
+}
+
 /** Random anonymous pairing chat — identities never leak in API payloads. */
 function serializeUserphoneMessages(rows, viewerId) {
   return (rows || []).map((row) => ({
@@ -730,6 +890,11 @@ async function buildUserphoneState(me) {
 }
 
 async function cleanupStaleConvWaiting() {
+  const mode = await resolveConvWaitingMode();
+  if (mode === "memory") {
+    convWaitingMemoryPruneStale();
+    return;
+  }
   const cutoff = new Date(Date.now() - USERPHONE_WAIT_MS).toISOString();
   await supabase.from("anon_userphone_conv_waiting").delete().lt("joined_at", cutoff);
 }
@@ -737,7 +902,7 @@ async function cleanupStaleConvWaiting() {
 /** Pair two different group threads that are queued for anonymous bridge. */
 async function tryPairConversationBridges() {
   await cleanupStaleConvWaiting();
-  const { data: rows } = await supabase.from("anon_userphone_conv_waiting").select("*").order("joined_at", { ascending: true });
+  const rows = await convWaitingFetchAllSorted();
   if (!rows?.length) return;
   const first = rows[0];
   const second = rows.find((r) => r.conversation_id !== first.conversation_id);
@@ -746,8 +911,8 @@ async function tryPairConversationBridges() {
   const hostB = second.queued_by_user_id;
   if (await fetchActiveUserphoneSession(hostA)) return;
   if (await fetchActiveUserphoneSession(hostB)) return;
-  const { data: gotA } = await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", first.conversation_id).select("conversation_id");
-  const { data: gotB } = await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", second.conversation_id).select("conversation_id");
+  const gotA = await convWaitingDeleteConversationReturning(first.conversation_id);
+  const gotB = await convWaitingDeleteConversationReturning(second.conversation_id);
   if (!gotA?.length || !gotB?.length) return;
   const ca = first.conversation_id;
   const cb = second.conversation_id;
@@ -765,10 +930,7 @@ async function tryPairConversationBridges() {
   });
   if (error) {
     console.error("[tryPairConversationBridges]", error.message);
-    await supabase.from("anon_userphone_conv_waiting").insert([
-      { conversation_id: first.conversation_id, queued_by_user_id: first.queued_by_user_id },
-      { conversation_id: second.conversation_id, queued_by_user_id: second.queued_by_user_id }
-    ]);
+    await convWaitingReinsertPair(first, second);
   }
 }
 
@@ -788,11 +950,11 @@ async function buildGroupUserphoneBridge(gid /* , me retained for future ACL */)
   if (session) {
     return { phase: "matched", sessionId: session.id };
   }
-  const { data: w } = await supabase.from("anon_userphone_conv_waiting").select("*").eq("conversation_id", gid).maybeSingle();
+  const w = await convWaitingFindByConversationId(gid);
   if (w) {
     const joinedMs = new Date(w.joined_at).getTime();
     if (Date.now() - joinedMs >= USERPHONE_WAIT_MS) {
-      await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", gid);
+      await convWaitingDeleteByConversationId(gid);
       return { phase: "idle", waitTimedOut: true };
     }
     return {
@@ -1554,7 +1716,7 @@ app.post("/api/userphone/start", authenticate, async (req, res) => {
     }
     return res.json(await buildUserphoneState(me));
   }
-  await supabase.from("anon_userphone_conv_waiting").delete().eq("queued_by_user_id", me);
+  await convWaitingDeleteByQueuedUserId(me);
   const { data: waitRow } = await supabase.from("anon_userphone_waiting").select("user_id").eq("user_id", me).maybeSingle();
   if (!waitRow) {
     const { error } = await supabase.from("anon_userphone_waiting").insert({ user_id: me });
@@ -2113,10 +2275,7 @@ app.post("/api/groups/:id/userphone/start", authenticate, async (req, res) => {
       return res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
     }
     const ts = new Date().toISOString();
-    const { error: upErr } = await supabase.from("anon_userphone_conv_waiting").upsert(
-      { conversation_id: gid, queued_by_user_id: me, joined_at: ts },
-      { onConflict: "conversation_id" }
-    );
+    const upErr = await convWaitingUpsertEnqueue({ conversation_id: gid, queued_by_user_id: me, joined_at: ts });
     if (upErr) return res.status(400).json({ error: upErr.message });
     await tryPairConversationBridges();
     const payload = await getGroupThreadPayload(gid, me);
@@ -2132,7 +2291,7 @@ app.delete("/api/groups/:id/userphone/waiting", authenticate, async (req, res) =
   const payloadAwait = await getGroupThreadPayload(gid, me);
   if (payloadAwait.errorStatus === 403) return res.status(403).json({ error: payloadAwait.errorMessage });
   if (payloadAwait.errorStatus === 404) return res.status(404).json({ error: payloadAwait.errorMessage });
-  await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", gid);
+  await convWaitingDeleteByConversationId(gid);
   const payload = await getGroupThreadPayload(gid, me);
   res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
 });

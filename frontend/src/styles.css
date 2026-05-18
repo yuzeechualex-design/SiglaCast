@@ -1237,6 +1237,46 @@ label.btn-secondary:hover {
   transition: width 0.2s ease;
 }
 
+/* Group Userphone: “10s queue” shown as an outbound-style bubble in the thread */
+.gc-userphone-queue-msg .bubble-with-actions {
+  max-width: min(92%, 420px);
+}
+
+.gc-userphone-queue-bubble-inner {
+  text-align: left;
+}
+
+.gc-userphone-queue-text {
+  margin: 0 0 6px;
+  font-size: 0.98rem;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.gc-userphone-queue-sub {
+  margin: 0 0 10px;
+  line-height: 1.35;
+  opacity: 0.88;
+}
+
+.gc-userphone-queue-meter {
+  width: 100%;
+  margin: 4px 0;
+}
+
+.gc-userphone-queue-spinner {
+  margin: 8px 0 4px;
+}
+
+.gc-userphone-queue-meta {
+  margin-top: 8px;
+}
+
+.gc-userphone-queue-cancel-btn {
+  margin-top: 10px;
+  align-self: flex-start;
+}
+
 .userphone-auto-row {
   display: flex;
   align-items: flex-start;
