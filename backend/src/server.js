@@ -1628,7 +1628,7 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const cleaned = q.replace(/[%_\\]/g, "").trim();
   if (!cleaned) return res.json([]);
   const pattern = `%${cleaned}%`;
-  const selectCols = "id, name, email, role, course, avatar_url, status_emoji, status_note";
+  const selectCols = "id, name, email, role, course, avatar_url";
   const [byName, byEmail, byCourse] = await Promise.all([
     supabase.from("users").select(selectCols).neq("id", me).ilike("name", pattern).limit(12),
     supabase.from("users").select(selectCols).neq("id", me).ilike("email", pattern).limit(12),
