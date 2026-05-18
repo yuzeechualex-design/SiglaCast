@@ -1583,6 +1583,10 @@ label.btn-secondary:hover {
   animation: modal-fade 150ms ease both;
 }
 
+.modal-backdrop.modal-backdrop--portal {
+  z-index: 240;
+}
+
 @keyframes modal-fade {
   from { opacity: 0; }
   to { opacity: 1; }

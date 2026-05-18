@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { request } from "../services/api.js";
 
 /**
  * Modal that fetches GET {path} → { breakdown: { like: [{id,name,avatarUrl}], ... } }
  * and renders grouped names. `reactionTypes` is e.g. Community REACTIONS or CHAT_REACTIONS.
+ *
+ * Portaled to document.body so position:fixed is viewport-relative (ancestors like .panel use
+ * transform animations that would otherwise trap fixed overlays).
  */
 export default function ReactionActorsModal({ title, path, reactionTypes, onClose }) {
   const [breakdown, setBreakdown] = useState({});
@@ -20,10 +24,18 @@ export default function ReactionActorsModal({ title, path, reactionTypes, onClos
       .catch(() => setLoading(false));
   }, [path]);
 
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   const blocks = (reactionTypes || []).filter((r) => (breakdown[r.type] || []).length);
 
-  return (
-    <div className="modal-backdrop" onClick={onClose} role="presentation">
+  const content = (
+    <div className="modal-backdrop modal-backdrop--portal" onClick={onClose} role="presentation">
       <div className="modal-card modal-card-narrow" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>
@@ -51,4 +63,6 @@ export default function ReactionActorsModal({ title, path, reactionTypes, onClos
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 }
