@@ -372,7 +372,7 @@ async function extractMentionIds(text, excludeUserId = null) {
   return [...new Set(matched.map((u) => u.id).filter((id) => id !== excludeUserId))];
 }
 
-async function notifyMentions(text, label, excludeUserId) {
+async function notifyMentions(text, label, excludeUserId, linkPath = null) {
   const ids = await extractMentionIds(text, excludeUserId);
   if (!ids.length) return;
   const notes = ids.map((uid) => ({
@@ -382,13 +382,14 @@ async function notifyMentions(text, label, excludeUserId) {
     kind: "mention",
     badge_count: 1,
     source_key: null,
+    link_path: linkPath,
     read: false
   }));
   await supabase.from("notifications").insert(notes);
 }
 
 // Bump a single unread aggregated row keyed by source_key (same sender etc.)
-async function bumpAggregatedNotification({ userId, sourceKey, kind, textForCount }) {
+async function bumpAggregatedNotification({ userId, sourceKey, kind, textForCount, linkPath = null }) {
   const sk = sourceKey.slice(0, 500);
   const { data: row } = await supabase
     .from("notifications")
@@ -411,12 +412,13 @@ async function bumpAggregatedNotification({ userId, sourceKey, kind, textForCoun
       read: false,
       kind,
       badge_count: 1,
-      source_key: sk
+      source_key: sk,
+      link_path: linkPath
     });
   }
 }
 
-async function insertNotification({ userId, text, kind = "general", badgeCount = 1 }) {
+async function insertNotification({ userId, text, kind = "general", badgeCount = 1, linkPath = null }) {
   await supabase.from("notifications").insert({
     id: `n${Date.now()}-${userId}-${Math.random().toString(36).slice(2, 6)}`,
     user_id: userId,
@@ -424,7 +426,8 @@ async function insertNotification({ userId, text, kind = "general", badgeCount =
     read: false,
     kind,
     badge_count: badgeCount,
-    source_key: null
+    source_key: null,
+    link_path: linkPath
   });
 }
 
@@ -858,10 +861,18 @@ app.get("/api/auth/me", authenticate, (req, res) => {
 
 app.patch("/api/profile", authenticate, async (req, res) => {
   try {
-    const { name, currentPassword, newPassword } = req.body || {};
+    const { name, currentPassword, newPassword, statusEmoji, statusNote } = req.body || {};
     const updates = {};
     const trimmedName = name !== undefined ? String(name).trim() : "";
     if (trimmedName) updates.name = trimmedName;
+    if (statusEmoji !== undefined) {
+      const em = String(statusEmoji).trim();
+      updates.status_emoji = em ? em.slice(0, 48) : null;
+    }
+    if (statusNote !== undefined) {
+      const nt = String(statusNote).trim();
+      updates.status_note = nt ? nt.slice(0, 128) : null;
+    }
     if (newPassword) {
       if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
       const ok = await bcrypt.compare(String(currentPassword), req.user.password_hash || "");
@@ -949,7 +960,8 @@ app.post("/api/events", authenticate, requireAdmin, (req, res, next) => {
         userId: u.id,
         sourceKey: `events:inbox:${u.id}`,
         kind: "event",
-        textForCount: (n) => `🗓️ (${n}) new event${n === 1 ? "" : "s"} · open Events`
+        textForCount: (n) => `🗓️ (${n}) new event${n === 1 ? "" : "s"} · open Events`,
+        linkPath: "/events"
       });
     }
 
@@ -1013,7 +1025,7 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
     }).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("post.created", { id: post.id });
-    await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id);
+    await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -1065,6 +1077,7 @@ app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
       kind: "reaction_post",
       badge_count: 1,
       source_key: null,
+      link_path: `/community?post=${encodeURIComponent(post_id)}`,
       read: false
     });
   }
@@ -1130,12 +1143,15 @@ app.post(
           kind: "reply_comment",
           badge_count: 1,
           source_key: null,
+          link_path: `/community?post=${encodeURIComponent(post_id)}&comment=${encodeURIComponent(parentId)}`,
           read: false
         });
       }
     }
     if (notes.length) await supabase.from("notifications").insert(notes);
-    await notifyMentions(text, parentId ? `a reply by ${req.user.name}` : `a comment by ${req.user.name}`, req.user.id);
+    const mentionLink =
+      `/community?post=${encodeURIComponent(post_id)}${parentId ? `&comment=${encodeURIComponent(parentId)}` : ""}`;
+    await notifyMentions(text, parentId ? `a reply by ${req.user.name}` : `a comment by ${req.user.name}`, req.user.id, mentionLink);
 
     res.status(201).json({ comment: { id, text, author: req.user.name, parentId }, post: await serializePost(post, req.user.id) });
   } catch (e) {
@@ -1186,6 +1202,7 @@ app.post("/api/community/comments/:id/react", authenticate, async (req, res) => 
       kind: "reaction_comment",
       badge_count: 1,
       source_key: null,
+      link_path: `/community?post=${encodeURIComponent(comment.post_id)}&comment=${encodeURIComponent(commentId)}`,
       read: false
     });
   }
@@ -1272,7 +1289,8 @@ app.post("/api/announcements", authenticate, requireAdmin, async (req, res) => {
         userId: u.id,
         sourceKey: `announcements:inbox:${u.id}`,
         kind: "announcement",
-        textForCount: (n) => `📢 (${n}) new announcement${n === 1 ? "" : "s"} · open Notifications`
+        textForCount: (n) => `📢 (${n}) new announcement${n === 1 ? "" : "s"} · open Notifications`,
+        linkPath: "/announcements"
       });
     }
     await broker.publish("announcement.created", { id, title });
@@ -1374,7 +1392,9 @@ app.get("/api/notifications", authenticate, async (req, res) => {
       read: n.read,
       badgeCount: typeof n.badge_count === "number" ? n.badge_count : 1,
       kind: n.kind || "general",
-      createdAt: n.created_at
+      createdAt: n.created_at,
+      linkPath: n.link_path || null,
+      sourceKey: n.source_key || null
     }))
   );
 });
@@ -1465,7 +1485,7 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   if (!q) return res.json([]);
   const { data } = await supabase
     .from("users")
-    .select("id, name, email, role, course, avatar_url")
+    .select("id, name, email, role, course, avatar_url, status_emoji, status_note")
     .neq("id", me)
     .or(`name.ilike.%${q}%,email.ilike.%${q}%,course.ilike.%${q}%`)
     .limit(12);
@@ -1613,7 +1633,8 @@ app.post("/api/friends/:friendId", authenticate, async (req, res) => {
     userId: friendId,
     text: `👋 ${req.user.name} sent you a friend request`,
     kind: "friend_request",
-    badgeCount: 1
+    badgeCount: 1,
+    linkPath: "/messages"
   });
   res.status(201).json({ pending: true, message: "Friend request sent" });
 });
@@ -1822,9 +1843,10 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       userId: otherId,
       sourceKey: `dm:${me}`,
       kind: "dm",
-      textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`
+      textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`,
+      linkPath: `/messages?dm=${encodeURIComponent(me)}`
     });
-    if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me);
+    if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me, `/messages?dm=${encodeURIComponent(me)}`);
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });
@@ -2013,12 +2035,13 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
           userId: quotedAuthor,
           kind: "reply_message",
           text: `↩️ ${req.user.name} replied to you in "${conv?.name || "group"}"`,
-          badgeCount: 1
+          badgeCount: 1,
+          linkPath: `/messages?group=${encodeURIComponent(gid)}`
         });
       }
     }
 
-    if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me);
+    if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me, `/messages?group=${encodeURIComponent(gid)}`);
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });
@@ -2105,7 +2128,10 @@ app.post("/api/groups/:id/members", authenticate, async (req, res) => {
     id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
     user_id: uid,
     text: `${req.user.name} added you to "${summary.name}"`,
-    read: false
+    kind: "group_added",
+    badge_count: 1,
+    read: false,
+    link_path: `/messages?group=${encodeURIComponent(gid)}`
   }));
   if (notes.length) await supabase.from("notifications").insert(notes);
 
@@ -2132,8 +2158,11 @@ app.delete("/api/groups/:id/members/:userId", authenticate, async (req, res) => 
   await supabase.from("notifications").insert({
     id: `n${Date.now()}-${targetId}-${Math.random().toString(36).slice(2, 5)}`,
     user_id: targetId,
+    kind: "group_removed",
     text: `You were removed from "${summary.name}"`,
-    read: false
+    badge_count: 1,
+    read: false,
+    link_path: "/messages"
   });
 
   res.json(await fetchGroupSummary(gid, me));
@@ -2273,7 +2302,11 @@ app.post("/api/messages/:id/react", authenticate, async (req, res) => {
       userId: message.from_user_id,
       kind: "reaction_message",
       text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your message`,
-      badgeCount: 1
+      badgeCount: 1,
+      linkPath:
+        message.conversation_id != null
+          ? `/messages?group=${encodeURIComponent(message.conversation_id)}`
+          : `/messages?dm=${encodeURIComponent(me)}`
     });
   }
 

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
@@ -17,6 +18,11 @@ const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
   acc[r.type] = r;
   return acc;
 }, {});
+
+function StatusEmojiChip({ emoji }) {
+  if (!emoji) return null;
+  return <span className="status-emoji-pill">{emoji}</span>;
+}
 
 export default function MessagesPage({
   currentUser,
@@ -69,6 +75,31 @@ export default function MessagesPage({
   const [isNarrowViewport, setIsNarrowViewport] = useState(
     typeof window !== "undefined" ? window.matchMedia("(max-width: 900px)").matches : false
   );
+  const [searchParams, setSearchParams] = useSearchParams();
+  const deepLinkDm = searchParams.get("dm");
+  const deepLinkGroup = searchParams.get("group");
+
+  useEffect(() => {
+    if (!deepLinkDm && !deepLinkGroup) return undefined;
+    let cancelled = false;
+    (async () => {
+      if (deepLinkDm) await onOpenChat?.("dm", deepLinkDm);
+      else if (deepLinkGroup) await onOpenChat?.("group", deepLinkGroup);
+      if (cancelled) return;
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("dm");
+          next.delete("group");
+          return next;
+        },
+        { replace: true }
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deepLinkDm, deepLinkGroup, onOpenChat, setSearchParams]);
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
@@ -275,7 +306,14 @@ export default function MessagesPage({
                             <li key={r.id} className="friend-requests-menu-row">
                               {renderAvatar(r.from, "sm", { showPresence: true })}
                               <div className="friend-requests-menu-meta">
-                                <strong>{r.from?.name}</strong>
+                                <strong className="user-line-name">
+                                  {r.from?.name} <StatusEmojiChip emoji={r.from?.statusEmoji} />
+                                </strong>
+                                {r.from?.statusNote ? (
+                                  <span className="friend-req-status-line" title={r.from.statusNote}>
+                                    {r.from.statusNote}
+                                  </span>
+                                ) : null}
                                 <small>{r.from?.email}</small>
                               </div>
                               <div className="friend-requests-menu-actions">
@@ -326,7 +364,14 @@ export default function MessagesPage({
                 <div key={u.id} className="search-result-row">
                   {renderAvatar(u, "sm", { showPresence: true })}
                   <div className="search-result-info">
-                    <strong>{u.name}</strong>
+                    <strong className="user-line-name">
+                      {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
+                    </strong>
+                    {u.statusNote ? (
+                      <span className="search-result-status" title={u.statusNote}>
+                        {u.statusNote}
+                      </span>
+                    ) : null}
                     <small>{u.email}</small>
                   </div>
                   <div className="search-result-actions">
@@ -397,13 +442,19 @@ export default function MessagesPage({
                       renderAvatar(target, "sm")
                     )}
                     <div className="conv-item-body">
-                      <strong>
+                      <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
                         {target?.name || "Unknown"}{" "}
                         {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
                         {c.kind === "userphone" ? (
                           <span className="pill pill-muted small">anonymous</span>
                         ) : null}
+                        {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
                       </strong>
+                      {c.kind === "dm" && target?.statusNote ? (
+                        <span className="conv-status-sub" title={target.statusNote}>
+                          {target.statusNote}
+                        </span>
+                      ) : null}
                       <span className="conv-preview">
                         {c.lastMessage
                           ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text || ""}`
@@ -446,11 +497,21 @@ export default function MessagesPage({
                   })
                 )}
                 <div className="thread-header-info">
-                  <strong>{isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}</strong>
+                  <strong className={!isGroup && !isUserphone ? "user-line-name" : undefined}>
+                    {isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}
+                    {!isGroup && !isUserphone ? (
+                      <StatusEmojiChip emoji={activeChat.user?.statusEmoji} />
+                    ) : null}
+                  </strong>
                   {isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
                     <small>{activeChat.group?.members?.length || 0} members</small>
+                  ) : activeChat.user?.statusNote ? (
+                    <>
+                      <p className="thread-header-custom-note">{activeChat.user.statusNote}</p>
+                      <small>{activeChat.user?.email}</small>
+                    </>
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}

@@ -20,7 +20,9 @@ export function toPublicUser(row) {
     name: row.name,
     email: row.email,
     course: row.course || null,
-    avatarUrl: row.avatar_url || null
+    avatarUrl: row.avatar_url || null,
+    statusEmoji: row.status_emoji || null,
+    statusNote: row.status_note || null
   };
 }
 

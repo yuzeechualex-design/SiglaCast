@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
@@ -31,6 +32,7 @@ export default function CommunityPage({
   onDeleteComment
 }) {
   const isAdmin = currentUser?.role === "admin";
+  const [params] = useSearchParams();
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
@@ -60,6 +62,35 @@ export default function CommunityPage({
     setContent("");
     clearImage();
   }
+
+  const deeplinkQs = params.toString();
+  useEffect(() => {
+    if (!deeplinkQs) return undefined;
+    const sp = new URLSearchParams(deeplinkQs);
+    const postId = sp.get("post");
+    if (!postId) return undefined;
+
+    let cancelled = false;
+    const cid = sp.get("comment");
+    const anchorId = cid ? `comment-${cid}` : `post-${postId}`;
+
+    const t = window.setTimeout(() => {
+      if (cancelled) return;
+      const el = document.getElementById(anchorId);
+      if (!el && anchorId.startsWith("comment-")) {
+        document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+      }
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      el?.classList.add("community-deep-link-highlight");
+      window.setTimeout(() => el?.classList?.remove("community-deep-link-highlight"), 1500);
+    }, 260);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [deeplinkQs, posts]);
 
   return (
     <section className="panel single">
@@ -91,7 +122,7 @@ export default function CommunityPage({
       {posts.map((post) => {
         const canDelete = isAdmin || post.authorId === currentUser?.id;
         return (
-          <article key={post.id} className="tile post-card">
+          <article key={post.id} id={`post-${post.id}`} className="tile post-card">
             <div className="post-header">
               {post.authorAvatar ? (
                 <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
@@ -314,7 +345,7 @@ function CommentRow({
     }
   }
   return (
-    <div className={`comment-row ${isReply ? "is-reply" : ""}`}>
+    <div className={`comment-row ${isReply ? "is-reply" : ""}`} id={`comment-${comment.id}`}>
       {comment.authorAvatar ? (
         <img className="comment-avatar" src={mediaUrl(comment.authorAvatar)} alt="" />
       ) : (
