@@ -24,6 +24,9 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
+/** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
+const USERPHONE_GUEST_ID = "_userphone_guest";
+
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
 // 25 MB cap — large enough for original-resolution camera shots without re-compression.
 // Files are stored as-is on Supabase Storage (uploadToBucket passes the raw buffer).
@@ -606,12 +609,13 @@ async function decorateChatMessages(rows, viewerId) {
   }
 
   return rows.map((row) => {
-    const sender = senderMap.get(row.from_user_id);
+    const sender =
+      row.from_user_id === USERPHONE_GUEST_ID ? null : senderMap.get(row.from_user_id);
     const rx = reactionsByMessage.get(row.id) || { breakdown: {}, mine: null };
     return {
       ...serializeChatMessage(row, viewerId),
-      author: sender?.name || "Unknown",
-      authorAvatar: sender?.avatar_url || null,
+      author: row.from_user_id === USERPHONE_GUEST_ID ? "Anonymous" : (sender?.name || "Unknown"),
+      authorAvatar: row.from_user_id === USERPHONE_GUEST_ID ? null : (sender?.avatar_url || null),
       reactionBreakdown: row.is_unsent ? {} : rx.breakdown,
       myReaction: row.is_unsent ? null : rx.mine,
       replyTo: row.reply_to_id ? (replyMap.get(row.reply_to_id) || null) : null
@@ -642,6 +646,14 @@ async function fetchActiveUserphoneSession(userId) {
     .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
     .maybeSingle();
   return data || null;
+}
+
+/** Active 1-on-1 Userphone (not a group-chat bridge session). */
+async function fetchActiveSoloUserphoneSession(userId) {
+  const s = await fetchActiveUserphoneSession(userId);
+  if (!s) return null;
+  if (s.bridge_conversation_a || s.bridge_conversation_b) return null;
+  return s;
 }
 
 async function tryPairUserphoneUsers(me) {
@@ -680,7 +692,7 @@ async function tryPairUserphoneUsers(me) {
 }
 
 async function buildUserphoneState(me) {
-  const session = await fetchActiveUserphoneSession(me);
+  const session = await fetchActiveSoloUserphoneSession(me);
   if (session) {
     const { data: rows } = await supabase
       .from("anon_userphone_messages")
@@ -715,6 +727,122 @@ async function buildUserphoneState(me) {
     };
   }
   return { phase: "idle", sessionId: null, messages: [] };
+}
+
+async function cleanupStaleConvWaiting() {
+  const cutoff = new Date(Date.now() - USERPHONE_WAIT_MS).toISOString();
+  await supabase.from("anon_userphone_conv_waiting").delete().lt("joined_at", cutoff);
+}
+
+/** Pair two different group threads that are queued for anonymous bridge. */
+async function tryPairConversationBridges() {
+  await cleanupStaleConvWaiting();
+  const { data: rows } = await supabase.from("anon_userphone_conv_waiting").select("*").order("joined_at", { ascending: true });
+  if (!rows?.length) return;
+  const first = rows[0];
+  const second = rows.find((r) => r.conversation_id !== first.conversation_id);
+  if (!second) return;
+  const hostA = first.queued_by_user_id;
+  const hostB = second.queued_by_user_id;
+  if (await fetchActiveUserphoneSession(hostA)) return;
+  if (await fetchActiveUserphoneSession(hostB)) return;
+  const { data: gotA } = await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", first.conversation_id).select("conversation_id");
+  const { data: gotB } = await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", second.conversation_id).select("conversation_id");
+  if (!gotA?.length || !gotB?.length) return;
+  const ca = first.conversation_id;
+  const cb = second.conversation_id;
+  const participantA = hostA < hostB ? hostA : hostB;
+  const participantB = hostA < hostB ? hostB : hostA;
+  const bridgeA = hostA < hostB ? ca : cb;
+  const bridgeB = hostA < hostB ? cb : ca;
+  const id = `up${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const { error } = await supabase.from("anon_userphone_sessions").insert({
+    id,
+    participant_a: participantA,
+    participant_b: participantB,
+    bridge_conversation_a: bridgeA,
+    bridge_conversation_b: bridgeB
+  });
+  if (error) {
+    console.error("[tryPairConversationBridges]", error.message);
+    await supabase.from("anon_userphone_conv_waiting").insert([
+      { conversation_id: first.conversation_id, queued_by_user_id: first.queued_by_user_id },
+      { conversation_id: second.conversation_id, queued_by_user_id: second.queued_by_user_id }
+    ]);
+  }
+}
+
+async function fetchActiveBridgeSessionForConversation(conversationId) {
+  const { data } = await supabase
+    .from("anon_userphone_sessions")
+    .select("*")
+    .is("ended_at", null)
+    .or(`bridge_conversation_a.eq.${conversationId},bridge_conversation_b.eq.${conversationId}`)
+    .maybeSingle();
+  return data || null;
+}
+
+async function buildGroupUserphoneBridge(gid /* , me retained for future ACL */) {
+  await cleanupStaleConvWaiting();
+  const session = await fetchActiveBridgeSessionForConversation(gid);
+  if (session) {
+    return { phase: "matched", sessionId: session.id };
+  }
+  const { data: w } = await supabase.from("anon_userphone_conv_waiting").select("*").eq("conversation_id", gid).maybeSingle();
+  if (w) {
+    const joinedMs = new Date(w.joined_at).getTime();
+    if (Date.now() - joinedMs >= USERPHONE_WAIT_MS) {
+      await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", gid);
+      return { phase: "idle", waitTimedOut: true };
+    }
+    return {
+      phase: "waiting",
+      waitExpiresAt: new Date(joinedMs + USERPHONE_WAIT_MS).toISOString(),
+      waitStartedAt: w.joined_at
+    };
+  }
+  return { phase: "idle" };
+}
+
+async function getGroupThreadPayload(gid, me) {
+  if (!(await ensureGroupMember(gid, me))) return { errorStatus: 403, errorMessage: "You are not a member of this group" };
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return { errorStatus: 404, errorMessage: "Group not found" };
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", gid)
+    .order("created_at", { ascending: true });
+  const groupUserphone = await buildGroupUserphoneBridge(gid, me);
+  return { group: summary, messages: await decorateChatMessages(msgs || [], me), groupUserphone };
+}
+
+async function relayGroupBridgeMessage(insertedRow) {
+  if (!insertedRow?.conversation_id || insertedRow.bridge_mirror) return;
+  if (insertedRow.from_user_id === USERPHONE_GUEST_ID) return;
+  const gid = insertedRow.conversation_id;
+  const session = await fetchActiveBridgeSessionForConversation(gid);
+  if (!session?.id || session.ended_at) return;
+  const other =
+    session.bridge_conversation_a === gid ? session.bridge_conversation_b : session.bridge_conversation_a;
+  if (!other) return;
+  const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const { error } = await supabase.from("messages").insert({
+    id,
+    conversation_id: other,
+    from_user_id: USERPHONE_GUEST_ID,
+    to_user_id: null,
+    text: insertedRow.text,
+    read: false,
+    reply_to_id: null,
+    attachment_url: insertedRow.attachment_url,
+    attachment_type: insertedRow.attachment_type,
+    attachment_name: insertedRow.attachment_name,
+    attachment_size: insertedRow.attachment_size,
+    bridge_mirror: true,
+    is_unsent: false
+  });
+  if (error) console.error("[relayGroupBridgeMessage]", error.message);
 }
 
 // Seed an admin account + demo event if users table is empty.
@@ -1418,8 +1546,15 @@ app.post("/api/userphone/start", authenticate, async (req, res) => {
   const me = req.user.id;
   const existing = await fetchActiveUserphoneSession(me);
   if (existing) {
+    if (existing.bridge_conversation_a || existing.bridge_conversation_b) {
+      return res.status(400).json({
+        error: "You’re connected via group Userphone. End it in that group first.",
+        code: "USERPHONE_BRIDGE_ACTIVE"
+      });
+    }
     return res.json(await buildUserphoneState(me));
   }
+  await supabase.from("anon_userphone_conv_waiting").delete().eq("queued_by_user_id", me);
   const { data: waitRow } = await supabase.from("anon_userphone_waiting").select("user_id").eq("user_id", me).maybeSingle();
   if (!waitRow) {
     const { error } = await supabase.from("anon_userphone_waiting").insert({ user_id: me });
@@ -1446,6 +1581,12 @@ app.post("/api/userphone/switch", authenticate, async (req, res) => {
   const me = req.user.id;
   const session = await fetchActiveUserphoneSession(me);
   if (session) {
+    if (session.bridge_conversation_a || session.bridge_conversation_b) {
+      return res.status(400).json({
+        error: "Switch isn’t available during group Userphone. End the bridge in the group first.",
+        code: "USERPHONE_BRIDGE_ACTIVE"
+      });
+    }
     await supabase.from("anon_userphone_sessions").update({ ended_at: new Date().toISOString() }).eq("id", session.id);
   }
   await supabase.from("anon_userphone_waiting").delete().eq("user_id", me);
@@ -1460,7 +1601,7 @@ app.post("/api/userphone/:sessionId/messages", authenticate, async (req, res) =>
   const sessionId = req.params.sessionId;
   const text = String(req.body?.text || "").trim();
   if (!text) return res.status(400).json({ error: "Message text is required" });
-  const session = await fetchActiveUserphoneSession(me);
+  const session = await fetchActiveSoloUserphoneSession(me);
   if (!session || session.id !== sessionId) {
     return res.status(400).json({ error: "No active anonymous call" });
   }
@@ -1927,18 +2068,78 @@ app.post("/api/groups", authenticate, (req, res, next) => {
 app.get("/api/groups/:id", authenticate, async (req, res) => {
   const me = req.user.id;
   const gid = req.params.id;
-  if (!(await ensureGroupMember(gid, me))) return res.status(403).json({ error: "You are not a member of this group" });
-  const summary = await fetchGroupSummary(gid, me);
-  if (!summary) return res.status(404).json({ error: "Group not found" });
-  const { data: msgs } = await supabase
-    .from("messages")
-    .select("*")
-    .eq("conversation_id", gid)
-    .order("created_at", { ascending: true });
-  res.json({
-    group: summary,
-    messages: await decorateChatMessages(msgs, me)
-  });
+  const payload = await getGroupThreadPayload(gid, me);
+  if (payload.errorStatus === 403) return res.status(403).json({ error: payload.errorMessage });
+  if (payload.errorStatus === 404) return res.status(404).json({ error: payload.errorMessage });
+  res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+});
+
+app.post("/api/groups/:id/userphone/start", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const gid = req.params.id;
+    const existingSession = await fetchActiveUserphoneSession(me);
+    if (existingSession) {
+      const isBridge = !!(existingSession.bridge_conversation_a || existingSession.bridge_conversation_b);
+      if (!isBridge) {
+        return res.status(400).json({ error: "You’re already in Userphone.", code: "USERPHONE_SOLO_ACTIVE" });
+      }
+      const inSame =
+        existingSession.bridge_conversation_a === gid || existingSession.bridge_conversation_b === gid;
+      if (!inSame) {
+        return res.status(400).json({
+          error: "You’re bridged via Userphone in another group. End it there first.",
+          code: "USERPHONE_BRIDGE_ACTIVE"
+        });
+      }
+      const payload = await getGroupThreadPayload(gid, me);
+      return res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+    }
+    await supabase.from("anon_userphone_waiting").delete().eq("user_id", me);
+    const bridgeNow = await buildGroupUserphoneBridge(gid, me);
+    if (bridgeNow.phase === "matched") {
+      const payload = await getGroupThreadPayload(gid, me);
+      return res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+    }
+    const ts = new Date().toISOString();
+    const { error: upErr } = await supabase.from("anon_userphone_conv_waiting").upsert(
+      { conversation_id: gid, queued_by_user_id: me, joined_at: ts },
+      { onConflict: "conversation_id" }
+    );
+    if (upErr) return res.status(400).json({ error: upErr.message });
+    await tryPairConversationBridges();
+    const payload = await getGroupThreadPayload(gid, me);
+    res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.delete("/api/groups/:id/userphone/waiting", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const payloadAwait = await getGroupThreadPayload(gid, me);
+  if (payloadAwait.errorStatus === 403) return res.status(403).json({ error: payloadAwait.errorMessage });
+  if (payloadAwait.errorStatus === 404) return res.status(404).json({ error: payloadAwait.errorMessage });
+  await supabase.from("anon_userphone_conv_waiting").delete().eq("conversation_id", gid);
+  const payload = await getGroupThreadPayload(gid, me);
+  res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+});
+
+app.post("/api/groups/:id/userphone/end", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  const payloadAwait = await getGroupThreadPayload(gid, me);
+  if (payloadAwait.errorStatus === 403) return res.status(403).json({ error: payloadAwait.errorMessage });
+  if (payloadAwait.errorStatus === 404) return res.status(404).json({ error: payloadAwait.errorMessage });
+  const bridge = await fetchActiveBridgeSessionForConversation(gid);
+  if (!bridge?.id) {
+    const payload = payloadAwait;
+    return res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+  }
+  await supabase.from("anon_userphone_sessions").update({ ended_at: new Date().toISOString() }).eq("id", bridge.id);
+  const payload = await getGroupThreadPayload(gid, me);
+  res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
 });
 
 // Update group name / photo (admins only)
@@ -2013,11 +2214,13 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
         attachment_url: attachment?.url || null,
         attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null,
         attachment_name: attachment?.name || null,
-        attachment_size: attachment?.size || null
+        attachment_size: attachment?.size || null,
+        bridge_mirror: false
       })
       .select()
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
+    await relayGroupBridgeMessage(message);
     await broker.publish("message.sent", { id, fromUserId: me, conversationId: gid });
 
     // No broadcast push for every group message — only @mentions (below) and

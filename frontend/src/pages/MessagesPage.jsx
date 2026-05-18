@@ -54,6 +54,9 @@ export default function MessagesPage({
   onUserphoneEnd,
   onUserphoneSwitch,
   onUserphoneCancelWaiting,
+  onStartGroupUserphoneBridge,
+  onCancelGroupUserphoneWaiting,
+  onEndGroupUserphoneBridge,
   userPhoneAutoReconnect,
   setUserPhoneAutoReconnect
 }) {
@@ -106,24 +109,33 @@ export default function MessagesPage({
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
   const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
+  const gpu = isGroup ? activeChat?.groupUserphone : null;
+  const groupUserphoneWaiting = gpu?.phase === "waiting";
+  const groupUserphoneMatched = gpu?.phase === "matched";
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
 
   /** Must match backend USERPHONE_WAIT_MS / 1000 in server.js */
   const USERPHONE_QUEUE_SEC = 10;
   const [userphoneNow, setUserphoneNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!isUserphone || userphonePhase !== "waiting") return undefined;
+    const queueWaiting =
+      (isUserphone && userphonePhase === "waiting") || (isGroup && groupUserphoneWaiting);
+    if (!queueWaiting) return undefined;
     const t = setInterval(() => setUserphoneNow(Date.now()), 200);
     return () => clearInterval(t);
-  }, [isUserphone, userphonePhase]);
+  }, [isUserphone, userphonePhase, isGroup, groupUserphoneWaiting]);
 
-  const userphoneSecondsLeft =
-    isUserphone && userphonePhase === "waiting" && activeChat?.waitExpiresAt
-      ? Math.max(0, Math.ceil((new Date(activeChat.waitExpiresAt).getTime() - userphoneNow) / 1000))
-      : null;
+  const soloWaitExpiry = activeChat?.waitExpiresAt;
+  const groupWaitExpiry = gpu?.waitExpiresAt;
+  const queueSecondsLeft =
+    isUserphone && userphonePhase === "waiting" && soloWaitExpiry
+      ? Math.max(0, Math.ceil((new Date(soloWaitExpiry).getTime() - userphoneNow) / 1000))
+      : isGroup && groupUserphoneWaiting && groupWaitExpiry
+        ? Math.max(0, Math.ceil((new Date(groupWaitExpiry).getTime() - userphoneNow) / 1000))
+        : null;
 
-  const userphoneCountdownPct =
-    userphoneSecondsLeft != null ? Math.min(1, Math.max(0, userphoneSecondsLeft / USERPHONE_QUEUE_SEC)) : null;
+  const queueCountdownPct =
+    queueSecondsLeft != null ? Math.min(1, Math.max(0, queueSecondsLeft / USERPHONE_QUEUE_SEC)) : null;
 
   useEffect(() => {
     setDraft("");
@@ -131,7 +143,14 @@ export default function MessagesPage({
     setMenuOpen(false);
     setReplyTarget(null);
     setComposePlusOpen(false);
-  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, activeChat?.sessionId, activeChat?.phase]);
+  }, [
+    activeChat?.kind,
+    activeChat?.user?.id,
+    activeChat?.group?.id,
+    activeChat?.sessionId,
+    activeChat?.phase,
+    activeChat?.groupUserphone?.phase
+  ]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
@@ -148,7 +167,14 @@ export default function MessagesPage({
       threadEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, activeChat?.sessionId, activeChat?.phase]);
+  }, [
+    activeChat?.kind,
+    activeChat?.user?.id,
+    activeChat?.group?.id,
+    activeChat?.sessionId,
+    activeChat?.phase,
+    activeChat?.groupUserphone?.phase
+  ]);
 
   // Click outside hamburger menu closes it
   useEffect(() => {
@@ -637,6 +663,18 @@ export default function MessagesPage({
                 ) : null}
               </div>
 
+              {isGroup && groupUserphoneMatched ? (
+                <div className="userphone-toolbar">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onEndGroupUserphoneBridge?.(activeChat.group.id)}
+                  >
+                    End Userphone
+                  </button>
+                </div>
+              ) : null}
+
               {isUserphone && userphonePhase === "matched" ? (
                 <div className="userphone-toolbar">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => onUserphoneEnd?.()}>
@@ -671,10 +709,10 @@ export default function MessagesPage({
                   ) : (
                     <>
                       <p className="userphone-intro userphone-countdown-line">
-                        {userphoneSecondsLeft != null ? (
+                        {queueSecondsLeft != null ? (
                           <>
                             Matching…{" "}
-                            <span className="userphone-countdown-digits">{userphoneSecondsLeft}</span>s left before you
+                            <span className="userphone-countdown-digits">{queueSecondsLeft}</span>s left before you
                             leave the queue.
                           </>
                         ) : (
@@ -686,12 +724,12 @@ export default function MessagesPage({
                           ? "Each round lasts 10s; you’ll stay in queue automatically until you match or tap Cancel."
                           : "If no one joins in time, tap Call anonymous again when someone might be online."}
                       </p>
-                      {userphoneCountdownPct != null ? (
+                      {queueCountdownPct != null ? (
                         <div className="userphone-queue-meter" aria-label="Time left in queue">
                           <div
                             className="userphone-queue-meter-fill"
                             style={{
-                              width: `${Math.round(Math.min(100, Math.max(0, userphoneCountdownPct * 100)))}%`
+                              width: `${Math.round(Math.min(100, Math.max(0, queueCountdownPct * 100)))}%`
                             }}
                           />
                         </div>
@@ -713,21 +751,60 @@ export default function MessagesPage({
                   )}
                 </div>
               ) : (
-              <div className="thread-messages">
-                {(activeChat.messages || []).map((m) => (
-                  <MessageBubble
-                    key={m.id}
-                    message={m}
-                    showAuthor={isGroup && !m.fromMe}
-                    minimal={isUserphone}
-                    onReact={onReactToMessage}
-                    onReply={handleReply}
-                    onUnsend={handleUnsend}
-                    onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
-                  />
-                ))}
-                <div ref={threadEndRef} />
-              </div>
+              <>
+                {isGroup && groupUserphoneWaiting ? (
+                  <div className="userphone-cta-wrap gc-userphone-connecting" role="status">
+                    <p className="userphone-intro userphone-countdown-line">
+                      {queueSecondsLeft != null ? (
+                        <>
+                          Connecting anonymous Userphone…{" "}
+                          <span className="userphone-countdown-digits">{queueSecondsLeft}</span>s left in this search
+                          round.
+                        </>
+                      ) : (
+                        <>Connecting anonymous Userphone — searching for another group chat…</>
+                      )}
+                    </p>
+                    <p className="userphone-timeout-hint muted small">
+                      When matched, messages from people in the other group appear here as Anonymous.
+                    </p>
+                    {queueCountdownPct != null ? (
+                      <div className="userphone-queue-meter" aria-label="Time left in queue">
+                        <div
+                          className="userphone-queue-meter-fill"
+                          style={{
+                            width: `${Math.round(Math.min(100, Math.max(0, queueCountdownPct * 100)))}%`
+                          }}
+                        />
+                      </div>
+                    ) : (
+                      <div className="userphone-spinner" aria-busy />
+                    )}
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm"
+                      onClick={() => onCancelGroupUserphoneWaiting?.(activeChat.group.id)}
+                    >
+                      Cancel search
+                    </button>
+                  </div>
+                ) : null}
+                <div className="thread-messages">
+                  {(activeChat.messages || []).map((m) => (
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      showAuthor={isGroup && !m.fromMe}
+                      minimal={isUserphone}
+                      onReact={onReactToMessage}
+                      onReply={handleReply}
+                      onUnsend={handleUnsend}
+                      onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
+                    />
+                  ))}
+                  <div ref={threadEndRef} />
+                </div>
+              </>
               )}
 
               {replyTarget && !isUserphone ? (
@@ -771,21 +848,39 @@ export default function MessagesPage({
                   </button>
                   {composePlusOpen ? (
                     <div className="compose-plus-dropdown" role="menu">
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className="compose-plus-item"
-                        onClick={async () => {
-                          setComposePlusOpen(false);
-                          await onOpenChat?.("userphone", "userphone");
-                          await onUserphoneStart?.();
-                        }}
-                      >
-                        <span className="compose-plus-item-title">📞 Userphone</span>
-                        <span className="compose-plus-item-desc">
-                          Anonymous 1-on-1 queue when someone else is on Userphone too. Leaves this DM or group for the Userphone tab.
-                        </span>
-                      </button>
+                      {isGroup ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="compose-plus-item"
+                          onClick={async () => {
+                            setComposePlusOpen(false);
+                            await onStartGroupUserphoneBridge?.(activeChat.group.id);
+                          }}
+                        >
+                          <span className="compose-plus-item-title">📞 Userphone (this group)</span>
+                          <span className="compose-plus-item-desc">
+                            Queues this group anonymously with another group. Stay in this chat — mirrored messages appear
+                            as Anonymous.
+                          </span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="compose-plus-item"
+                          onClick={async () => {
+                            setComposePlusOpen(false);
+                            await onOpenChat?.("userphone", "userphone");
+                            await onUserphoneStart?.();
+                          }}
+                        >
+                          <span className="compose-plus-item-title">📞 Userphone</span>
+                          <span className="compose-plus-item-desc">
+                            Anonymous 1-on-1 queue when someone else is on Userphone too. Opens the Userphone tab.
+                          </span>
+                        </button>
+                      )}
                     </div>
                   ) : null}
                 </div>

@@ -815,6 +815,10 @@ export default function App() {
 
   async function startUserphoneCall() {
     const st = await api("/userphone/start", { method: "POST", body: {} });
+    if (st.error) {
+      setNotice(st.error);
+      return;
+    }
     applyUserPhoneServerPayload(st);
   }
 
@@ -838,7 +842,43 @@ export default function App() {
     setNotice("Stopped searching");
   }
 
-  // Unified send (DM or group). file is optional.
+  async function startGroupUserphoneBridge(groupId) {
+    const res = await api(`/groups/${groupId}/userphone/start`, { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setActiveChat((prev) =>
+      prev?.kind === "group" && prev.group?.id === groupId ? { ...res, kind: "group" } : prev
+    );
+    await loadMessages();
+  }
+
+  async function cancelGroupUserphoneWaiting(groupId) {
+    const res = await api(`/groups/${groupId}/userphone/waiting`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setActiveChat((prev) =>
+      prev?.kind === "group" && prev.group?.id === groupId ? { ...res, kind: "group" } : prev
+    );
+    await loadMessages();
+    setNotice("Stopped searching");
+  }
+
+  async function endGroupUserphoneBridge(groupId) {
+    const res = await api(`/groups/${groupId}/userphone/end`, { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setActiveChat((prev) =>
+      prev?.kind === "group" && prev.group?.id === groupId ? { ...res, kind: "group" } : prev
+    );
+    await loadMessages();
+    setNotice("Userphone disconnected");
+  }
   // Send a chat message. Optionally attach a file and/or quote-reply another
   // message via replyToId.
   async function sendChatMessage(text, file, replyToId = null) {
@@ -1314,6 +1354,9 @@ export default function App() {
               onUserphoneEnd={endUserphoneCallAction}
               onUserphoneSwitch={switchUserphoneCallAction}
               onUserphoneCancelWaiting={cancelUserphoneWaitingAction}
+              onStartGroupUserphoneBridge={startGroupUserphoneBridge}
+              onCancelGroupUserphoneWaiting={cancelGroupUserphoneWaiting}
+              onEndGroupUserphoneBridge={endGroupUserphoneBridge}
               userPhoneAutoReconnect={userPhoneAutoReconnect}
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
             />
