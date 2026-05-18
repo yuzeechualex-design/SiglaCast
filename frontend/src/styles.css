@@ -2683,14 +2683,16 @@ label.btn-secondary:hover {
     gap: 6px;
   }
 
+  /* Anchor toward the conversation center (inner edge): own bubbles on the
+     right → actions on the left; others' bubbles on the left → on the right. */
   .bubble-quick-actions.side-left {
-    right: 0;
-    left: auto;
+    left: 0;
+    right: auto;
   }
 
   .bubble-quick-actions.side-right {
-    left: 0;
-    right: auto;
+    right: 0;
+    left: auto;
   }
 
   /* Room for picker (above) + inline actions strip (below bubble) */
