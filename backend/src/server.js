@@ -14,6 +14,7 @@ import jwt from "jsonwebtoken";
 import multer from "multer";
 
 import { supabase, toPublicUser, toEvent, toCandidate, uploadToBucket, uploadAttachment } from "./supabase.js";
+import { validateRegisterForm } from "./registerValidation.js";
 
 const { xsltProcess, xmlParse } = xsltProcessor;
 
@@ -646,8 +647,18 @@ function requireAdmin(req, res, next) {
 // Auth
 app.post("/api/auth/register", async (req, res) => {
   try {
-    const { name, email, password, course = "General" } = req.body || {};
-    if (!name || !email || !password) return res.status(400).json({ error: "name, email, and password are required" });
+    const body = req.body || {};
+    const v = validateRegisterForm({
+      name: body.name,
+      email: body.email,
+      password: body.password,
+      course: body.course ?? ""
+    });
+    if (!v.ok) {
+      const messages = [...new Set(Object.values(v.fieldErrors))];
+      return res.status(400).json({ error: messages.join(" ") });
+    }
+    const { name, email, password, course } = v.normalized;
     const existing = await fetchUserByEmail(email);
     if (existing) return res.status(400).json({ error: "Email already registered" });
     const { count } = await supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "student");

@@ -11,6 +11,7 @@ import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
+import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
 export default function App() {
   const navigate = useNavigate();
@@ -277,7 +278,7 @@ export default function App() {
     setLoadingAuth(true);
     const res = await api("/auth/login", {
       method: "POST",
-      body: { email, password }
+      body: { email: normalizeRegistrationEmail(email), password }
     });
     if (res.error) {
       setNotice(res.error);
@@ -293,12 +294,19 @@ export default function App() {
     setLoadingAuth(false);
   }
 
-  async function register() {
+  async function register(registrationPayload) {
     if (loadingAuth) return;
+    const source = registrationPayload ?? { name, email, password, course };
+    const v = validateRegisterForm(source);
+    if (!v.ok) {
+      setNotice([...new Set(Object.values(v.fieldErrors))].join(" "));
+      return;
+    }
     setLoadingAuth(true);
+    const { name: regName, email: regEmail, password: regPassword, course: regCourse } = v.normalized;
     const res = await api("/auth/register", {
       method: "POST",
-      body: { name, email, password, course }
+      body: { name: regName, email: regEmail, password: regPassword, course: regCourse }
     });
     setNotice(res.error || "Registration successful. Please login.");
     if (!res.error) setMode("login");
@@ -765,6 +773,7 @@ export default function App() {
         course={course}
         setCourse={setCourse}
         notice={notice}
+        clearNotice={() => setNotice("")}
         loading={loadingAuth}
         onLogin={login}
         onRegister={register}

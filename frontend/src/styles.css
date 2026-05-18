@@ -125,6 +125,54 @@ p {
   margin-top: 14px;
 }
 
+.auth-field-hint {
+  margin: -8px 0 10px;
+  font-size: 0.82rem;
+  color: var(--ink-600);
+  line-height: 1.4;
+}
+
+.auth-field-error {
+  margin: -8px 0 10px;
+  font-size: 0.82rem;
+  color: #b91c1c;
+  line-height: 1.35;
+}
+
+.auth-password-hints {
+  list-style: none;
+  padding: 0;
+  margin: 4px 0 14px;
+  font-size: 0.76rem;
+  color: var(--ink-600);
+  line-height: 1.5;
+}
+
+.auth-password-hints li {
+  margin: 3px 0;
+  padding-left: 1.2em;
+  position: relative;
+}
+
+.auth-password-hints li::before {
+  content: "○";
+  position: absolute;
+  left: 0;
+  opacity: 0.55;
+  font-size: 0.7em;
+  top: 0.15em;
+}
+
+.auth-password-hints li.ok {
+  color: #15803d;
+}
+
+.auth-password-hints li.ok::before {
+  content: "✓";
+  opacity: 1;
+  font-weight: 700;
+}
+
 .hero-badge {
   margin-top: 14px;
 }
@@ -2293,6 +2341,18 @@ label.btn-secondary:hover {
 [data-theme="dark"] .auth-tabs button:not(.active):hover {
   background: var(--yellow-300);
   color: #1b1f29;
+}
+
+[data-theme="dark"] .auth-field-hint {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+[data-theme="dark"] .auth-field-error {
+  color: #fecaca;
+}
+
+[data-theme="dark"] .auth-password-hints li:not(.ok) {
+  color: rgba(255, 255, 255, 0.65);
 }
 
 [data-theme="dark"] .modal-backdrop {
