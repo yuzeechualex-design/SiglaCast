@@ -261,10 +261,23 @@ async function serializePost(post, viewerId) {
       : null;
 
   let commentAuthors = new Map();
+  let commentLikesByCommentId = new Map();
   if (comments?.length) {
+    const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
-    const { data: users } = await supabase.from("users").select("id, name, avatar_url").in("id", authorIds);
+    const [{ data: users }, { data: likes }] = await Promise.all([
+      supabase.from("users").select("id, name, avatar_url").in("id", authorIds),
+      supabase.from("comment_likes").select("comment_id, user_id").in("comment_id", commentIds)
+    ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
+    for (const l of likes || []) {
+      if (!commentLikesByCommentId.has(l.comment_id)) {
+        commentLikesByCommentId.set(l.comment_id, { count: 0, mine: false });
+      }
+      const entry = commentLikesByCommentId.get(l.comment_id);
+      entry.count += 1;
+      if (viewerId && l.user_id === viewerId) entry.mine = true;
+    }
   }
 
   // Build a 2-level comment tree: top-level comments each get a `replies` array.
@@ -272,6 +285,7 @@ async function serializePost(post, viewerId) {
   // UI stays readable (Facebook style).
   const flat = (comments || []).map((c) => {
     const a = commentAuthors.get(c.author_id);
+    const likeInfo = commentLikesByCommentId.get(c.id) || { count: 0, mine: false };
     return {
       id: c.id,
       parentId: c.parent_id || null,
@@ -279,7 +293,9 @@ async function serializePost(post, viewerId) {
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
       text: c.content,
-      createdAt: c.created_at
+      createdAt: c.created_at,
+      likeCount: likeInfo.count,
+      likedByMe: likeInfo.mine
     };
   });
   const byId = new Map(flat.map((c) => [c.id, c]));
@@ -327,6 +343,37 @@ async function serializePost(post, viewerId) {
     commentCount: flat.length
   };
 }
+// ---------- Mentions ----------
+// Mentions use the canonical bracket form `@[Full Name]` (inserted by the
+// frontend autocomplete). On submit we extract every match, look up users by
+// exact (case-insensitive) name, drop the author, and return user ids.
+async function extractMentionIds(text, excludeUserId = null) {
+  if (!text || typeof text !== "string") return [];
+  const names = new Set();
+  const re = /@\[([^\]]+)\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    const name = m[1].trim();
+    if (name) names.add(name.toLowerCase());
+  }
+  if (!names.size) return [];
+  const { data } = await supabase.from("users").select("id, name");
+  const matched = (data || []).filter((u) => names.has((u.name || "").toLowerCase()));
+  return [...new Set(matched.map((u) => u.id).filter((id) => id !== excludeUserId))];
+}
+
+async function notifyMentions(text, label, excludeUserId) {
+  const ids = await extractMentionIds(text, excludeUserId);
+  if (!ids.length) return;
+  const notes = ids.map((uid) => ({
+    id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
+    user_id: uid,
+    text: `You were mentioned in ${label}`,
+    read: false
+  }));
+  await supabase.from("notifications").insert(notes);
+}
+
 async function areFriends(a, b) {
   const { data } = await supabase
     .from("friends")
@@ -709,6 +756,7 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
     }).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("post.created", { id: post.id });
+    await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id);
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -729,23 +777,38 @@ app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
     .eq("user_id", req.user.id)
     .maybeSingle();
 
+  let action = "none";
   if (existing) {
     if (wantClear || existing.reaction === reaction) {
-      // Toggle off if same reaction or explicit clear
       await supabase.from("post_reactions").delete().eq("post_id", post_id).eq("user_id", req.user.id);
+      action = "removed";
     } else {
       await supabase
         .from("post_reactions")
         .update({ reaction })
         .eq("post_id", post_id)
         .eq("user_id", req.user.id);
+      action = "changed";
     }
   } else if (!wantClear) {
     await supabase.from("post_reactions").insert({ post_id, user_id: req.user.id, reaction });
+    action = "added";
   }
 
   const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
   if (!post) return res.status(404).json({ error: "Post not found" });
+
+  // Notify the post author when someone newly reacts (not themselves, not toggle-off, not change)
+  if (action === "added" && post.author_id && post.author_id !== req.user.id) {
+    const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+    await supabase.from("notifications").insert({
+      id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+      user_id: post.author_id,
+      text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your post`,
+      read: false
+    });
+  }
+
   res.json(await serializePost(post, req.user.id));
 });
 
@@ -774,10 +837,78 @@ app.post("/api/community/posts/:id/comments", authenticate, async (req, res) => 
       .insert({ id, post_id, author_id: req.user.id, content: text, parent_id: parentId });
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
+
+    // Notification fan-out
+    const notes = [];
+    if (post?.author_id && post.author_id !== req.user.id) {
+      notes.push({
+        id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+        user_id: post.author_id,
+        text: parentId
+          ? `${req.user.name} replied to a comment on your post`
+          : `${req.user.name} commented on your post`,
+        read: false
+      });
+    }
+    if (parentId) {
+      const { data: parent } = await supabase
+        .from("post_comments")
+        .select("author_id")
+        .eq("id", parentId)
+        .maybeSingle();
+      if (parent?.author_id && parent.author_id !== req.user.id && parent.author_id !== post?.author_id) {
+        notes.push({
+          id: `n${Date.now()}-${parent.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+          user_id: parent.author_id,
+          text: `${req.user.name} replied to your comment`,
+          read: false
+        });
+      }
+    }
+    if (notes.length) await supabase.from("notifications").insert(notes);
+    await notifyMentions(text, parentId ? `a reply by ${req.user.name}` : `a comment by ${req.user.name}`, req.user.id);
+
     res.status(201).json({ comment: { id, text, author: req.user.name, parentId }, post: await serializePost(post, req.user.id) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// Toggle a heart "like" on a comment + notify the comment author the first
+// time someone likes it. Returns the updated full post so the UI can patch.
+app.post("/api/community/comments/:id/like", authenticate, async (req, res) => {
+  const commentId = req.params.id;
+  const me = req.user.id;
+  const { data: comment } = await supabase
+    .from("post_comments")
+    .select("*")
+    .eq("id", commentId)
+    .maybeSingle();
+  if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+  const { data: existing } = await supabase
+    .from("comment_likes")
+    .select("comment_id")
+    .eq("comment_id", commentId)
+    .eq("user_id", me)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase.from("comment_likes").delete().eq("comment_id", commentId).eq("user_id", me);
+  } else {
+    await supabase.from("comment_likes").insert({ comment_id: commentId, user_id: me });
+    if (comment.author_id && comment.author_id !== me) {
+      await supabase.from("notifications").insert({
+        id: `n${Date.now()}-${comment.author_id}-${Math.random().toString(36).slice(2, 5)}`,
+        user_id: comment.author_id,
+        text: `${req.user.name} liked your comment`,
+        read: false
+      });
+    }
+  }
+
+  const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
+  res.json(await serializePost(post, me));
 });
 
 // Dashboards
@@ -888,6 +1019,7 @@ app.delete("/api/admin/users/:id", authenticate, requireAdmin, async (req, res) 
   }
   await supabase.from("posts").delete().eq("author_id", id);
   await supabase.from("post_reactions").delete().eq("user_id", id);
+  await supabase.from("comment_likes").delete().eq("user_id", id);
   await supabase.from("post_comments").delete().eq("author_id", id);
   await supabase.from("messages").delete().or(`from_user_id.eq.${id},to_user_id.eq.${id}`);
   await supabase.from("friends").delete().or(`user_id.eq.${id},friend_id.eq.${id}`);
@@ -1147,6 +1279,7 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       text: `New message from ${req.user.name}`,
       read: false
     });
+    if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me);
     res.status(201).json({ message: serializeChatMessage(message, me) });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -1330,6 +1463,8 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
       }));
       await supabase.from("notifications").insert(notes);
     }
+
+    if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me);
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });

@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
+import ThemeToggle from "./ThemeToggle.jsx";
 
-export default function AppShell({ user, notice, stats, onLogout, children }) {
+export default function AppShell({ user, notice, stats, onLogout, theme, onToggleTheme, children }) {
   return (
     <div className="app">
       <header className="hero">
@@ -10,6 +11,9 @@ export default function AppShell({ user, notice, stats, onLogout, children }) {
           <p className="hero-subtitle">
             {user.role === "admin" ? "Admin Operations Dashboard" : "Student Dashboard"} — {user.name}
           </p>
+          <div className="hero-theme-row">
+            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+          </div>
         </div>
         <div className="hero-stats">
           <article className="stat"><span>Open Events</span><strong>{stats.openEvents}</strong></article>

@@ -50,6 +50,28 @@ export default function App() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [adminUsers, setAdminUsers] = useState([]);
+  const [theme, setTheme] = useState(() => {
+    try {
+      const saved = localStorage.getItem("siglacast_theme");
+      if (saved === "dark" || saved === "light") return saved;
+    } catch (_) { /* ignore */ }
+    if (typeof window !== "undefined" && window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+      return "dark";
+    }
+    return "light";
+  });
+
+  // Reflect theme on <html> so every page (including auth) picks it up.
+  useEffect(() => {
+    if (typeof document !== "undefined") {
+      document.documentElement.setAttribute("data-theme", theme);
+    }
+    try { localStorage.setItem("siglacast_theme", theme); } catch (_) { /* ignore */ }
+  }, [theme]);
+
+  function toggleTheme() {
+    setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }
 
   async function refreshSession() {
     if (isRefreshing) return null;
@@ -279,6 +301,17 @@ export default function App() {
     } else {
       await loadCore();
     }
+  }
+
+  // Toggle a heart-like on a single comment. Backend returns the patched post.
+  async function likeComment(comment) {
+    if (!comment?.id) return;
+    const res = await api(`/community/comments/${comment.id}/like`, { method: "POST" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setPosts((prev) => prev.map((p) => (p.id === res.id ? res : p)));
   }
 
   async function saveProfile(payload) {
@@ -628,6 +661,8 @@ export default function App() {
       user={user}
       notice={notice || ""}
       onLogout={logout}
+      theme={theme}
+      onToggleTheme={toggleTheme}
       stats={{
         openEvents: events.filter((e) => e.status === "open").length,
         posts: posts.length,
@@ -687,6 +722,7 @@ export default function App() {
               onReact={reactToPost}
               onComment={commentOnPost}
               onDeletePost={deletePost}
+              onLikeComment={likeComment}
             />
           }
         />

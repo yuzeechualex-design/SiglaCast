@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
+import MentionInput from "../components/MentionInput.jsx";
+import MentionText from "../components/MentionText.jsx";
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
@@ -17,7 +19,7 @@ const REACTION_MAP = REACTIONS.reduce((acc, r) => {
 
 const TRUNCATE_LIMIT = 280;
 
-export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost }) {
+export default function CommunityPage({ posts, currentUser, onPost, onReact, onComment, onDeletePost, onLikeComment }) {
   const isAdmin = currentUser?.role === "admin";
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -55,7 +57,13 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
         <p>Share updates, photos, and reactions with campus users.</p>
       </div>
       <div className="composer community-composer">
-        <textarea value={content} onChange={(e) => setContent(e.target.value)} placeholder="What is on your mind?" />
+        <MentionInput
+          as="textarea"
+          rows={3}
+          value={content}
+          onChange={setContent}
+          placeholder="What is on your mind? Use @ to mention someone…"
+        />
         {previewUrl ? (
           <div className="image-preview-wrap">
             <img className="image-preview" src={previewUrl} alt="Preview" />
@@ -106,6 +114,7 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
               post={post}
               currentUser={currentUser}
               onComment={onComment}
+              onLikeComment={onLikeComment}
             />
           </article>
         );
@@ -114,7 +123,7 @@ export default function CommunityPage({ posts, currentUser, onPost, onReact, onC
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment }) {
+function CommentsBlock({ post, currentUser, onComment, onLikeComment }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const comments = post.comments || [];
 
@@ -142,6 +151,7 @@ function CommentsBlock({ post, currentUser, onComment }) {
               currentUser={currentUser}
               onSubmitReply={(text) => submitReply(c.id, text)}
               onCancelReply={() => setReplyingTo(null)}
+              onLikeComment={onLikeComment}
             />
             {c.replies?.length ? (
               <ul className="reply-list">
@@ -155,6 +165,7 @@ function CommentsBlock({ post, currentUser, onComment }) {
                       currentUser={currentUser}
                       onSubmitReply={(text) => submitReply(r.id, text)}
                       onCancelReply={() => setReplyingTo(null)}
+                      onLikeComment={onLikeComment}
                     />
                   </li>
                 ))}
@@ -173,7 +184,7 @@ function CommentsBlock({ post, currentUser, onComment }) {
   );
 }
 
-function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply }) {
+function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onSubmitReply, onCancelReply, onLikeComment }) {
   return (
     <div className={`comment-row ${isReply ? "is-reply" : ""}`}>
       {comment.authorAvatar ? (
@@ -187,9 +198,18 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
           {comment.replyToAuthor ? (
             <span className="reply-mention">@{comment.replyToAuthor}</span>
           ) : null}{" "}
-          <span>{comment.text}</span>
+          <MentionText text={comment.text} />
         </div>
         <div className="comment-meta">
+          <button
+            type="button"
+            className={`comment-like-btn ${comment.likedByMe ? "liked" : ""}`}
+            onClick={() => onLikeComment?.(comment)}
+            title={comment.likedByMe ? "Unlike" : "Like"}
+          >
+            <span className="comment-like-heart">{comment.likedByMe ? "❤️" : "🤍"}</span>
+            {comment.likeCount > 0 ? <span>{comment.likeCount}</span> : <span>Like</span>}
+          </button>
           <button type="button" className="reply-link" onClick={onReplyClick}>
             {replying ? "Cancel" : "Reply"}
           </button>
@@ -197,7 +217,7 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
         {replying ? (
           <ReplyForm
             currentUser={currentUser}
-            placeholder={`Reply to ${comment.author}…`}
+            placeholder={`Reply to ${comment.author}… use @ to mention`}
             onSubmit={onSubmitReply}
             onCancel={onCancelReply}
           />
@@ -209,10 +229,6 @@ function CommentRow({ comment, isReply, onReplyClick, replying, currentUser, onS
 
 function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
   const [text, setText] = useState("");
-  const inputRef = useRef(null);
-  useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
@@ -222,11 +238,11 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
   }
   return (
     <form className="comment-form reply-form" onSubmit={submit}>
-      <input
-        ref={inputRef}
+      <MentionInput
         value={text}
+        onChange={setText}
         placeholder={placeholder || `Reply as ${currentUser.name}…`}
-        onChange={(e) => setText(e.target.value)}
+        autoFocus
       />
       <button type="submit" className="btn btn-secondary btn-sm">↩ Reply</button>
       <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
@@ -242,7 +258,7 @@ function PostText({ text }) {
   const displayed = expanded || !tooLong ? text : text.slice(0, TRUNCATE_LIMIT).trimEnd() + "…";
   return (
     <p className={`post-body ${expanded || !tooLong ? "" : "post-body-clamped"}`}>
-      {displayed}
+      <MentionText text={displayed} />
       {tooLong ? (
         <>
           {" "}
@@ -368,7 +384,11 @@ function CommentBox({ postId, onComment, currentUser }) {
   }
   return (
     <form className="comment-form" onSubmit={submit}>
-      <input value={text} placeholder={`Comment as ${currentUser.name}…`} onChange={(e) => setText(e.target.value)} />
+      <MentionInput
+        value={text}
+        onChange={setText}
+        placeholder={`Comment as ${currentUser.name}… use @ to mention`}
+      />
       <button type="submit" className="btn btn-secondary btn-sm">💬 Comment</button>
     </form>
   );

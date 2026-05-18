@@ -1,4 +1,5 @@
-:root {
+:root,
+[data-theme="light"] {
   --blue-950: #0a255e;
   --blue-800: #0d47a1;
   --blue-700: #1f5ec7;
@@ -8,8 +9,40 @@
   --ink-900: #112b47;
   --ink-600: #506a87;
   --surface: #f8fbff;
+  --card: #ffffff;
   --line: #d8e6f7;
   --shadow-soft: 0 10px 30px rgba(13, 71, 161, 0.12);
+  --body-bg-1: #f3f8ff;
+  --body-bg-2: #fff7dd;
+  --body-bg-3: #edf5ff;
+  --body-bg-4: #fffdf1;
+  --input-bg: #ffffff;
+  --bubble-them-bg: #ffffff;
+  --bubble-them-text: var(--ink-900);
+  --menu-bg: #ffffff;
+}
+
+[data-theme="dark"] {
+  --blue-950: #0a255e;
+  --blue-800: #2b56c9;
+  --blue-700: #3a73e0;
+  --yellow-500: #facc15;
+  --yellow-300: #fde047;
+  --white: #ffffff;
+  --ink-900: #e6edf6;
+  --ink-600: #a3b2cc;
+  --surface: #182234;
+  --card: #131c2e;
+  --line: #283246;
+  --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.45);
+  --body-bg-1: rgba(31, 94, 199, 0.12);
+  --body-bg-2: rgba(250, 204, 21, 0.06);
+  --body-bg-3: #0b1220;
+  --body-bg-4: #131c2e;
+  --input-bg: #1a2236;
+  --bubble-them-bg: #1f2940;
+  --bubble-them-text: var(--ink-900);
+  --menu-bg: #1a2236;
 }
 
 * {
@@ -20,12 +53,14 @@ body {
   margin: 0;
   font-family: Inter, system-ui, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
   background:
-    radial-gradient(circle at 5% 0%, #f3f8ff 0%, transparent 40%),
-    radial-gradient(circle at 95% 100%, #fff7dd 0%, transparent 40%),
-    linear-gradient(140deg, #edf5ff, #fffdf1);
+    radial-gradient(circle at 5% 0%, var(--body-bg-1) 0%, transparent 40%),
+    radial-gradient(circle at 95% 100%, var(--body-bg-2) 0%, transparent 40%),
+    linear-gradient(140deg, var(--body-bg-3), var(--body-bg-4));
   color: var(--ink-900);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  transition: background 0.4s ease, color 0.4s ease;
+  min-height: 100vh;
 }
 
 h1, h2, h3 {
@@ -2097,6 +2132,286 @@ label.btn-secondary:hover {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* ========================================================================
+   Dark mode overrides — kept here as a single block to keep the rest of the
+   stylesheet light-mode-first. Every selector below scopes to [data-theme="dark"].
+   ======================================================================== */
+
+[data-theme="dark"] .panel,
+[data-theme="dark"] .tile,
+[data-theme="dark"] .composer,
+[data-theme="dark"] .auth-card,
+[data-theme="dark"] .admin-panel,
+[data-theme="dark"] .admin-row,
+[data-theme="dark"] .modal-card,
+[data-theme="dark"] .conv-item,
+[data-theme="dark"] .messages-sidebar,
+[data-theme="dark"] .messages-thread,
+[data-theme="dark"] .search-results,
+[data-theme="dark"] .search-result-row,
+[data-theme="dark"] .thread-menu,
+[data-theme="dark"] .mention-popover,
+[data-theme="dark"] .reaction-picker,
+[data-theme="dark"] .bubble-react-picker,
+[data-theme="dark"] .bubble-reaction-chip,
+[data-theme="dark"] .file-row,
+[data-theme="dark"] .member-row,
+[data-theme="dark"] .comment-bubble {
+  background-color: var(--card);
+  color: var(--ink-900);
+}
+
+[data-theme="dark"] .friend-search input,
+[data-theme="dark"] input,
+[data-theme="dark"] textarea,
+[data-theme="dark"] select {
+  background-color: var(--input-bg);
+  color: var(--ink-900);
+  border-color: var(--line);
+}
+
+[data-theme="dark"] input::placeholder,
+[data-theme="dark"] textarea::placeholder {
+  color: var(--ink-600);
+}
+
+[data-theme="dark"] .bubble-them {
+  background: var(--bubble-them-bg);
+  color: var(--bubble-them-text);
+}
+
+[data-theme="dark"] .bubble-them small {
+  color: var(--ink-600);
+}
+
+[data-theme="dark"] .conv-item.active {
+  background: linear-gradient(135deg, rgba(43, 86, 201, 0.3), rgba(31, 94, 199, 0.15));
+}
+
+[data-theme="dark"] .pill-muted {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--ink-600);
+}
+
+[data-theme="dark"] .surface,
+[data-theme="dark"] .add-members-panel,
+[data-theme="dark"] .file-row {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] .btn-ghost {
+  color: var(--ink-900);
+}
+
+[data-theme="dark"] .btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .modal-backdrop {
+  background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .empty-hint,
+[data-theme="dark"] .empty-row,
+[data-theme="dark"] .muted,
+[data-theme="dark"] .form-hint {
+  color: var(--ink-600);
+}
+
+[data-theme="dark"] .see-more-btn,
+[data-theme="dark"] .reply-link:hover,
+[data-theme="dark"] .reply-mention,
+[data-theme="dark"] .mention-pill {
+  color: var(--yellow-500);
+}
+
+[data-theme="dark"] .file-row a {
+  color: var(--yellow-500);
+}
+
+/* ---------- Theme toggle ---------- */
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  transition: background 0.2s ease;
+  user-select: none;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #fff;
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.theme-toggle-track {
+  position: relative;
+  width: 56px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--yellow-500);
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  color: #fff;
+  transition: left 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
+              background 0.3s ease;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.theme-toggle-icon {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 13px;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.theme-toggle-icon.left {
+  left: 8px;
+}
+
+.theme-toggle-icon.right {
+  right: 8px;
+}
+
+[data-theme="dark"] .theme-toggle-thumb {
+  left: 30px;
+  background: var(--blue-700);
+}
+
+.theme-toggle-label {
+  min-width: 38px;
+}
+
+/* ---------- Mention chips ---------- */
+.mention-pill {
+  display: inline;
+  color: var(--blue-700);
+  font-weight: 600;
+  background: rgba(37, 99, 235, 0.08);
+  border-radius: 6px;
+  padding: 0 4px;
+  margin: 0 1px;
+}
+
+.mention-pill:hover {
+  background: rgba(37, 99, 235, 0.15);
+}
+
+/* ---------- Mention autocomplete popover ---------- */
+.mention-input-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.mention-input-wrap > input,
+.mention-input-wrap > textarea {
+  width: 100%;
+}
+
+.mention-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 60;
+  width: min(280px, 100%);
+  max-height: 220px;
+  overflow-y: auto;
+  background: var(--menu-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(13, 71, 161, 0.16);
+  animation: fade-in-up 140ms ease both;
+}
+
+.mention-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: transparent;
+  border: none;
+  text-align: left;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ink-900);
+}
+
+.mention-row.active,
+.mention-row:hover {
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.mention-row .msg-avatar {
+  width: 26px;
+  height: 26px;
+}
+
+.mention-row-info strong {
+  display: block;
+  font-size: 13px;
+}
+
+.mention-row-info small {
+  color: var(--ink-600);
+  font-size: 11px;
+}
+
+/* ---------- Comment like button ---------- */
+.comment-like-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ink-600);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.comment-like-btn:hover {
+  color: var(--blue-700);
+}
+
+.comment-like-btn.liked {
+  color: #e11d48;
+}
+
+.comment-like-btn.liked .comment-like-heart {
+  animation: heart-pop 280ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes heart-pop {
+  0% { transform: scale(0.6); }
+  50% { transform: scale(1.4); }
+  100% { transform: scale(1); }
 }
 
 @media (max-width: 900px) {

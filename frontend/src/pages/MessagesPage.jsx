@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
+import MentionInput from "../components/MentionInput.jsx";
+import MentionText from "../components/MentionText.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -336,10 +338,10 @@ export default function MessagesPage({
                     </button>
                   </div>
                 ) : null}
-                <input
+                <MentionInput
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
-                  placeholder={isGroup ? `Message ${activeChat.group?.name}…` : `Message ${activeChat.user?.name}…`}
+                  onChange={setDraft}
+                  placeholder={isGroup ? `Message ${activeChat.group?.name}… use @ to mention` : `Message ${activeChat.user?.name}… use @ to mention`}
                 />
                 <button type="submit" className="btn btn-primary" disabled={sending}>
                   {sending ? "…" : "📤"}
@@ -469,7 +471,7 @@ function MessageBubble({ message: m, showAuthor, onReact }) {
           <div className={`bubble ${m.fromMe ? "bubble-me" : "bubble-them"}`}>
             {showAuthor ? <p className="bubble-author">{m.author}</p> : null}
             {m.attachment ? <MessageAttachment att={m.attachment} /> : null}
-            {m.text ? <p>{m.text}</p> : null}
+            {m.text ? <p><MentionText text={m.text} /></p> : null}
             <small>{new Date(m.createdAt).toLocaleString()}</small>
             {totalCount > 0 ? (
               <span className="bubble-reaction-chip" title={`${totalCount} reaction${totalCount === 1 ? "" : "s"}`}>
