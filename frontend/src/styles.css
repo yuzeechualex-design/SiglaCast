@@ -1131,10 +1131,12 @@ label.btn-secondary:hover {
 }
 
 .bubble {
+  position: relative;
   max-width: 78%;
   padding: 10px 14px;
   border-radius: 16px;
   box-shadow: 0 1px 2px rgba(15, 40, 80, 0.06);
+  margin-bottom: 12px;
 }
 
 .bubble p {
@@ -1421,39 +1423,49 @@ label.btn-secondary:hover {
 }
 
 .bubble-reaction-chip {
-  position: absolute;
-  bottom: -10px;
-  right: 8px;
-  background: #fff;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  padding: 2px 8px;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  font-size: 12px;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.06);
-  animation: reaction-summary-pop 240ms ease both;
-}
-
-.bubble-row.row-me .bubble-reaction-chip {
-  right: auto;
-  left: 8px;
+  gap: 3px;
+  padding: 2px 0 2px 4px;
+  margin: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  font-size: 13px;
+  line-height: 1.2;
+  flex-shrink: 0;
+  max-width: 55%;
 }
 
 .bubble-reaction-chip small {
   font-weight: 700;
   margin-left: 2px;
+  font-size: 0.72rem;
   color: var(--ink-600);
 }
 
-/* Add some bottom margin so the reaction chip doesn't collide with the next bubble */
-.bubble {
-  position: relative;
-  margin-bottom: 12px;
+/* Timestamp + reaction summary share one row so nothing overlaps. */
+.bubble-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+  width: 100%;
+  min-width: 0;
 }
 
-/* ---------- Group settings modal additions ---------- */
+.bubble-meta-row .bubble-time {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+.bubble-me .bubble-meta-row .bubble-reaction-chip small {
+  color: rgba(255, 255, 255, 0.9);
+}
+
 .modal-sep {
   border: none;
   border-top: 1px solid var(--line);
@@ -2195,7 +2207,6 @@ label.btn-secondary:hover {
 [data-theme="dark"] .mention-popover,
 [data-theme="dark"] .reaction-picker,
 [data-theme="dark"] .bubble-react-picker,
-[data-theme="dark"] .bubble-reaction-chip,
 [data-theme="dark"] .file-row,
 [data-theme="dark"] .member-row,
 [data-theme="dark"] .comment-bubble {
@@ -2615,15 +2626,18 @@ label.btn-secondary:hover {
 /* ---------- Chat quick actions (Reply / Unsend) ---------- */
 .bubble-quick-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   align-self: center;
   opacity: 0;
   transition: opacity 0.18s ease;
 }
 
-.bubble-with-actions:hover .bubble-quick-actions,
-.bubble-quick-actions:focus-within {
-  opacity: 1;
+/* Pointer devices: reveal beside the bubble on hover / keyboard focus */
+@media (hover: hover) and (pointer: fine) {
+  .bubble-with-actions:hover .bubble-quick-actions,
+  .bubble-quick-actions:focus-within {
+    opacity: 1;
+  }
 }
 
 .bubble-quick-actions.side-left {
@@ -2631,30 +2645,64 @@ label.btn-secondary:hover {
 }
 
 .bubble-quick-btn {
-  background: var(--card);
-  border: 1px solid var(--line);
+  appearance: none;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   cursor: pointer;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
+  min-height: unset;
+  min-width: unset;
+  width: auto;
+  height: auto;
+  padding: 4px 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
   color: var(--ink-600);
-  box-shadow: 0 4px 10px rgba(13, 71, 161, 0.1);
-  transition: transform 0.15s ease, color 0.15s ease;
+  box-shadow: none;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 
 .bubble-quick-btn:hover {
   color: var(--blue-700);
-  transform: scale(1.08);
+  transform: scale(1.1);
 }
 
-/* Mobile: surface the quick actions next to the bubble at all times since
-   :hover is unreliable on touch devices. */
+/* Touch devices: hide until long-press opens the picker (:has(.bubble-react-picker)). */
 @media (hover: none) {
   .bubble-quick-actions {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    position: absolute;
+    top: calc(100% + 8px);
+    z-index: 16;
+    margin: 0;
+    gap: 6px;
+  }
+
+  .bubble-quick-actions.side-left {
+    right: 0;
+    left: auto;
+  }
+
+  .bubble-quick-actions.side-right {
+    left: 0;
+    right: auto;
+  }
+
+  /* Room for picker (above) + inline actions strip (below bubble) */
+  .bubble-with-actions:has(.bubble-react-picker) {
+    padding-bottom: 44px;
+  }
+
+  .bubble-with-actions:has(.bubble-react-picker) .bubble-quick-actions {
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    display: flex;
   }
 }
 
@@ -2676,22 +2724,21 @@ label.btn-secondary:hover {
 }
 
 .bubble-reaction-chip-btn {
-  margin-top: 6px;
   border: none;
-  background: rgba(0, 0, 0, 0.06);
   cursor: pointer;
   font: inherit;
   color: inherit;
-  text-align: left;
-  align-self: flex-start;
-}
-
-.bubble-me .bubble-reaction-chip-btn {
-  background: rgba(255, 255, 255, 0.2);
+  text-align: right;
 }
 
 .bubble-reaction-chip-btn:hover {
   filter: brightness(1.06);
+}
+
+.bubble-reaction-chip-btn:focus-visible {
+  outline: 2px solid var(--yellow-500);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .modal-card-narrow {

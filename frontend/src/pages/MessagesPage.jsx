@@ -515,13 +515,30 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
   const longPressTimer = useRef(null);
+  const bubbleWrapRef = useRef(null);
+  const unsent = !!m.isUnsent;
 
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   }, []);
 
-  const unsent = !!m.isUnsent;
+  // Touch: tapping outside closes the reaction + action strip (still long-press to open).
+  useEffect(() => {
+    if (!pickerOpen || unsent) return;
+    const mq = window.matchMedia("(hover: none)");
+    if (!mq.matches) return;
+    function tapOut(e) {
+      if (!bubbleWrapRef.current?.contains(e.target)) setPickerOpen(false);
+    }
+    document.addEventListener("touchstart", tapOut, true);
+    document.addEventListener("mousedown", tapOut, true);
+    return () => {
+      document.removeEventListener("touchstart", tapOut, true);
+      document.removeEventListener("mousedown", tapOut, true);
+    };
+  }, [pickerOpen, unsent]);
+
   const breakdown = m.reactionBreakdown || {};
   const topReactions = CHAT_REACTIONS
     .filter((r) => breakdown[r.type])
@@ -571,7 +588,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
         onMouseEnter={!unsent ? openPicker : undefined}
         onMouseLeave={!unsent ? deferClose : undefined}
       >
-        <div className="bubble-with-actions">
+        <div className="bubble-with-actions" ref={bubbleWrapRef}>
           <div
             className={`bubble ${m.fromMe ? "bubble-me" : "bubble-them"} ${unsent ? "bubble-unsent" : ""}`}
             onContextMenu={suppressContext}
@@ -598,23 +615,25 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
                 {m.text ? <p><MentionText text={m.text} /></p> : null}
               </>
             )}
-            <small>{new Date(m.createdAt).toLocaleString()}</small>
-            {!unsent && totalCount > 0 ? (
-              <button
-                type="button"
-                className="bubble-reaction-chip bubble-reaction-chip-btn"
-                title={`See who reacted · ${totalCount}`}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onOpenReactors?.(m.id);
-                }}
-              >
-                {topReactions.slice(0, 3).map((r) => (
-                  <span key={r.type}>{r.emoji}</span>
-                ))}
-                {totalCount > 1 ? <small>{totalCount}</small> : null}
-              </button>
-            ) : null}
+            <div className="bubble-meta-row">
+              <small className="bubble-time">{new Date(m.createdAt).toLocaleString()}</small>
+              {!unsent && totalCount > 0 ? (
+                <button
+                  type="button"
+                  className="bubble-reaction-chip bubble-reaction-chip-btn"
+                  title={`See who reacted · ${totalCount}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onOpenReactors?.(m.id);
+                  }}
+                >
+                  {topReactions.slice(0, 3).map((r) => (
+                    <span key={r.type}>{r.emoji}</span>
+                  ))}
+                  {totalCount > 1 ? <small>{totalCount}</small> : null}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {!unsent ? (
@@ -623,7 +642,10 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
                 type="button"
                 className="bubble-quick-btn"
                 title="Reply"
-                onClick={() => onReply?.(m)}
+                onClick={() => {
+                  setPickerOpen(false);
+                  onReply?.(m);
+                }}
               >
                 ↩
               </button>
@@ -632,7 +654,10 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
                   type="button"
                   className="bubble-quick-btn"
                   title="Unsend"
-                  onClick={() => onUnsend?.(m)}
+                  onClick={() => {
+                    setPickerOpen(false);
+                    onUnsend?.(m);
+                  }}
                 >
                   🗑
                 </button>
