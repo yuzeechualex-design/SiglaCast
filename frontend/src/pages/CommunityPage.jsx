@@ -433,7 +433,14 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
           <button type="button" className="comment-photo-clear" onClick={() => setPhoto(null)}>✕</button>
         </div>
       ) : null}
-      <button type="submit" className="btn btn-secondary btn-sm">↩ Reply</button>
+      <button
+        type="submit"
+        className="btn btn-primary btn-send-msg"
+        aria-label="Send reply"
+        title="Send reply"
+      >
+        ➤
+      </button>
       <button type="button" className="btn btn-ghost btn-sm" onClick={onCancel}>Cancel</button>
     </form>
   );
@@ -604,7 +611,14 @@ function CommentBox({ postId, onComment, currentUser }) {
           <button type="button" className="comment-photo-clear" onClick={() => setPhoto(null)}>✕</button>
         </div>
       ) : null}
-      <button type="submit" className="btn btn-secondary btn-sm">💬 Comment</button>
+      <button
+        type="submit"
+        className="btn btn-primary btn-send-msg"
+        aria-label="Post comment"
+        title="Post comment"
+      >
+        ➤
+      </button>
     </form>
   );
 }

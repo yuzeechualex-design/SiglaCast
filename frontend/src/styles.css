@@ -694,6 +694,11 @@ label.btn-secondary:hover {
   flex: 1;
 }
 
+.comment-form .mention-input-wrap {
+  flex: 1;
+  min-width: 0;
+}
+
 .profile-hero {
   display: flex;
   flex-direction: column;
@@ -1468,12 +1473,17 @@ input.profile-status-emoji {
   flex: 1;
 }
 
-.thread-compose .btn-send-msg {
+.thread-compose .btn-send-msg,
+.comment-form .btn-send-msg {
   min-width: 44px;
-  padding-inline: 12px;
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  border-radius: 12px;
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1;
+  flex-shrink: 0;
 }
 
 .msg-avatar {
