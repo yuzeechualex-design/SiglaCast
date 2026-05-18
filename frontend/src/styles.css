@@ -1153,27 +1153,6 @@ label.btn-secondary:hover {
   border-color: rgba(100, 160, 255, 0.35);
 }
 
-.conv-item.conv-siglacast-ai {
-  border-color: rgba(180, 120, 255, 0.4);
-}
-
-.conv-siglacast-ai-avatar {
-  font-size: 1.05rem;
-  line-height: 1;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(138, 99, 255, 0.35), rgba(56, 189, 248, 0.25));
-}
-
-.thread-siglacast-ai-icon {
-  width: 40px;
-  height: 40px;
-  font-size: 1.35rem;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(135deg, rgba(138, 99, 255, 0.35), rgba(56, 189, 248, 0.25));
-}
-
 .conv-userphone-avatar {
   font-size: 1.05rem;
   line-height: 1;

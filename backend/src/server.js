@@ -27,11 +27,6 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 /** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
 const USERPHONE_GUEST_ID = "_userphone_guest";
 
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
-const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
-const SIGLACAST_AI_DISPLAY_NAME = "SiglaCast AI";
-const SIGLACAST_AI_SYSTEM = `You are SiglaCast AI, the in-app assistant for SiglaCast — a campus engagement app (events, voting, community, and messaging). Help students and staff with clear, friendly answers. Keep replies concise unless the user asks for more detail. If you do not know something about their specific school, course, or account, say so and suggest official campus channels. Refuse harmful, illegal, or disallowed content.`;
-
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
 // 25 MB cap — large enough for original-resolution camera shots without re-compression.
 // Files are stored as-is on Supabase Storage (uploadToBucket passes the raw buffer).
@@ -850,82 +845,6 @@ async function relayGroupBridgeMessage(insertedRow) {
   if (error) console.error("[relayGroupBridgeMessage]", error.message);
 }
 
-function serializeSiglacastAiRows(rows) {
-  return (rows || []).map((row) => ({
-    id: row.id,
-    text: row.content || "",
-    fromMe: row.role === "user",
-    createdAt: row.created_at,
-    author: row.role === "user" ? "You" : SIGLACAST_AI_DISPLAY_NAME,
-    isUnsent: false,
-    attachment: null,
-    replyTo: null,
-    reactionBreakdown: {},
-    myReaction: null
-  }));
-}
-
-function buildSiglacastAiPreviewFromSerialized(serialized) {
-  if (!serialized.length) {
-    return {
-      previewLine: "Ask about campus, classes, or SiglaCast.",
-      previewAt: new Date(0).toISOString()
-    };
-  }
-  const l = serialized[serialized.length - 1];
-  const slice = (s) => (s || "").replace(/\s+/g, " ").trim().slice(0, 72);
-  const t = slice(l.text);
-  const previewLine = l.fromMe
-    ? t
-      ? `You: ${t}`
-      : "You sent a message"
-    : `${SIGLACAST_AI_DISPLAY_NAME}: ${t || "…"}`;
-  return { previewLine, previewAt: l.createdAt };
-}
-
-async function fetchSiglacastAiThreadPayload(userId, { limit = 120 } = {}) {
-  const configured = Boolean(OPENAI_API_KEY);
-  const { data: rows } = await supabase
-    .from("siglacast_ai_messages")
-    .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: true })
-    .limit(limit);
-  const messages = serializeSiglacastAiRows(rows || []);
-  const { previewLine, previewAt } = buildSiglacastAiPreviewFromSerialized(messages);
-  return { configured, messages, previewLine, previewAt };
-}
-
-async function callOpenAiChat(chatMessages) {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [{ role: "system", content: SIGLACAST_AI_SYSTEM }, ...chatMessages],
-      temperature: 0.7,
-      max_tokens: 1200
-    })
-  });
-  const json = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = json?.error?.message || res.statusText || "OpenAI request failed";
-    const err = new Error(msg);
-    err.status = res.status >= 400 && res.status < 600 ? res.status : 502;
-    throw err;
-  }
-  const content = json?.choices?.[0]?.message?.content?.trim?.() || "";
-  if (!content) {
-    const err = new Error("Empty assistant reply");
-    err.status = 502;
-    throw err;
-  }
-  return content;
-}
-
 // Seed an admin account + demo event if users table is empty.
 // Demo student accounts are no longer auto-created.
 async function seedIfEmpty() {
@@ -1618,75 +1537,7 @@ app.post("/api/notifications/read-all", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
-// SiglaCast AI — OpenAI-backed assistant (per-user thread in `siglacast_ai_messages`)
-app.get("/api/siglacast-ai/thread", authenticate, async (req, res) => {
-  try {
-    const payload = await fetchSiglacastAiThreadPayload(req.user.id);
-    res.json(payload);
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
-app.post("/api/siglacast-ai/messages", authenticate, async (req, res) => {
-  try {
-    if (!OPENAI_API_KEY) {
-      return res
-        .status(503)
-        .json({ error: "SiglaCast AI is not configured (set OPENAI_API_KEY on the server)." });
-    }
-    const me = req.user.id;
-    const text = String(req.body?.text || "").trim();
-    if (!text) return res.status(400).json({ error: "Message text is required" });
-    if (text.length > 8000) return res.status(400).json({ error: "Message is too long" });
-
-    const { data: prior } = await supabase
-      .from("siglacast_ai_messages")
-      .select("role, content")
-      .eq("user_id", me)
-      .order("created_at", { ascending: false })
-      .limit(40);
-
-    const chronological = (prior || []).reverse();
-    const openaiMsgs = chronological.map((r) => ({
-      role: r.role === "assistant" ? "assistant" : "user",
-      content: r.content
-    }));
-    openaiMsgs.push({ role: "user", content: text });
-
-    const userRowId = `sai${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const { error: insUserErr } = await supabase.from("siglacast_ai_messages").insert({
-      id: userRowId,
-      user_id: me,
-      role: "user",
-      content: text
-    });
-    if (insUserErr) return res.status(400).json({ error: insUserErr.message });
-
-    let assistantText;
-    try {
-      assistantText = await callOpenAiChat(openaiMsgs);
-    } catch (e) {
-      await supabase.from("siglacast_ai_messages").delete().eq("id", userRowId);
-      return res.status(e.status || 502).json({ error: e.message || "OpenAI error" });
-    }
-
-    const asstRowId = `sai${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    const { error: insAsstErr } = await supabase.from("siglacast_ai_messages").insert({
-      id: asstRowId,
-      user_id: me,
-      role: "assistant",
-      content: assistantText
-    });
-    if (insAsstErr) return res.status(400).json({ error: insAsstErr.message });
-
-    const payload = await fetchSiglacastAiThreadPayload(me);
-    res.status(201).json(payload);
-  } catch (e) {
-    res.status(400).json({ error: e.message });
-  }
-});
-
+// Random anonymous "Userphone" chat (same app users, masked as Anonymous)
 app.get("/api/userphone/state", authenticate, async (req, res) => {
   res.json(await buildUserphoneState(req.user.id));
 });
