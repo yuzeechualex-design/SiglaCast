@@ -6,7 +6,7 @@
       "name": "Ana Cruz",
       "email": "ana@dorsu.edu.ph",
       "passwordHash": "$2a$10$N.7bI9rt.bS4nbszUJENoenHwZoHYnQIF2RS.yOC7Z2/U0eSLEcKy",
-      "refreshTokenHash": "$2a$10$5nCOQxgGCxNNYPP7xmYKV.Y.anGWnWUsCQKOXpjfd.XWVjnkXgQyi",
+      "refreshTokenHash": null,
       "course": "BSIT",
       "avatarUrl": "/uploads/1778546180810-6xzjb0ld.png"
     },
@@ -16,7 +16,7 @@
       "name": "System Admin",
       "email": "admin@dorsu.edu.ph",
       "passwordHash": "$2a$10$YYx.HbNKYs0T75oBueuWiO5EFsTGSu9nBB/BZzxzzwnoPIAHUkZAa",
-      "refreshTokenHash": "$2a$10$mGNdGVY2RWSoil7AOxlCr.Kmh2zdYQCpCHGaN2eZ6CYCiE77V7UPG",
+      "refreshTokenHash": "$2a$10$0MaVZ20c4SO6PyXXJ8Qdpuwa8PSUhS.LgpFxPphWn2bAfHgYzxCaS",
       "permissions": [
         "all"
       ],
@@ -31,6 +31,26 @@
       "refreshTokenHash": null,
       "course": "BSIT",
       "avatarUrl": null
+    },
+    {
+      "id": "s3",
+      "role": "student",
+      "name": "yuze",
+      "email": "yuze@dorsu.edu.ph",
+      "passwordHash": "$2a$10$qgfMgexoz4Fxhy7ZyFtQo.Ab3c2r52YiJPpDQNVCBNUzaoqwTG7.e",
+      "refreshTokenHash": null,
+      "avatarUrl": null,
+      "course": "BSIT"
+    },
+    {
+      "id": "s4",
+      "role": "student",
+      "name": "ramil",
+      "email": "ramil@dorsu.edu.ph",
+      "passwordHash": "$2a$10$w/je.PHcjSRwq5IWKqqwpOINFymg14Mah6NFF2fEyfvuSpa8HCb5C",
+      "refreshTokenHash": "$2a$10$ezy5w5t/lq6GSOAy96zJTOg742T8ZU6tleUnAfkrvflY.2c4W7Sy.",
+      "avatarUrl": null,
+      "course": "BSIT"
     }
   ],
   "events": [
@@ -133,6 +153,18 @@
   "notifications": {
     "s1": [
       {
+        "id": "n1779093518408-s1",
+        "text": "New message from yuze",
+        "createdAt": "2026-05-18T08:38:38.408Z",
+        "read": false
+      },
+      {
+        "id": "n1779093381651-s1",
+        "text": "New message from yuze",
+        "createdAt": "2026-05-18T08:36:21.651Z",
+        "read": false
+      },
+      {
         "id": "n1778546246368",
         "text": "Your vote was recorded for event Student Election 2026.",
         "createdAt": "2026-05-12T00:37:26.368Z",
@@ -146,6 +178,84 @@
       }
     ],
     "a1": [],
-    "s2": []
-  }
+    "s2": [
+      {
+        "id": "n1779093359204-s2",
+        "text": "New message from Ana Cruz",
+        "createdAt": "2026-05-18T08:35:59.204Z",
+        "read": false
+      },
+      {
+        "id": "n1779093354933-s2",
+        "text": "New message from Ana Cruz",
+        "createdAt": "2026-05-18T08:35:54.933Z",
+        "read": false
+      }
+    ],
+    "s3": [
+      {
+        "id": "n1779093413950-s3",
+        "text": "New message from Ana Cruz",
+        "createdAt": "2026-05-18T08:36:53.950Z",
+        "read": false
+      }
+    ],
+    "s4": []
+  },
+  "friends": [
+    {
+      "id": "fr1779093349890",
+      "userId": "s1",
+      "friendId": "s2",
+      "createdAt": "2026-05-18T08:35:49.890Z"
+    },
+    {
+      "id": "fr1779093378618",
+      "userId": "s3",
+      "friendId": "s1",
+      "createdAt": "2026-05-18T08:36:18.618Z"
+    }
+  ],
+  "messages": [
+    {
+      "id": "msg1779093354932",
+      "fromUserId": "s1",
+      "toUserId": "s2",
+      "text": "hi",
+      "createdAt": "2026-05-18T08:35:54.932Z",
+      "read": false
+    },
+    {
+      "id": "msg1779093359202",
+      "fromUserId": "s1",
+      "toUserId": "s2",
+      "text": "hello",
+      "createdAt": "2026-05-18T08:35:59.202Z",
+      "read": false
+    },
+    {
+      "id": "msg1779093381650",
+      "fromUserId": "s3",
+      "toUserId": "s1",
+      "text": "hi",
+      "createdAt": "2026-05-18T08:36:21.650Z",
+      "read": true
+    },
+    {
+      "id": "msg1779093413949",
+      "fromUserId": "s1",
+      "toUserId": "s3",
+      "text": "hello",
+      "createdAt": "2026-05-18T08:36:53.949Z",
+      "read": true
+    },
+    {
+      "id": "msg1779093518406",
+      "fromUserId": "s3",
+      "toUserId": "s1",
+      "text": "it worked!",
+      "createdAt": "2026-05-18T08:38:38.406Z",
+      "read": true
+    }
+  ]
 }

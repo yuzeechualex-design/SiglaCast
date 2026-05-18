@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Build output
+dist/
+build/
+.vite/
+
+# Environment & secrets
+.env
+.env.local
+backend/.env
+
+# Logs
+*.log
+npm-debug.log*
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Uploads (user-generated runtime files)
+backend/uploads/*
+!backend/uploads/.gitkeep
+
+# Temporary
+*.tmp
+_shelltest.txt
+.gitstatus.txt
+runlog.txt
+gen_out.txt
+test_shell*.txt
+build_log.txt
+docs/runlog.txt
+docs/gen_out.txt

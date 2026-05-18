@@ -10,6 +10,7 @@ import CommunityPage from "./pages/CommunityPage.jsx";
 import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import MessagesPage from "./pages/MessagesPage.jsx";
 
 export default function App() {
   const navigate = useNavigate();
@@ -44,6 +45,10 @@ export default function App() {
   const [newEventCoverFile, setNewEventCoverFile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [conversations, setConversations] = useState([]);
+  const [activeChat, setActiveChat] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
 
   async function refreshSession() {
     if (isRefreshing) return null;
@@ -133,6 +138,28 @@ export default function App() {
       }
     })();
   }, [token]);
+
+  async function loadMessages() {
+    if (!token) return;
+    const list = await api("/messages/conversations");
+    if (!list.error) setConversations(Array.isArray(list) ? list : []);
+  }
+
+  useEffect(() => {
+    if (!token || location.pathname !== "/messages") return undefined;
+    loadMessages();
+    const interval = setInterval(loadMessages, 4000);
+    return () => clearInterval(interval);
+  }, [token, location.pathname]);
+
+  useEffect(() => {
+    if (!token || !activeChat?.user?.id || location.pathname !== "/messages") return undefined;
+    const interval = setInterval(async () => {
+      const thread = await api(`/messages/with/${activeChat.user.id}`);
+      if (!thread.error) setActiveChat(thread);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [token, activeChat?.user?.id, location.pathname]);
 
   useEffect(() => {
     if (!token || !selectedEventId || location.pathname !== "/events/detail") return undefined;
@@ -234,6 +261,51 @@ export default function App() {
       localStorage.setItem("siglacast_user", JSON.stringify(res.user));
     }
     setNotice("Profile updated");
+  }
+
+  async function searchUsers() {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults([]);
+      return;
+    }
+    const res = await api(`/users/search?q=${encodeURIComponent(q)}`);
+    setSearchResults(res.error ? [] : res);
+  }
+
+  async function addFriend(friendId) {
+    const res = await api(`/friends/${friendId}`, { method: "POST" });
+    setNotice(res.error || "Friend added");
+    if (!res.error) {
+      await loadMessages();
+      await searchUsers();
+      if (activeChat?.user?.id === friendId) {
+        const thread = await api(`/messages/with/${friendId}`);
+        if (!thread.error) setActiveChat(thread);
+      }
+    }
+  }
+
+  async function openChat(userId) {
+    const thread = await api(`/messages/with/${userId}`);
+    if (thread.error) return setNotice(thread.error);
+    setActiveChat(thread);
+    setSearchResults([]);
+    await loadMessages();
+  }
+
+  async function sendDirectMessage(userId, text) {
+    const res = await api(`/messages/with/${userId}`, {
+      method: "POST",
+      body: { text }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    const thread = await api(`/messages/with/${userId}`);
+    if (!thread.error) setActiveChat(thread);
+    await loadMessages();
   }
 
   async function uploadAvatar(file) {
@@ -403,6 +475,23 @@ export default function App() {
           }
         />
         <Route path="/notifications" element={<NotificationsPage notifications={notifications} />} />
+        <Route
+          path="/messages"
+          element={
+            <MessagesPage
+              conversations={conversations}
+              activeChat={activeChat}
+              searchResults={searchResults}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              onSearch={searchUsers}
+              onAddFriend={addFriend}
+              onOpenChat={openChat}
+              onSendMessage={sendDirectMessage}
+              onRefreshConversations={loadMessages}
+            />
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AppShell>

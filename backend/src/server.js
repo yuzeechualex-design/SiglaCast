@@ -199,7 +199,7 @@ function mapCandidateCounts(event, tally) {
   }));
 }
 
-const db = { users: [], events: [], votes: [], posts: [], announcements: [], notifications: {} };
+const db = { users: [], events: [], votes: [], posts: [], announcements: [], notifications: {}, friends: [], messages: [] };
 let saveQueue = Promise.resolve();
 
 async function saveDb() {
@@ -264,6 +264,8 @@ async function loadDb() {
     db.posts = Array.isArray(parsed.posts) ? parsed.posts : [];
     db.announcements = Array.isArray(parsed.announcements) ? parsed.announcements : [];
     db.notifications = parsed.notifications && typeof parsed.notifications === "object" ? parsed.notifications : {};
+    db.friends = Array.isArray(parsed.friends) ? parsed.friends : [];
+    db.messages = Array.isArray(parsed.messages) ? parsed.messages : [];
   } catch {
     await saveDb();
   }
@@ -353,6 +355,7 @@ app.use("/uploads", express.static(UPLOAD_ROOT));
 const broker = await makeBroker();
 await broker.consume("vote.cast", (m) => console.log("[vote.cast]", m));
 await broker.consume("post.created", (m) => console.log("[post.created]", m.id));
+await broker.consume("message.sent", (m) => console.log("[message.sent]", m.fromUserId, "->", m.toUserId));
 
 app.get("/api/health", (_, res) => res.json({ ok: true }));
 
@@ -760,6 +763,214 @@ app.post("/api/announcements", authenticate, requireAdmin, async (req, res) => {
 
 app.get("/api/notifications", authenticate, (req, res) => {
   res.json(db.notifications[req.user.id] || []);
+});
+
+function areFriends(userId, friendId) {
+  return db.friends.some(
+    (f) =>
+      (f.userId === userId && f.friendId === friendId) ||
+      (f.userId === friendId && f.friendId === userId)
+  );
+}
+
+function threadBetween(a, b) {
+  return db.messages.filter(
+    (m) =>
+      (m.fromUserId === a && m.toUserId === b) ||
+      (m.fromUserId === b && m.toUserId === a)
+  );
+}
+
+function publicUserBrief(u) {
+  if (!u) return null;
+  return {
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    role: u.role,
+    course: u.course || null,
+    avatarUrl: u.avatarUrl || null
+  };
+}
+
+function buildConversations(userId) {
+  const partnerIds = new Set();
+  for (const f of db.friends) {
+    if (f.userId === userId) partnerIds.add(f.friendId);
+    if (f.friendId === userId) partnerIds.add(f.userId);
+  }
+  for (const m of db.messages) {
+    if (m.fromUserId === userId) partnerIds.add(m.toUserId);
+    if (m.toUserId === userId) partnerIds.add(m.fromUserId);
+  }
+
+  const list = [];
+  for (const pid of partnerIds) {
+    const partner = db.users.find((u) => u.id === pid);
+    if (!partner) continue;
+    const msgs = threadBetween(userId, pid).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    const last = msgs[msgs.length - 1] || null;
+    const unread = msgs.filter((m) => m.toUserId === userId && !m.read).length;
+    list.push({
+      user: publicUserBrief(partner),
+      isFriend: areFriends(userId, pid),
+      lastMessage: last
+        ? {
+            text: last.text,
+            createdAt: last.createdAt,
+            fromMe: last.fromUserId === userId
+          }
+        : null,
+      unreadCount: unread
+    });
+  }
+
+  list.sort((a, b) => {
+    const ta = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
+    const tb = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
+    return tb - ta;
+  });
+  return list;
+}
+
+// Messaging + friends
+app.get("/api/users/search", authenticate, (req, res) => {
+  const q = String(req.query.q || "").trim().toLowerCase();
+  if (q.length < 1) return res.json([]);
+  const results = db.users
+    .filter((u) => u.id !== req.user.id)
+    .filter(
+      (u) =>
+        u.name.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        (u.course && u.course.toLowerCase().includes(q))
+    )
+    .slice(0, 12)
+    .map((u) => ({
+      ...publicUserBrief(u),
+      isFriend: areFriends(req.user.id, u.id)
+    }));
+  res.json(results);
+});
+
+app.get("/api/friends", authenticate, (req, res) => {
+  const ids = new Set();
+  for (const f of db.friends) {
+    if (f.userId === req.user.id) ids.add(f.friendId);
+    if (f.friendId === req.user.id) ids.add(f.userId);
+  }
+  const friends = [...ids]
+    .map((id) => publicUserBrief(db.users.find((u) => u.id === id)))
+    .filter(Boolean);
+  res.json(friends);
+});
+
+app.post("/api/friends/:friendId", authenticate, async (req, res) => {
+  const friendId = req.params.friendId;
+  if (friendId === req.user.id) return res.status(400).json({ error: "You cannot add yourself" });
+  const friend = db.users.find((u) => u.id === friendId);
+  if (!friend) return res.status(404).json({ error: "User not found" });
+  if (areFriends(req.user.id, friendId)) return res.status(400).json({ error: "Already friends" });
+  db.friends.push({
+    id: `fr${Date.now()}`,
+    userId: req.user.id,
+    friendId,
+    createdAt: new Date().toISOString()
+  });
+  await saveDb();
+  res.status(201).json({ friend: publicUserBrief(friend) });
+});
+
+app.delete("/api/friends/:friendId", authenticate, async (req, res) => {
+  const friendId = req.params.friendId;
+  const before = db.friends.length;
+  db.friends = db.friends.filter(
+    (f) =>
+      !(
+        (f.userId === req.user.id && f.friendId === friendId) ||
+        (f.userId === friendId && f.friendId === req.user.id)
+      )
+  );
+  if (db.friends.length === before) return res.status(404).json({ error: "Friend not found" });
+  await saveDb();
+  res.json({ success: true });
+});
+
+app.get("/api/messages/conversations", authenticate, (req, res) => {
+  res.json(buildConversations(req.user.id));
+});
+
+app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
+  const otherId = req.params.userId;
+  const other = db.users.find((u) => u.id === otherId);
+  if (!other) return res.status(404).json({ error: "User not found" });
+
+  const msgs = threadBetween(req.user.id, otherId).sort(
+    (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
+  );
+  let changed = false;
+  for (const m of msgs) {
+    if (m.toUserId === req.user.id && !m.read) {
+      m.read = true;
+      changed = true;
+    }
+  }
+  if (changed) await saveDb();
+
+  res.json({
+    user: publicUserBrief(other),
+    isFriend: areFriends(req.user.id, otherId),
+    messages: msgs.map((m) => ({
+      id: m.id,
+      text: m.text,
+      createdAt: m.createdAt,
+      fromMe: m.fromUserId === req.user.id,
+      fromUserId: m.fromUserId
+    }))
+  });
+});
+
+app.post("/api/messages/with/:userId", authenticate, async (req, res) => {
+  const otherId = req.params.userId;
+  const text = String(req.body?.text || "").trim();
+  if (!text) return res.status(400).json({ error: "Message text is required" });
+  if (otherId === req.user.id) return res.status(400).json({ error: "Cannot message yourself" });
+  const other = db.users.find((u) => u.id === otherId);
+  if (!other) return res.status(404).json({ error: "User not found" });
+
+  const message = {
+    id: `msg${Date.now()}`,
+    fromUserId: req.user.id,
+    toUserId: otherId,
+    text,
+    createdAt: new Date().toISOString(),
+    read: false
+  };
+  db.messages.push(message);
+  await broker.publish("message.sent", {
+    id: message.id,
+    fromUserId: req.user.id,
+    toUserId: otherId
+  });
+
+  if (!db.notifications[otherId]) db.notifications[otherId] = [];
+  db.notifications[otherId].unshift({
+    id: `n${Date.now()}-${otherId}`,
+    text: `New message from ${req.user.name}`,
+    createdAt: new Date().toISOString(),
+    read: false
+  });
+
+  await saveDb();
+  res.status(201).json({
+    message: {
+      id: message.id,
+      text: message.text,
+      createdAt: message.createdAt,
+      fromMe: true,
+      fromUserId: req.user.id
+    }
+  });
 });
 
 // XML and XML parsing

@@ -20,6 +20,7 @@ export default function AppShell({ user, notice, stats, onLogout, children }) {
           <NavLink to="/" className="nav-btn" end>📊 Dashboard</NavLink>
           <NavLink to="/events" className="nav-btn">📅 Events</NavLink>
           <NavLink to="/community" className="nav-btn">💬 Community</NavLink>
+          <NavLink to="/messages" className="nav-btn">✉️ Messages</NavLink>
           <NavLink to="/announcements" className="nav-btn">📣 Announcements</NavLink>
           <NavLink to="/notifications" className="nav-btn">🔔 Notifications</NavLink>
           <NavLink to="/profile" className="nav-btn">👤 Profile</NavLink>
