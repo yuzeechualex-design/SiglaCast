@@ -13,7 +13,7 @@ import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
 
-import { supabase, toPublicUser, toEvent, toCandidate, uploadToBucket } from "./supabase.js";
+import { supabase, toPublicUser, toEvent, toCandidate, uploadToBucket, uploadAttachment } from "./supabase.js";
 
 const { xsltProcess, xmlParse } = xsltProcessor;
 
@@ -33,6 +33,13 @@ const uploadImage = multer({
     if (imageMime.test(file.mimetype)) cb(null, true);
     else cb(new Error("Only JPEG, PNG, GIF, or WebP images are allowed"));
   }
+});
+
+// Generic chat attachment uploader — accepts any file type up to 25 MB so users
+// can share PDFs, docs, audio, etc. in addition to images.
+const uploadAnyFile = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 }
 });
 
 // OOP: Encapsulation + Inheritance
@@ -327,6 +334,88 @@ async function areFriends(a, b) {
     .or(`and(user_id.eq.${a},friend_id.eq.${b}),and(user_id.eq.${b},friend_id.eq.${a})`)
     .limit(1);
   return Boolean(data?.length);
+}
+
+// ---------- Group chat helpers ----------
+
+async function ensureGroupMember(conversationId, userId) {
+  const { data } = await supabase
+    .from("conversation_members")
+    .select("user_id")
+    .eq("conversation_id", conversationId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  return Boolean(data);
+}
+
+async function fetchGroupSummary(conversationId, viewerId) {
+  const { data: conv } = await supabase
+    .from("conversations")
+    .select("*")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (!conv) return null;
+  const { data: memberRows } = await supabase
+    .from("conversation_members")
+    .select("user_id, role")
+    .eq("conversation_id", conversationId);
+  const memberIds = (memberRows || []).map((m) => m.user_id);
+  const { data: users } = memberIds.length
+    ? await supabase.from("users").select("*").in("id", memberIds)
+    : { data: [] };
+  const userMap = new Map((users || []).map((u) => [u.id, u]));
+  const members = (memberRows || []).map((m) => ({
+    ...toPublicUser(userMap.get(m.user_id)),
+    role: m.role
+  }));
+  return {
+    id: conv.id,
+    name: conv.name,
+    photoUrl: conv.photo_url,
+    isGroup: conv.is_group,
+    createdAt: conv.created_at,
+    createdBy: conv.created_by,
+    members,
+    isMember: members.some((m) => m.id === viewerId),
+    isAdmin: members.some((m) => m.id === viewerId && m.role === "admin")
+  };
+}
+
+function serializeChatMessage(row, viewerId) {
+  return {
+    id: row.id,
+    text: row.text || "",
+    fromUserId: row.from_user_id,
+    fromMe: row.from_user_id === viewerId,
+    createdAt: row.created_at,
+    attachment: row.attachment_url
+      ? {
+          url: row.attachment_url,
+          type: row.attachment_type,
+          name: row.attachment_name,
+          size: row.attachment_size,
+          isImage: row.attachment_type === "image"
+        }
+      : null
+  };
+}
+
+async function decorateChatMessages(rows, viewerId) {
+  const senderIds = [...new Set((rows || []).map((m) => m.from_user_id))];
+  if (!senderIds.length) return [];
+  const { data: users } = await supabase
+    .from("users")
+    .select("id, name, avatar_url")
+    .in("id", senderIds);
+  const senderMap = new Map((users || []).map((u) => [u.id, u]));
+  return (rows || []).map((row) => {
+    const sender = senderMap.get(row.from_user_id);
+    return {
+      ...serializeChatMessage(row, viewerId),
+      author: sender?.name || "Unknown",
+      authorAvatar: sender?.avatar_url || null
+    };
+  });
 }
 
 // Seed an admin account + demo event if users table is empty.
@@ -789,6 +878,7 @@ app.delete("/api/admin/users/:id", authenticate, requireAdmin, async (req, res) 
   await supabase.from("friends").delete().or(`user_id.eq.${id},friend_id.eq.${id}`);
   await supabase.from("notifications").delete().eq("user_id", id);
   await supabase.from("votes").delete().eq("user_id", id);
+  await supabase.from("conversation_members").delete().eq("user_id", id);
 
   const { error } = await supabase.from("users").delete().eq("id", id);
   if (error) return res.status(400).json({ error: error.message });
@@ -886,42 +976,91 @@ app.delete("/api/friends/:friendId", authenticate, async (req, res) => {
 
 app.get("/api/messages/conversations", authenticate, async (req, res) => {
   const me = req.user.id;
-  const [{ data: friendsRows }, { data: msgs }] = await Promise.all([
+  const [{ data: friendsRows }, { data: dmMsgs }, { data: groupMemberRows }] = await Promise.all([
     supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
     supabase
       .from("messages")
       .select("*")
+      .is("conversation_id", null)
       .or(`from_user_id.eq.${me},to_user_id.eq.${me}`)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: true }),
+    supabase.from("conversation_members").select("conversation_id, role").eq("user_id", me)
   ]);
 
+  const list = [];
+
+  // ---- DM conversations ----
   const partners = new Set();
   for (const f of friendsRows || []) partners.add(f.user_id === me ? f.friend_id : f.user_id);
-  for (const m of msgs || []) partners.add(m.from_user_id === me ? m.to_user_id : m.from_user_id);
-  if (!partners.size) return res.json([]);
-
-  const { data: users } = await supabase.from("users").select("*").in("id", [...partners]);
-  const userMap = new Map((users || []).map((u) => [u.id, u]));
-  const list = [];
-  for (const pid of partners) {
-    const partner = userMap.get(pid);
-    if (!partner) continue;
-    const thread = (msgs || []).filter(
-      (m) => (m.from_user_id === me && m.to_user_id === pid) || (m.from_user_id === pid && m.to_user_id === me)
-    );
-    const last = thread[thread.length - 1] || null;
-    const unread = thread.filter((m) => m.to_user_id === me && !m.read).length;
-    list.push({
-      user: toPublicUser(partner),
-      isFriend: (friendsRows || []).some(
-        (f) => (f.user_id === me && f.friend_id === pid) || (f.user_id === pid && f.friend_id === me)
-      ),
-      lastMessage: last
-        ? { text: last.text, createdAt: last.created_at, fromMe: last.from_user_id === me }
-        : null,
-      unreadCount: unread
-    });
+  for (const m of dmMsgs || []) partners.add(m.from_user_id === me ? m.to_user_id : m.from_user_id);
+  if (partners.size) {
+    const { data: users } = await supabase.from("users").select("*").in("id", [...partners]);
+    const userMap = new Map((users || []).map((u) => [u.id, u]));
+    for (const pid of partners) {
+      const partner = userMap.get(pid);
+      if (!partner) continue;
+      const thread = (dmMsgs || []).filter(
+        (m) => (m.from_user_id === me && m.to_user_id === pid) || (m.from_user_id === pid && m.to_user_id === me)
+      );
+      const last = thread[thread.length - 1] || null;
+      const unread = thread.filter((m) => m.to_user_id === me && !m.read).length;
+      list.push({
+        kind: "dm",
+        id: `dm:${pid}`,
+        user: toPublicUser(partner),
+        isFriend: (friendsRows || []).some(
+          (f) => (f.user_id === me && f.friend_id === pid) || (f.user_id === pid && f.friend_id === me)
+        ),
+        lastMessage: last
+          ? {
+              text: last.text || (last.attachment_url ? `📎 ${last.attachment_name || "attachment"}` : ""),
+              createdAt: last.created_at,
+              fromMe: last.from_user_id === me
+            }
+          : null,
+        unreadCount: unread
+      });
+    }
   }
+
+  // ---- Group conversations ----
+  const groupIds = (groupMemberRows || []).map((g) => g.conversation_id);
+  if (groupIds.length) {
+    const [{ data: convs }, { data: groupMsgs }] = await Promise.all([
+      supabase.from("conversations").select("*").in("id", groupIds),
+      supabase
+        .from("messages")
+        .select("*")
+        .in("conversation_id", groupIds)
+        .order("created_at", { ascending: true })
+    ]);
+    const convById = new Map((convs || []).map((c) => [c.id, c]));
+    for (const gid of groupIds) {
+      const conv = convById.get(gid);
+      if (!conv) continue;
+      const thread = (groupMsgs || []).filter((m) => m.conversation_id === gid);
+      const last = thread[thread.length - 1] || null;
+      list.push({
+        kind: "group",
+        id: `group:${gid}`,
+        group: {
+          id: conv.id,
+          name: conv.name,
+          photoUrl: conv.photo_url,
+          isGroup: true
+        },
+        lastMessage: last
+          ? {
+              text: last.text || (last.attachment_url ? `📎 ${last.attachment_name || "attachment"}` : ""),
+              createdAt: last.created_at,
+              fromMe: last.from_user_id === me
+            }
+          : null,
+        unreadCount: 0
+      });
+    }
+  }
+
   list.sort((a, b) => {
     const ta = a.lastMessage ? new Date(a.lastMessage.createdAt).getTime() : 0;
     const tb = b.lastMessage ? new Date(b.lastMessage.createdAt).getTime() : 0;
@@ -938,6 +1077,7 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
   const { data: msgs } = await supabase
     .from("messages")
     .select("*")
+    .is("conversation_id", null)
     .or(`and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`)
     .order("created_at", { ascending: true });
   const unreadIds = (msgs || []).filter((m) => m.to_user_id === me && !m.read).map((m) => m.id);
@@ -945,29 +1085,43 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
   res.json({
     user: toPublicUser(other),
     isFriend: await areFriends(me, otherId),
-    messages: (msgs || []).map((m) => ({
-      id: m.id,
-      text: m.text,
-      createdAt: m.created_at,
-      fromMe: m.from_user_id === me,
-      fromUserId: m.from_user_id
-    }))
+    messages: await decorateChatMessages(msgs, me)
   });
 });
 
-app.post("/api/messages/with/:userId", authenticate, async (req, res) => {
+// Send DM with optional attachment
+app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
+  uploadAnyFile.single("attachment")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
   try {
     const me = req.user.id;
     const otherId = req.params.userId;
     const text = String(req.body?.text || "").trim();
-    if (!text) return res.status(400).json({ error: "Message text is required" });
     if (otherId === me) return res.status(400).json({ error: "Cannot message yourself" });
+    if (!text && !req.file) return res.status(400).json({ error: "Message text or attachment is required" });
     const other = await fetchUserById(otherId);
     if (!other) return res.status(404).json({ error: "User not found" });
+
+    let attachment = null;
+    if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
+
     const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
     const { data: message, error } = await supabase
       .from("messages")
-      .insert({ id, from_user_id: me, to_user_id: otherId, text, read: false })
+      .insert({
+        id,
+        from_user_id: me,
+        to_user_id: otherId,
+        text: text || null,
+        read: false,
+        attachment_url: attachment?.url || null,
+        attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null,
+        attachment_name: attachment?.name || null,
+        attachment_size: attachment?.size || null
+      })
       .select()
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
@@ -978,18 +1132,224 @@ app.post("/api/messages/with/:userId", authenticate, async (req, res) => {
       text: `New message from ${req.user.name}`,
       read: false
     });
-    res.status(201).json({
-      message: {
-        id: message.id,
-        text: message.text,
-        createdAt: message.created_at,
-        fromMe: true,
-        fromUserId: me
-      }
-    });
+    res.status(201).json({ message: serializeChatMessage(message, me) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+// Attachments list for a DM (images + files popup)
+app.get("/api/messages/with/:userId/attachments", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const otherId = req.params.userId;
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("*")
+    .is("conversation_id", null)
+    .not("attachment_url", "is", null)
+    .or(`and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`)
+    .order("created_at", { ascending: false });
+  res.json((msgs || []).map((m) => serializeChatMessage(m, me)));
+});
+
+// ==========================================================================
+// Group chat endpoints
+// ==========================================================================
+
+// Create a new group chat. memberIds is an array; the creator is added as admin.
+app.post("/api/groups", authenticate, (req, res, next) => {
+  uploadImage.single("photo")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const name = String(req.body?.name || "").trim();
+    if (!name) return res.status(400).json({ error: "Group name is required" });
+    let memberIds = [];
+    try {
+      const raw = req.body?.memberIds || "[]";
+      memberIds = typeof raw === "string" ? JSON.parse(raw) : raw;
+    } catch {
+      return res.status(400).json({ error: "memberIds must be a JSON array" });
+    }
+    if (!Array.isArray(memberIds)) memberIds = [];
+    memberIds = [...new Set(memberIds.filter((id) => id && id !== me))];
+    if (memberIds.length < 1) return res.status(400).json({ error: "Add at least one other member" });
+
+    // Verify all member ids exist
+    const { data: users } = await supabase.from("users").select("id").in("id", memberIds);
+    const validIds = new Set((users || []).map((u) => u.id));
+    const filtered = memberIds.filter((id) => validIds.has(id));
+    if (!filtered.length) return res.status(400).json({ error: "No valid members found" });
+
+    let photo_url = null;
+    if (req.file) photo_url = await uploadToBucket("group-photos", req.file);
+
+    const id = `gc${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    const { error: convErr } = await supabase.from("conversations").insert({
+      id, name, photo_url, is_group: true, created_by: me
+    });
+    if (convErr) return res.status(400).json({ error: convErr.message });
+
+    const memberRows = [
+      { conversation_id: id, user_id: me, role: "admin" },
+      ...filtered.map((uid) => ({ conversation_id: id, user_id: uid, role: "member" }))
+    ];
+    const { error: memErr } = await supabase.from("conversation_members").insert(memberRows);
+    if (memErr) return res.status(400).json({ error: memErr.message });
+
+    // Notify added members
+    const notes = filtered.map((uid) => ({
+      id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
+      user_id: uid,
+      text: `${req.user.name} added you to "${name}"`,
+      read: false
+    }));
+    if (notes.length) await supabase.from("notifications").insert(notes);
+
+    res.status(201).json(await fetchGroupSummary(id, me));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Get group details + thread
+app.get("/api/groups/:id", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  if (!(await ensureGroupMember(gid, me))) return res.status(403).json({ error: "You are not a member of this group" });
+  const summary = await fetchGroupSummary(gid, me);
+  if (!summary) return res.status(404).json({ error: "Group not found" });
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", gid)
+    .order("created_at", { ascending: true });
+  res.json({
+    group: summary,
+    messages: await decorateChatMessages(msgs, me)
+  });
+});
+
+// Update group name / photo (admins only)
+app.patch("/api/groups/:id", authenticate, (req, res, next) => {
+  uploadImage.single("photo")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const gid = req.params.id;
+    const summary = await fetchGroupSummary(gid, me);
+    if (!summary) return res.status(404).json({ error: "Group not found" });
+    if (!summary.isMember) return res.status(403).json({ error: "Not a member" });
+    if (!summary.isAdmin && req.user.role !== "admin") {
+      return res.status(403).json({ error: "Only group admins can edit this chat" });
+    }
+    const updates = {};
+    const newName = req.body?.name ? String(req.body.name).trim() : "";
+    if (newName) updates.name = newName;
+    if (req.file) updates.photo_url = await uploadToBucket("group-photos", req.file);
+    if (!Object.keys(updates).length) return res.status(400).json({ error: "Nothing to update" });
+    const { error } = await supabase.from("conversations").update(updates).eq("id", gid);
+    if (error) return res.status(400).json({ error: error.message });
+    res.json(await fetchGroupSummary(gid, me));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Send message to a group (text and/or attachment)
+app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
+  uploadAnyFile.single("attachment")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const gid = req.params.id;
+    if (!(await ensureGroupMember(gid, me))) return res.status(403).json({ error: "You are not a member of this group" });
+    const text = String(req.body?.text || "").trim();
+    if (!text && !req.file) return res.status(400).json({ error: "Message text or attachment is required" });
+
+    let attachment = null;
+    if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
+
+    const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const { data: message, error } = await supabase
+      .from("messages")
+      .insert({
+        id,
+        conversation_id: gid,
+        from_user_id: me,
+        to_user_id: null,
+        text: text || null,
+        read: false,
+        attachment_url: attachment?.url || null,
+        attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null,
+        attachment_name: attachment?.name || null,
+        attachment_size: attachment?.size || null
+      })
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    await broker.publish("message.sent", { id, fromUserId: me, conversationId: gid });
+
+    // Notify other members
+    const { data: members } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", gid);
+    const others = (members || []).map((m) => m.user_id).filter((u) => u !== me);
+    if (others.length) {
+      const { data: conv } = await supabase.from("conversations").select("name").eq("id", gid).maybeSingle();
+      const notes = others.map((uid) => ({
+        id: `n${Date.now()}-${uid}-${Math.random().toString(36).slice(2, 5)}`,
+        user_id: uid,
+        text: `New message in "${conv?.name || "group"}" from ${req.user.name}`,
+        read: false
+      }));
+      await supabase.from("notifications").insert(notes);
+    }
+
+    const [decorated] = await decorateChatMessages([message], me);
+    res.status(201).json({ message: decorated });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Group attachments list
+app.get("/api/groups/:id/attachments", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  if (!(await ensureGroupMember(gid, me))) return res.status(403).json({ error: "You are not a member of this group" });
+  const { data: msgs } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("conversation_id", gid)
+    .not("attachment_url", "is", null)
+    .order("created_at", { ascending: false });
+  res.json(await decorateChatMessages(msgs, me));
+});
+
+// Leave a group
+app.delete("/api/groups/:id/members/me", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const gid = req.params.id;
+  await supabase.from("conversation_members").delete().eq("conversation_id", gid).eq("user_id", me);
+  const { count } = await supabase
+    .from("conversation_members")
+    .select("user_id", { count: "exact", head: true })
+    .eq("conversation_id", gid);
+  if (!count) {
+    await supabase.from("conversations").delete().eq("id", gid);
+  }
+  res.json({ success: true });
 });
 
 // XML and XSLT

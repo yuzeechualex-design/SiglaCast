@@ -162,14 +162,19 @@ export default function App() {
     return () => clearInterval(interval);
   }, [token, location.pathname]);
 
+  // Poll the active thread (DM or group) every 3 seconds while the page is open.
   useEffect(() => {
-    if (!token || !activeChat?.user?.id || location.pathname !== "/messages") return undefined;
+    if (!token || !activeChat || location.pathname !== "/messages") return undefined;
     const interval = setInterval(async () => {
-      const thread = await api(`/messages/with/${activeChat.user.id}`);
-      if (!thread.error) setActiveChat(thread);
+      const refreshed =
+        activeChat.kind === "group"
+          ? await api(`/groups/${activeChat.group.id}`)
+          : await api(`/messages/with/${activeChat.user.id}`);
+      if (refreshed.error) return;
+      setActiveChat({ ...refreshed, kind: activeChat.kind });
     }, 3000);
     return () => clearInterval(interval);
-  }, [token, activeChat?.user?.id, location.pathname]);
+  }, [token, activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, location.pathname]);
 
   useEffect(() => {
     if (!token || !selectedEventId || location.pathname !== "/events/detail") return undefined;
@@ -305,33 +310,101 @@ export default function App() {
     if (!res.error) {
       await loadMessages();
       await searchUsers();
-      if (activeChat?.user?.id === friendId) {
+      if (activeChat?.kind !== "group" && activeChat?.user?.id === friendId) {
         const thread = await api(`/messages/with/${friendId}`);
-        if (!thread.error) setActiveChat(thread);
+        if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
       }
     }
   }
 
-  async function openChat(userId) {
-    const thread = await api(`/messages/with/${userId}`);
-    if (thread.error) return setNotice(thread.error);
-    setActiveChat(thread);
+  async function openChat(kind, id) {
+    if (kind === "group") {
+      const thread = await api(`/groups/${id}`);
+      if (thread.error) return setNotice(thread.error);
+      setActiveChat({ ...thread, kind: "group" });
+    } else {
+      const thread = await api(`/messages/with/${id}`);
+      if (thread.error) return setNotice(thread.error);
+      setActiveChat({ ...thread, kind: "dm" });
+    }
     setSearchResults([]);
     await loadMessages();
   }
 
-  async function sendDirectMessage(userId, text) {
-    const res = await api(`/messages/with/${userId}`, {
-      method: "POST",
-      body: { text }
-    });
+  // Unified send (DM or group). file is optional.
+  async function sendChatMessage(text, file) {
+    if (!activeChat) return;
+    const formData = new FormData();
+    if (text) formData.append("text", text);
+    if (file) formData.append("attachment", file);
+    const url =
+      activeChat.kind === "group"
+        ? `/groups/${activeChat.group.id}/messages`
+        : `/messages/with/${activeChat.user.id}`;
+    const res = await apiForm(url, formData);
     if (res.error) {
       setNotice(res.error);
       return;
     }
-    const thread = await api(`/messages/with/${userId}`);
-    if (!thread.error) setActiveChat(thread);
+    // Refresh the thread + conversation list
+    const refreshed =
+      activeChat.kind === "group"
+        ? await api(`/groups/${activeChat.group.id}`)
+        : await api(`/messages/with/${activeChat.user.id}`);
+    if (!refreshed.error) setActiveChat({ ...refreshed, kind: activeChat.kind });
     await loadMessages();
+  }
+
+  async function createGroupChat({ name, memberIds, photoFile }) {
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("memberIds", JSON.stringify(memberIds));
+    if (photoFile) formData.append("photo", photoFile);
+    const res = await apiForm("/groups", formData);
+    if (res.error) {
+      setNotice(res.error);
+      throw new Error(res.error);
+    }
+    setNotice(`Group "${name}" created`);
+    await loadMessages();
+    await openChat("group", res.id);
+  }
+
+  async function updateGroupChat(groupId, { name, photoFile }) {
+    const formData = new FormData();
+    if (name) formData.append("name", name);
+    if (photoFile) formData.append("photo", photoFile);
+    const res = await apiForm(`/groups/${groupId}`, formData, "PATCH");
+    if (res.error) {
+      setNotice(res.error);
+      throw new Error(res.error);
+    }
+    setNotice("Group updated");
+    const refreshed = await api(`/groups/${groupId}`);
+    if (!refreshed.error) setActiveChat({ ...refreshed, kind: "group" });
+    await loadMessages();
+  }
+
+  async function leaveGroupChat(groupId) {
+    const res = await api(`/groups/${groupId}/members/me`, { method: "DELETE" });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Left group");
+    setActiveChat(null);
+    await loadMessages();
+  }
+
+  async function loadActiveAttachments() {
+    if (!activeChat) return [];
+    const url =
+      activeChat.kind === "group"
+        ? `/groups/${activeChat.group.id}/attachments`
+        : `/messages/with/${activeChat.user.id}/attachments`;
+    const res = await api(url);
+    if (res.error || !Array.isArray(res)) return [];
+    return res;
   }
 
   async function uploadAvatar(file) {
@@ -573,6 +646,7 @@ export default function App() {
           path="/messages"
           element={
             <MessagesPage
+              currentUser={user}
               conversations={conversations}
               activeChat={activeChat}
               searchResults={searchResults}
@@ -581,8 +655,12 @@ export default function App() {
               onSearch={searchUsers}
               onAddFriend={addFriend}
               onOpenChat={openChat}
-              onSendMessage={sendDirectMessage}
+              onSendMessage={sendChatMessage}
               onRefreshConversations={loadMessages}
+              onCreateGroup={createGroupChat}
+              onUpdateGroup={updateGroupChat}
+              onLeaveGroup={leaveGroupChat}
+              onLoadAttachments={loadActiveAttachments}
             />
           }
         />

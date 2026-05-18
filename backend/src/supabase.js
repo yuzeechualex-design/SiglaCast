@@ -59,3 +59,28 @@ export async function uploadToBucket(bucket, file) {
   const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
   return data.publicUrl;
 }
+
+// Same as uploadToBucket but returns a richer object including the safe
+// display name so chat attachments can show their original filename.
+export async function uploadAttachment(bucket, file) {
+  const safeName = (file.originalname || "file")
+    .replace(/[/\\]/g, "_")
+    .slice(0, 120);
+  const ext = safeName.split(".").pop().toLowerCase();
+  const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const { error } = await supabase.storage
+    .from(bucket)
+    .upload(filename, file.buffer, {
+      contentType: file.mimetype,
+      upsert: false
+    });
+  if (error) throw new Error(`Upload failed: ${error.message}`);
+  const { data } = supabase.storage.from(bucket).getPublicUrl(filename);
+  return {
+    url: data.publicUrl,
+    name: safeName,
+    size: file.size,
+    mime: file.mimetype,
+    isImage: /^image\//i.test(file.mimetype || "")
+  };
+}
