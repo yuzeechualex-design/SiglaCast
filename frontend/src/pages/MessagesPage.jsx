@@ -27,7 +27,7 @@ export default function MessagesPage({
   setSearchQuery,
   onSearch,
   onAddFriend,
-  onOpenChat,            // (kind, id)  kind: "dm" | "group"
+  onOpenChat,            // (kind, id)  kind: "dm" | "group" | "userphone"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
@@ -40,7 +40,11 @@ export default function MessagesPage({
   onDeleteGroup,         // (groupId)
   onReactToMessage,      // (messageId, reaction|null)
   onUnsendMessage,       // (message)
-  onCloseMobileChat      // () clears activeChat (mobile back out of thread)
+  onCloseMobileChat,      // () clears activeChat (mobile back out of thread)
+  onUserphoneStart,
+  onUserphoneEnd,
+  onUserphoneSwitch,
+  onUserphoneCancelWaiting
 }) {
   const [draft, setDraft] = useState("");
   const [draftFile, setDraftFile] = useState(null);
@@ -59,6 +63,8 @@ export default function MessagesPage({
   );
 
   const isGroup = activeChat?.kind === "group";
+  const isUserphone = activeChat?.kind === "userphone";
+  const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
 
   useEffect(() => {
@@ -66,7 +72,7 @@ export default function MessagesPage({
     setDraftFile(null);
     setMenuOpen(false);
     setReplyTarget(null);
-  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id]);
+  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, activeChat?.sessionId, activeChat?.phase]);
 
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 900px)");
@@ -83,7 +89,7 @@ export default function MessagesPage({
       threadEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id]);
+  }, [activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, activeChat?.sessionId, activeChat?.phase]);
 
   // Click outside hamburger menu closes it
   useEffect(() => {
@@ -122,7 +128,7 @@ export default function MessagesPage({
   function handleReply(message) {
     setReplyTarget({
       id: message.id,
-      author: message.author || (message.fromMe ? currentUser?.name : (isGroup ? "member" : activeChat?.user?.name)),
+      author: message.author || (message.fromMe ? currentUser?.name : (isGroup ? "member" : isUserphone ? "Anonymous" : activeChat?.user?.name)),
       text: message.text || (message.attachment?.isImage ? "📷 Photo" : message.attachment ? "📁 File" : "")
     });
   }
@@ -202,27 +208,41 @@ export default function MessagesPage({
           )}
 
           <div className="conv-list">
-            {conversations.length === 0 ? (
-              <p className="empty-hint">No conversations yet. Search someone or start a group chat.</p>
+            {(conversations || []).length === 0 ? (
+              <p className="empty-hint">No conversations yet. Search someone or try Userphone.</p>
             ) : (
               conversations.map((c) => {
-                const isDM = c.kind === "dm";
-                const target = isDM ? c.user : c.group;
+                const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
+                const target = c.kind === "group" ? c.group : c.user;
                 const isActive =
-                  (isGroup && activeChat?.group?.id === c.group?.id) ||
-                  (!isGroup && activeChat?.user?.id === c.user?.id);
+                  (isGroup && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
+                  (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
+                  (c.kind === "userphone" && activeChat?.kind === "userphone");
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    className={`conv-item ${isActive ? "active" : ""}`}
-                    onClick={() => onOpenChat(c.kind, isDM ? c.user.id : c.group.id)}
+                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
+                    onClick={() =>
+                      c.kind === "userphone"
+                        ? onOpenChat("userphone", "userphone")
+                        : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
+                    }
                   >
-                    {renderAvatar(target, "sm")}
+                    {c.kind === "userphone" ? (
+                      <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
+                        📞
+                      </div>
+                    ) : (
+                      renderAvatar(target, "sm")
+                    )}
                     <div className="conv-item-body">
                       <strong>
                         {target?.name || "Unknown"}{" "}
-                        {!isDM ? <span className="pill pill-muted small">group</span> : null}
+                        {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
+                        {c.kind === "userphone" ? (
+                          <span className="pill pill-muted small">anonymous</span>
+                        ) : null}
                       </strong>
                       <span className="conv-preview">
                         {c.lastMessage
@@ -256,19 +276,28 @@ export default function MessagesPage({
                     ← Back
                   </button>
                 ) : null}
-                {renderAvatar(isGroup ? activeChat.group : activeChat.user)}
+                {isUserphone ? (
+                  <div className="msg-avatar placeholder thread-userphone-icon" aria-hidden>
+                    📞
+                  </div>
+                ) : (
+                  renderAvatar(isGroup ? activeChat.group : activeChat.user)
+                )}
                 <div className="thread-header-info">
-                  <strong>{isGroup ? activeChat.group?.name : activeChat.user?.name}</strong>
-                  {isGroup ? (
+                  <strong>{isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}</strong>
+                  {isUserphone ? (
+                    <small>Random anonymous chats — identities stay hidden.</small>
+                  ) : isGroup ? (
                     <small>
                       {activeChat.group?.members?.length || 0} members
                     </small>
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}
-                  {!isGroup && activeChat.isFriend ? (
+                  {!isGroup && !isUserphone && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>
-                  ) : !isGroup ? (
+                  ) : null}
+                  {!isGroup && !isUserphone ? (
                     <button
                       type="button"
                       className="btn btn-secondary btn-sm"
@@ -287,6 +316,7 @@ export default function MessagesPage({
                 >
                   ↻
                 </button>
+                {!isUserphone ? (
                 <div className="thread-menu-wrap" ref={menuRef}>
                   <button
                     type="button"
@@ -348,14 +378,50 @@ export default function MessagesPage({
                     </div>
                   ) : null}
                 </div>
+                ) : null}
               </div>
 
+              {isUserphone && userphonePhase === "matched" ? (
+                <div className="userphone-toolbar">
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => onUserphoneEnd?.()}>
+                    End call
+                  </button>
+                  <button type="button" className="btn btn-primary btn-sm" onClick={() => onUserphoneSwitch?.()}>
+                    Switch call
+                  </button>
+                </div>
+              ) : null}
+
+              {isUserphone && userphonePhase !== "matched" ? (
+                <div className="userphone-cta-wrap">
+                  {userphonePhase === "idle" ? (
+                    <>
+                      <p className="userphone-intro">
+                        Match with anyone else who opens Userphone. You will both appear as{" "}
+                        <strong>Anonymous</strong>.
+                      </p>
+                      <button type="button" className="btn btn-primary userphone-big-btn" onClick={() => onUserphoneStart?.()}>
+                        Call anonymous
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <p className="userphone-intro">Searching for someone else on Userphone…</p>
+                      <div className="userphone-spinner" aria-busy />
+                      <button type="button" className="btn btn-ghost btn-sm" onClick={() => onUserphoneCancelWaiting?.()}>
+                        Cancel search
+                      </button>
+                    </>
+                  )}
+                </div>
+              ) : (
               <div className="thread-messages">
                 {(activeChat.messages || []).map((m) => (
                   <MessageBubble
                     key={m.id}
                     message={m}
                     showAuthor={isGroup && !m.fromMe}
+                    minimal={isUserphone}
                     onReact={onReactToMessage}
                     onReply={handleReply}
                     onUnsend={handleUnsend}
@@ -364,8 +430,9 @@ export default function MessagesPage({
                 ))}
                 <div ref={threadEndRef} />
               </div>
+              )}
 
-              {replyTarget ? (
+              {replyTarget && !isUserphone ? (
                 <div className="reply-banner">
                   <div className="reply-banner-info">
                     <span className="reply-banner-label">Replying to {replyTarget.author}</span>
@@ -382,13 +449,17 @@ export default function MessagesPage({
                 </div>
               ) : null}
 
+              {(!isUserphone || userphonePhase === "matched") ? (
               <form className="thread-compose" onSubmit={handleSend}>
+                {!isUserphone ? (
                 <input
                   ref={fileRef}
                   type="file"
                   className="sr-only"
                   onChange={pickAttachment}
                 />
+                ) : null}
+                {!isUserphone ? (
                 <button
                   type="button"
                   className="btn btn-icon"
@@ -397,7 +468,8 @@ export default function MessagesPage({
                 >
                   📎
                 </button>
-                {draftFile ? (
+                ) : null}
+                {!isUserphone && draftFile ? (
                   <div className="draft-file-chip">
                     <span>📁 {draftFile.name}</span>
                     <button
@@ -416,7 +488,13 @@ export default function MessagesPage({
                 <MentionInput
                   value={draft}
                   onChange={setDraft}
-                  placeholder={isGroup ? `Message ${activeChat.group?.name}… use @ to mention` : `Message ${activeChat.user?.name}… use @ to mention`}
+                  placeholder={
+                    isUserphone
+                      ? "Message anonymously…"
+                      : isGroup
+                        ? `Message ${activeChat.group?.name}… use @ to mention`
+                        : `Message ${activeChat.user?.name}… use @ to mention`
+                  }
                 />
                 <button
                   type="submit"
@@ -427,6 +505,7 @@ export default function MessagesPage({
                   {sending ? "…" : "➤"}
                 </button>
               </form>
+              ) : null}
             </>
           )}
         </div>
@@ -517,7 +596,7 @@ function formatBytes(n) {
 // a hover reaction picker, quoted-reply preview, and inline Reply/Unsend
 // actions. On touch devices a long-press opens the picker and we cancel the
 // default text-selection menu so it doesn't conflict with reacting.
-function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onOpenReactors }) {
+function MessageBubble({ message: m, showAuthor, minimal = false, onReact, onReply, onUnsend, onOpenReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
   const longPressTimer = useRef(null);
@@ -531,7 +610,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
 
   // Touch: tapping outside closes the reaction + action strip (still long-press to open).
   useEffect(() => {
-    if (!pickerOpen || unsent) return;
+    if (!pickerOpen || unsent || minimal) return;
     const mq = window.matchMedia("(hover: none)");
     if (!mq.matches) return;
     function tapOut(e) {
@@ -543,7 +622,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
       document.removeEventListener("touchstart", tapOut, true);
       document.removeEventListener("mousedown", tapOut, true);
     };
-  }, [pickerOpen, unsent]);
+  }, [pickerOpen, unsent, minimal]);
 
   const breakdown = m.reactionBreakdown || {};
   const topReactions = CHAT_REACTIONS
@@ -568,7 +647,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
   // Touch: long-press to open the reaction picker. preventDefault on the
   // native contextmenu so "Copy / Select" doesn't appear underneath.
   function handleTouchStart() {
-    if (unsent) return;
+    if (unsent || minimal) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => setPickerOpen(true), 400);
   }
@@ -576,7 +655,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
   }
   function suppressContext(e) {
-    if (!unsent) e.preventDefault();
+    if (!unsent && !minimal) e.preventDefault();
   }
 
   return (
@@ -591,8 +670,8 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
 
       <div
         className="bubble-stack"
-        onMouseEnter={!unsent ? openPicker : undefined}
-        onMouseLeave={!unsent ? deferClose : undefined}
+        onMouseEnter={!unsent && !minimal ? openPicker : undefined}
+        onMouseLeave={!unsent && !minimal ? deferClose : undefined}
       >
         <div className="bubble-with-actions" ref={bubbleWrapRef}>
           <div
@@ -623,7 +702,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
             )}
             <div className="bubble-meta-row">
               <small className="bubble-time">{new Date(m.createdAt).toLocaleString()}</small>
-              {!unsent && totalCount > 0 ? (
+              {!minimal && !unsent && totalCount > 0 ? (
                 <button
                   type="button"
                   className="bubble-reaction-chip bubble-reaction-chip-btn"
@@ -642,7 +721,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
             </div>
           </div>
 
-          {!unsent ? (
+          {!unsent && !minimal ? (
             <div className={`bubble-quick-actions ${m.fromMe ? "side-left" : "side-right"}`}>
               <button
                 type="button"
@@ -671,7 +750,7 @@ function MessageBubble({ message: m, showAuthor, onReact, onReply, onUnsend, onO
             </div>
           ) : null}
 
-          {pickerOpen && !unsent ? (
+          {pickerOpen && !unsent && !minimal ? (
             <div
               className={`bubble-react-picker ${m.fromMe ? "side-left" : "side-right"}`}
               onMouseEnter={openPicker}

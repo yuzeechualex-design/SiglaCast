@@ -49,6 +49,12 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState([]);
+  /** Idle / waiting / matched state for sidebar + anonymous thread (polled on /messages). */
+  const [userPhoneState, setUserPhoneState] = useState({
+    phase: "idle",
+    sessionId: null,
+    messages: []
+  });
   const [activeChat, setActiveChat] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -120,6 +126,58 @@ export default function App() {
       method,
       onUnauthorizedRetry
     });
+
+  async function refreshUserPhoneFromServer() {
+    const st = await api("/userphone/state");
+    if (st.error || !st.phase) return null;
+    const next = {
+      phase: st.phase,
+      sessionId: st.sessionId || null,
+      messages: Array.isArray(st.messages) ? st.messages : []
+    };
+    setUserPhoneState(next);
+    return next;
+  }
+
+  const conversationsWithUserphone = useMemo(() => {
+    const lp =
+      userPhoneState.phase === "matched" &&
+      Array.isArray(userPhoneState.messages) &&
+      userPhoneState.messages.length > 0
+        ? userPhoneState.messages[userPhoneState.messages.length - 1]
+        : null;
+    let lastMessage;
+    if (lp) {
+      lastMessage = {
+        text: lp.fromMe ? `You: ${lp.text}` : lp.text || "",
+        createdAt: lp.createdAt,
+        fromMe: !!lp.fromMe
+      };
+    } else if (userPhoneState.phase === "waiting") {
+      lastMessage = {
+        text: "Searching for someone…",
+        createdAt: new Date().toISOString(),
+        fromMe: false
+      };
+    } else {
+      lastMessage = {
+        text: "Tap Call anonymous",
+        createdAt: new Date(0).toISOString(),
+        fromMe: false
+      };
+    }
+    return [
+      {
+        kind: "userphone",
+        id: "userphone",
+        user: { id: "userphone", name: "Userphone", email: "", course: "", avatarUrl: null },
+        isFriend: false,
+        lastMessage,
+        unreadCount: 0
+      },
+      ...(conversations || [])
+    ];
+  }, [conversations, userPhoneState.phase, userPhoneState.messages]);
 
   async function loadCore() {
     if (!token) return;
@@ -336,9 +394,43 @@ export default function App() {
     };
   }, [token, location.pathname]);
 
+  // Userphone pairing + messages poll while Messages screen is open
+  useEffect(() => {
+    if (!token || location.pathname !== "/messages") return undefined;
+    let cancelled = false;
+    async function poll() {
+      const st = await api("/userphone/state");
+      if (cancelled || st.error || !st.phase) return;
+      setUserPhoneState({
+        phase: st.phase,
+        sessionId: st.sessionId || null,
+        messages: Array.isArray(st.messages) ? st.messages : []
+      });
+    }
+    poll();
+    const iv = setInterval(poll, 2600);
+    return () => {
+      cancelled = true;
+      clearInterval(iv);
+    };
+  }, [token, location.pathname]);
+
+  useEffect(() => {
+    setActiveChat((prev) => {
+      if (!prev || prev.kind !== "userphone") return prev;
+      return {
+        ...prev,
+        phase: userPhoneState.phase,
+        sessionId: userPhoneState.sessionId,
+        messages: userPhoneState.messages
+      };
+    });
+  }, [userPhoneState]);
+
   // Poll the active thread (DM or group) every 3 seconds while the page is open.
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;
+    if (activeChat.kind === "userphone") return undefined;
     const interval = setInterval(async () => {
       const refreshed =
         activeChat.kind === "group"
@@ -531,7 +623,11 @@ export default function App() {
     if (!res.error) {
       await loadMessages();
       await searchUsers();
-      if (activeChat?.kind !== "group" && activeChat?.user?.id === friendId) {
+      if (
+        activeChat?.kind !== "group" &&
+        activeChat?.kind !== "userphone" &&
+        activeChat?.user?.id === friendId
+      ) {
         const thread = await api(`/messages/with/${friendId}`);
         if (!thread.error) setActiveChat({ ...thread, kind: "dm" });
       }
@@ -543,6 +639,18 @@ export default function App() {
       const thread = await api(`/groups/${id}`);
       if (thread.error) return setNotice(thread.error);
       setActiveChat({ ...thread, kind: "group" });
+    } else if (kind === "userphone") {
+      const next = await refreshUserPhoneFromServer();
+      if (!next) return setNotice("Could not load Userphone");
+      setActiveChat({
+        kind: "userphone",
+        phase: next.phase,
+        sessionId: next.sessionId,
+        messages: next.messages || []
+      });
+      setSearchResults([]);
+      await loadMessages();
+      return;
     } else {
       const thread = await api(`/messages/with/${id}`);
       if (thread.error) return setNotice(thread.error);
@@ -552,11 +660,57 @@ export default function App() {
     await loadMessages();
   }
 
+  async function startUserphoneCall() {
+    const res = await api("/userphone/start", { method: "POST", body: {} });
+    if (res.error) setNotice(res.error);
+    await refreshUserPhoneFromServer();
+  }
+
+  async function endUserphoneCallAction() {
+    await api("/userphone/end", { method: "POST", body: {} });
+    await refreshUserPhoneFromServer();
+    setNotice("Call ended");
+  }
+
+  async function switchUserphoneCallAction() {
+    const res = await api("/userphone/switch", { method: "POST", body: {} });
+    if (res.error) setNotice(res.error);
+    else setNotice("Looking for someone new…");
+    await refreshUserPhoneFromServer();
+  }
+
+  async function cancelUserphoneWaitingAction() {
+    await api("/userphone/waiting", { method: "DELETE" });
+    await refreshUserPhoneFromServer();
+    setNotice("Stopped searching");
+  }
+
   // Unified send (DM or group). file is optional.
   // Send a chat message. Optionally attach a file and/or quote-reply another
   // message via replyToId.
   async function sendChatMessage(text, file, replyToId = null) {
     if (!activeChat) return;
+    if (activeChat.kind === "userphone") {
+      if (!activeChat.sessionId) {
+        setNotice("Wait until you’re matched with someone.");
+        return;
+      }
+      if (file || replyToId) {
+        setNotice("Files and replies aren’t supported in Userphone.");
+        return;
+      }
+      const res = await api(`/userphone/${activeChat.sessionId}/messages`, {
+        method: "POST",
+        body: { text: text.trim() }
+      });
+      if (res.error) {
+        setNotice(res.error);
+        return;
+      }
+      await refreshUserPhoneFromServer();
+      await loadMessages();
+      return;
+    }
     const formData = new FormData();
     if (text) formData.append("text", text);
     if (file) formData.append("attachment", file);
@@ -581,7 +735,7 @@ export default function App() {
   // Soft-unsend one of my own messages. The thread is refreshed so the
   // tombstone ("This message was unsent") appears in place of the original.
   async function unsendMessage(message) {
-    if (!message?.id) return;
+    if (!message?.id || activeChat?.kind === "userphone") return;
     const res = await api(`/messages/${message.id}`, { method: "DELETE" });
     if (res.error) {
       setNotice(res.error);
@@ -695,6 +849,7 @@ export default function App() {
   }
 
   async function reactToMessage(messageId, reaction) {
+    if (activeChat?.kind === "userphone") return;
     const res = await api(`/messages/${messageId}/react`, {
       method: "POST",
       body: { reaction: reaction === undefined ? "like" : reaction }
@@ -716,6 +871,7 @@ export default function App() {
 
   async function loadActiveAttachments() {
     if (!activeChat) return [];
+    if (activeChat.kind === "userphone") return [];
     const url =
       activeChat.kind === "group"
         ? `/groups/${activeChat.group.id}/attachments`
@@ -977,7 +1133,7 @@ export default function App() {
           element={
             <MessagesPage
               currentUser={user}
-              conversations={conversations}
+              conversations={conversationsWithUserphone}
               activeChat={activeChat}
               searchResults={searchResults}
               searchQuery={searchQuery}
@@ -998,6 +1154,10 @@ export default function App() {
               onReactToMessage={reactToMessage}
               onUnsendMessage={unsendMessage}
               onCloseMobileChat={() => setActiveChat(null)}
+              onUserphoneStart={startUserphoneCall}
+              onUserphoneEnd={endUserphoneCallAction}
+              onUserphoneSwitch={switchUserphoneCallAction}
+              onUserphoneCancelWaiting={cancelUserphoneWaitingAction}
             />
           }
         />

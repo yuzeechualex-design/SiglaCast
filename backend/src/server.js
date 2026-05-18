@@ -589,6 +589,82 @@ async function decorateChatMessages(rows, viewerId) {
   });
 }
 
+/** Random anonymous pairing chat — identities never leak in API payloads. */
+function serializeUserphoneMessages(rows, viewerId) {
+  return (rows || []).map((row) => ({
+    id: row.id,
+    text: row.text || "",
+    fromMe: row.from_user_id === viewerId,
+    createdAt: row.created_at,
+    author: row.from_user_id === viewerId ? "You" : "Anonymous",
+    anonymous: true
+  }));
+}
+
+async function fetchActiveUserphoneSession(userId) {
+  const { data } = await supabase
+    .from("anon_userphone_sessions")
+    .select("*")
+    .is("ended_at", null)
+    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
+    .maybeSingle();
+  return data || null;
+}
+
+async function tryPairUserphoneUsers(me) {
+  if (await fetchActiveUserphoneSession(me)) return;
+  const { data: peerRow } = await supabase
+    .from("anon_userphone_waiting")
+    .select("user_id")
+    .neq("user_id", me)
+    .order("joined_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  const peerId = peerRow?.user_id;
+  if (!peerId || peerId === me) return;
+  if (await fetchActiveUserphoneSession(peerId)) return;
+  const { data: grabbed } = await supabase.from("anon_userphone_waiting").delete().eq("user_id", peerId).select("user_id");
+  if (!grabbed?.length) return;
+  const { data: selfRemoved } = await supabase.from("anon_userphone_waiting").delete().eq("user_id", me).select("user_id");
+  if (!selfRemoved?.length) {
+    await supabase.from("anon_userphone_waiting").insert({ user_id: peerId });
+    return;
+  }
+  const id = `up${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const participantA = peerId < me ? peerId : me;
+  const participantB = peerId < me ? me : peerId;
+  const { error } = await supabase.from("anon_userphone_sessions").insert({
+    id,
+    participant_a: participantA,
+    participant_b: participantB
+  });
+  if (error) {
+    await supabase.from("anon_userphone_waiting").insert([{ user_id: me }, { user_id: peerId }]);
+    return;
+  }
+}
+
+async function buildUserphoneState(me) {
+  const session = await fetchActiveUserphoneSession(me);
+  if (session) {
+    const { data: rows } = await supabase
+      .from("anon_userphone_messages")
+      .select("*")
+      .eq("session_id", session.id)
+      .order("created_at", { ascending: true });
+    return {
+      phase: "matched",
+      sessionId: session.id,
+      messages: serializeUserphoneMessages(rows, me)
+    };
+  }
+  const { data: waitRow } = await supabase.from("anon_userphone_waiting").select("user_id").eq("user_id", me).maybeSingle();
+  if (waitRow) {
+    return { phase: "waiting", sessionId: null, messages: [] };
+  }
+  return { phase: "idle", sessionId: null, messages: [] };
+}
+
 // Seed an admin account + demo event if users table is empty.
 // Demo student accounts are no longer auto-created.
 async function seedIfEmpty() {
@@ -1253,6 +1329,75 @@ app.post("/api/notifications/read-all", authenticate, async (req, res) => {
     .eq("read", false);
   if (error) return res.status(400).json({ error: error.message });
   res.json({ success: true });
+});
+
+// Random anonymous "Userphone" chat (same app users, masked as Anonymous)
+app.get("/api/userphone/state", authenticate, async (req, res) => {
+  res.json(await buildUserphoneState(req.user.id));
+});
+
+app.post("/api/userphone/start", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const existing = await fetchActiveUserphoneSession(me);
+  if (existing) {
+    return res.json(await buildUserphoneState(me));
+  }
+  const { data: waitRow } = await supabase.from("anon_userphone_waiting").select("user_id").eq("user_id", me).maybeSingle();
+  if (!waitRow) {
+    const { error } = await supabase.from("anon_userphone_waiting").insert({ user_id: me });
+    if (error) return res.status(400).json({ error: error.message });
+  }
+  await tryPairUserphoneUsers(me);
+  res.json(await buildUserphoneState(me));
+});
+
+app.delete("/api/userphone/waiting", authenticate, async (req, res) => {
+  await supabase.from("anon_userphone_waiting").delete().eq("user_id", req.user.id);
+  res.json({ success: true });
+});
+
+app.post("/api/userphone/end", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const session = await fetchActiveUserphoneSession(me);
+  if (!session) return res.json({ success: true });
+  await supabase.from("anon_userphone_sessions").update({ ended_at: new Date().toISOString() }).eq("id", session.id);
+  res.json({ success: true });
+});
+
+app.post("/api/userphone/switch", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const session = await fetchActiveUserphoneSession(me);
+  if (session) {
+    await supabase.from("anon_userphone_sessions").update({ ended_at: new Date().toISOString() }).eq("id", session.id);
+  }
+  await supabase.from("anon_userphone_waiting").delete().eq("user_id", me);
+  const { error } = await supabase.from("anon_userphone_waiting").insert({ user_id: me });
+  if (error) return res.status(400).json({ error: error.message });
+  await tryPairUserphoneUsers(me);
+  res.json(await buildUserphoneState(me));
+});
+
+app.post("/api/userphone/:sessionId/messages", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const sessionId = req.params.sessionId;
+  const text = String(req.body?.text || "").trim();
+  if (!text) return res.status(400).json({ error: "Message text is required" });
+  const session = await fetchActiveUserphoneSession(me);
+  if (!session || session.id !== sessionId) {
+    return res.status(400).json({ error: "No active anonymous call" });
+  }
+  if (session.participant_a !== me && session.participant_b !== me) {
+    return res.status(403).json({ error: "Not in this session" });
+  }
+  const id = `upm${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+  const { data: row, error } = await supabase
+    .from("anon_userphone_messages")
+    .insert({ id, session_id: sessionId, from_user_id: me, text })
+    .select()
+    .maybeSingle();
+  if (error) return res.status(400).json({ error: error.message });
+  const [msg] = serializeUserphoneMessages([row], me);
+  res.status(201).json({ message: msg });
 });
 
 // Messaging + friends

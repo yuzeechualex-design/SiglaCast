@@ -1132,6 +1132,70 @@ label.btn-secondary:hover {
   white-space: nowrap;
 }
 
+.conv-item.conv-userphone {
+  border-color: rgba(100, 160, 255, 0.35);
+}
+
+.conv-userphone-avatar {
+  font-size: 1.05rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.thread-userphone-icon {
+  width: 40px;
+  height: 40px;
+  font-size: 1.35rem;
+  display: grid;
+  place-items: center;
+}
+
+.userphone-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  align-items: center;
+}
+
+.userphone-cta-wrap {
+  flex: 1;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.userphone-intro {
+  max-width: 320px;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--ink-600);
+}
+
+.userphone-big-btn {
+  font-weight: 700;
+}
+
+.userphone-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 3px solid var(--line);
+  border-top-color: var(--blue-700, #3478ea);
+  animation: spin-avatar 700ms linear infinite;
+}
+
+@keyframes spin-avatar {
+  to { transform: rotate(360deg); }
+}
+
 .unread-dot {
   min-width: 22px;
   height: 22px;
