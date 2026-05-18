@@ -1,5 +1,12 @@
-const API = "http://localhost:4000/api";
-export const API_ORIGIN = "http://localhost:4000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+const API = `${API_BASE.replace(/\/$/, "")}/api`;
+export const API_ORIGIN = API_BASE.replace(/\/$/, "");
+
+export function mediaUrl(url) {
+  if (!url) return null;
+  if (/^https?:\/\//i.test(url)) return url;
+  return `${API_ORIGIN}${url.startsWith("/") ? "" : "/"}${url}`;
+}
 
 export async function request(path, { token, method = "GET", body, onUnauthorizedRetry } = {}) {
   const headers = {};
@@ -29,7 +36,7 @@ export async function request(path, { token, method = "GET", body, onUnauthorize
     }
     return data;
   } catch (error) {
-    return { error: "Cannot connect to server. Make sure backend is running on port 4000." };
+    return { error: "Cannot connect to server. Check VITE_API_BASE_URL or that the backend is running." };
   }
 }
 
@@ -61,6 +68,6 @@ export async function requestForm(path, { token, method = "POST", formData, onUn
     }
     return data;
   } catch (error) {
-    return { error: "Cannot connect to server. Make sure backend is running on port 4000." };
+    return { error: "Cannot connect to server. Check VITE_API_BASE_URL or that the backend is running." };
   }
 }

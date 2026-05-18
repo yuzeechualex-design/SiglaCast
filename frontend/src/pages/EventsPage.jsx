@@ -1,4 +1,4 @@
-import { API_ORIGIN } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 
 export default function EventsPage({ events, onOpenEvent }) {
   return (
@@ -11,7 +11,7 @@ export default function EventsPage({ events, onOpenEvent }) {
           <article key={event.id} className="tile event-list-card">
             <div className="event-list-grid">
               {event.coverImageUrl ? (
-                <img className="event-list-thumb" src={`${API_ORIGIN}${event.coverImageUrl}`} alt="" />
+                <img className="event-list-thumb" src={mediaUrl(event.coverImageUrl)} alt="" />
               ) : (
                 <div className="event-list-thumb placeholder">📅</div>
               )}
