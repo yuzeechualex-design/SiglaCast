@@ -53,7 +53,9 @@ export default function App() {
   const [userPhoneState, setUserPhoneState] = useState({
     phase: "idle",
     sessionId: null,
-    messages: []
+    messages: [],
+    waitExpiresAt: null,
+    waitStartedAt: null
   });
   const [activeChat, setActiveChat] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -130,14 +132,27 @@ export default function App() {
   async function refreshUserPhoneFromServer() {
     const st = await api("/userphone/state");
     if (st.error || !st.phase) return null;
+    if (st.waitTimedOut) {
+      setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
+    }
     const next = {
       phase: st.phase,
       sessionId: st.sessionId || null,
-      messages: Array.isArray(st.messages) ? st.messages : []
+      messages: Array.isArray(st.messages) ? st.messages : [],
+      waitExpiresAt: st.waitExpiresAt ?? null,
+      waitStartedAt: st.waitStartedAt ?? null
     };
     setUserPhoneState(next);
     return next;
   }
+
+  /** Re-render sidebar countdown while queued (server poll ~1.1s; this ticks every 250ms for smooth list text). */
+  const [userphoneTick, setUserphoneTick] = useState(0);
+  useEffect(() => {
+    if (userPhoneState.phase !== "waiting") return undefined;
+    const id = setInterval(() => setUserphoneTick((n) => n + 1), 250);
+    return () => clearInterval(id);
+  }, [userPhoneState.phase]);
 
   const conversationsWithUserphone = useMemo(() => {
     const lp =
@@ -154,8 +169,16 @@ export default function App() {
         fromMe: !!lp.fromMe
       };
     } else if (userPhoneState.phase === "waiting") {
+      let sub = "Searching…";
+      if (userPhoneState.waitExpiresAt) {
+        const left = Math.max(
+          0,
+          Math.ceil((new Date(userPhoneState.waitExpiresAt).getTime() - Date.now()) / 1000)
+        );
+        sub = `Searching… ${left}s until queue resets`;
+      }
       lastMessage = {
-        text: "Searching for someone…",
+        text: sub,
         createdAt: new Date().toISOString(),
         fromMe: false
       };
@@ -177,7 +200,7 @@ export default function App() {
       },
       ...(conversations || [])
     ];
-  }, [conversations, userPhoneState.phase, userPhoneState.messages]);
+  }, [conversations, userPhoneState.phase, userPhoneState.messages, userPhoneState.waitExpiresAt, userphoneTick]);
 
   async function loadCore() {
     if (!token) return;
@@ -401,14 +424,19 @@ export default function App() {
     async function poll() {
       const st = await api("/userphone/state");
       if (cancelled || st.error || !st.phase) return;
+      if (st.waitTimedOut) {
+        setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
+      }
       setUserPhoneState({
         phase: st.phase,
         sessionId: st.sessionId || null,
-        messages: Array.isArray(st.messages) ? st.messages : []
+        messages: Array.isArray(st.messages) ? st.messages : [],
+        waitExpiresAt: st.waitExpiresAt ?? null,
+        waitStartedAt: st.waitStartedAt ?? null
       });
     }
     poll();
-    const iv = setInterval(poll, 2600);
+    const iv = setInterval(poll, 1100);
     return () => {
       cancelled = true;
       clearInterval(iv);
@@ -422,7 +450,9 @@ export default function App() {
         ...prev,
         phase: userPhoneState.phase,
         sessionId: userPhoneState.sessionId,
-        messages: userPhoneState.messages
+        messages: userPhoneState.messages,
+        waitExpiresAt: userPhoneState.waitExpiresAt,
+        waitStartedAt: userPhoneState.waitStartedAt
       };
     });
   }, [userPhoneState]);
@@ -646,7 +676,9 @@ export default function App() {
         kind: "userphone",
         phase: next.phase,
         sessionId: next.sessionId,
-        messages: next.messages || []
+        messages: next.messages || [],
+        waitExpiresAt: next.waitExpiresAt ?? null,
+        waitStartedAt: next.waitStartedAt ?? null
       });
       setSearchResults([]);
       await loadMessages();
@@ -661,9 +693,21 @@ export default function App() {
   }
 
   async function startUserphoneCall() {
-    const res = await api("/userphone/start", { method: "POST", body: {} });
-    if (res.error) setNotice(res.error);
-    await refreshUserPhoneFromServer();
+    const st = await api("/userphone/start", { method: "POST", body: {} });
+    if (st.error) {
+      setNotice(st.error);
+      return;
+    }
+    if (st.waitTimedOut) {
+      setNotice("No one joined in 10 seconds. Tap Call anonymous to try again.");
+    }
+    setUserPhoneState({
+      phase: st.phase,
+      sessionId: st.sessionId || null,
+      messages: Array.isArray(st.messages) ? st.messages : [],
+      waitExpiresAt: st.waitExpiresAt ?? null,
+      waitStartedAt: st.waitStartedAt ?? null
+    });
   }
 
   async function endUserphoneCallAction() {

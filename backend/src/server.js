@@ -589,6 +589,9 @@ async function decorateChatMessages(rows, viewerId) {
   });
 }
 
+/** Max time to stay in the Userphone match queue before auto-dropping to idle (ms). */
+const USERPHONE_WAIT_MS = 10_000;
+
 /** Random anonymous pairing chat — identities never leak in API payloads. */
 function serializeUserphoneMessages(rows, viewerId) {
   return (rows || []).map((row) => ({
@@ -613,10 +616,12 @@ async function fetchActiveUserphoneSession(userId) {
 
 async function tryPairUserphoneUsers(me) {
   if (await fetchActiveUserphoneSession(me)) return;
+  const cutoff = new Date(Date.now() - USERPHONE_WAIT_MS).toISOString();
   const { data: peerRow } = await supabase
     .from("anon_userphone_waiting")
     .select("user_id")
     .neq("user_id", me)
+    .gte("joined_at", cutoff)
     .order("joined_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -658,9 +663,26 @@ async function buildUserphoneState(me) {
       messages: serializeUserphoneMessages(rows, me)
     };
   }
-  const { data: waitRow } = await supabase.from("anon_userphone_waiting").select("user_id").eq("user_id", me).maybeSingle();
+  const { data: waitRow } = await supabase
+    .from("anon_userphone_waiting")
+    .select("user_id, joined_at")
+    .eq("user_id", me)
+    .maybeSingle();
   if (waitRow) {
-    return { phase: "waiting", sessionId: null, messages: [] };
+    const joinedMs = new Date(waitRow.joined_at).getTime();
+    const elapsed = Date.now() - joinedMs;
+    if (elapsed >= USERPHONE_WAIT_MS) {
+      await supabase.from("anon_userphone_waiting").delete().eq("user_id", me);
+      return { phase: "idle", sessionId: null, messages: [], waitTimedOut: true };
+    }
+    const waitExpiresAt = new Date(joinedMs + USERPHONE_WAIT_MS).toISOString();
+    return {
+      phase: "waiting",
+      sessionId: null,
+      messages: [],
+      waitExpiresAt,
+      waitStartedAt: waitRow.joined_at
+    };
   }
   return { phase: "idle", sessionId: null, messages: [] };
 }

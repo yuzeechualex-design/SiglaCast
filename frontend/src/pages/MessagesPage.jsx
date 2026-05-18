@@ -67,6 +67,23 @@ export default function MessagesPage({
   const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
 
+  /** Must match backend USERPHONE_WAIT_MS / 1000 in server.js */
+  const USERPHONE_QUEUE_SEC = 10;
+  const [userphoneNow, setUserphoneNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!isUserphone || userphonePhase !== "waiting") return undefined;
+    const t = setInterval(() => setUserphoneNow(Date.now()), 200);
+    return () => clearInterval(t);
+  }, [isUserphone, userphonePhase]);
+
+  const userphoneSecondsLeft =
+    isUserphone && userphonePhase === "waiting" && activeChat?.waitExpiresAt
+      ? Math.max(0, Math.ceil((new Date(activeChat.waitExpiresAt).getTime() - userphoneNow) / 1000))
+      : null;
+
+  const userphoneCountdownPct =
+    userphoneSecondsLeft != null ? Math.min(1, Math.max(0, userphoneSecondsLeft / USERPHONE_QUEUE_SEC)) : null;
+
   useEffect(() => {
     setDraft("");
     setDraftFile(null);
@@ -406,8 +423,32 @@ export default function MessagesPage({
                     </>
                   ) : (
                     <>
-                      <p className="userphone-intro">Searching for someone else on Userphone…</p>
-                      <div className="userphone-spinner" aria-busy />
+                      <p className="userphone-intro userphone-countdown-line">
+                        {userphoneSecondsLeft != null ? (
+                          <>
+                            Matching…{" "}
+                            <span className="userphone-countdown-digits">{userphoneSecondsLeft}</span>s left before you
+                            leave the queue.
+                          </>
+                        ) : (
+                          <>Searching for someone else on Userphone…</>
+                        )}
+                      </p>
+                      <p className="userphone-timeout-hint muted small">
+                        If no one joins in time, tap <strong>Call anonymous</strong> again when someone might be online.
+                      </p>
+                      {userphoneCountdownPct != null ? (
+                        <div className="userphone-queue-meter" aria-label="Time left in queue">
+                          <div
+                            className="userphone-queue-meter-fill"
+                            style={{
+                              width: `${Math.round(Math.min(100, Math.max(0, userphoneCountdownPct * 100)))}%`
+                            }}
+                          />
+                        </div>
+                      ) : (
+                        <div className="userphone-spinner" aria-busy />
+                      )}
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => onUserphoneCancelWaiting?.()}>
                         Cancel search
                       </button>

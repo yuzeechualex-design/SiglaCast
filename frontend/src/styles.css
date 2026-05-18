@@ -1192,6 +1192,36 @@ label.btn-secondary:hover {
   animation: spin-avatar 700ms linear infinite;
 }
 
+.userphone-countdown-line {
+  line-height: 1.35;
+}
+
+.userphone-countdown-digits {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  color: var(--blue-700, #3478ea);
+}
+
+.userphone-timeout-hint {
+  max-width: 300px;
+  margin: 0;
+}
+
+.userphone-queue-meter {
+  width: min(260px, 100%);
+  height: 8px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.userphone-queue-meter-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--blue-600, #2b6bdc), var(--blue-800, #1a54c4));
+  transition: width 0.2s ease;
+}
+
 @keyframes spin-avatar {
   to { transform: rotate(360deg); }
 }
