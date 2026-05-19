@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 
-const WELCOME =
+export const ASSISTANT_WELCOME =
   'Hi—I am Sigla Assistant. Ask about using SiglaCast (events voting, announcements, Community, Messages, profile). Answers are informational only—not official DosU policy. Say "Ingles" if you prefer English.';
 
-export default function AssistantPage({ chatWithGroq }) {
+/** Embedded in Messages thread or full page — shared UI + state. */
+export function AssistantChatCore({ chatWithGroq }) {
   const [input, setInput] = useState("");
-  const [messages, setMessages] = useState(() => [{ role: "assistant", content: WELCOME }]);
+  const [messages, setMessages] = useState(() => [{ role: "assistant", content: ASSISTANT_WELCOME }]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const endRef = useRef(null);
@@ -63,15 +64,11 @@ export default function AssistantPage({ chatWithGroq }) {
 
   function clearConversation() {
     setError("");
-    setMessages([{ role: "assistant", content: WELCOME }]);
+    setMessages([{ role: "assistant", content: ASSISTANT_WELCOME }]);
   }
 
   return (
-    <section className="panel single assistant-panel">
-      <div className="panel-head">
-        <h2>✨ Sigla Assistant</h2>
-        <p>Groq-powered campus helper (students & admins)—answers are unofficial guidance only.</p>
-      </div>
+    <div className="assistant-chat-core">
       {error ? <div className="assistant-inline-error muted small">{error}</div> : null}
       <div className="assistant-thread">
         {messages.map((m, i) => (
@@ -108,6 +105,18 @@ export default function AssistantPage({ chatWithGroq }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+export default function AssistantPage({ chatWithGroq }) {
+  return (
+    <section className="panel single assistant-panel">
+      <div className="panel-head">
+        <h2>✨ Sigla Assistant</h2>
+        <p>Groq-powered campus helper (students & admins)—answers are unofficial guidance only.</p>
+      </div>
+      <AssistantChatCore chatWithGroq={chatWithGroq} />
     </section>
   );
 }

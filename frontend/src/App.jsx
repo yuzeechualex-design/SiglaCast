@@ -15,6 +15,7 @@ import AssistantPage from "./pages/AssistantPage.jsx";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
+const STORAGE_MESSAGES_APPS = "siglacast_messages_pinned_apps";
 
 export default function App() {
   const navigate = useNavigate();
@@ -68,6 +69,23 @@ export default function App() {
       return false;
     }
   });
+  const [messagePinnedApps, setMessagePinnedApps] = useState(() => {
+    try {
+      const raw = JSON.parse(localStorage.getItem(STORAGE_MESSAGES_APPS) || "{}");
+      return { assistantPinned: !!raw.assistantPinned };
+    } catch {
+      return { assistantPinned: false };
+    }
+  });
+  function pinAssistantInMessageList() {
+    setMessagePinnedApps((prev) => {
+      const next = { ...prev, assistantPinned: true };
+      try {
+        localStorage.setItem(STORAGE_MESSAGES_APPS, JSON.stringify(next));
+      } catch (_) { /* ignore */ }
+      return next;
+    });
+  }
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_USERPHONE_AUTO_QUEUE, userPhoneAutoReconnect ? "1" : "0");
@@ -233,7 +251,7 @@ export default function App() {
     return () => clearInterval(id);
   }, [userPhoneState.phase]);
 
-  const conversationsWithUserphone = useMemo(() => {
+  const conversationsForSidebar = useMemo(() => {
     const lp =
       userPhoneState.phase === "matched" &&
       Array.isArray(userPhoneState.messages) &&
@@ -268,18 +286,38 @@ export default function App() {
         fromMe: false
       };
     }
-    return [
-      {
-        kind: "userphone",
-        id: "userphone",
-        user: { id: "userphone", name: "Userphone", email: "", course: "", avatarUrl: null },
-        isFriend: false,
-        lastMessage,
-        unreadCount: 0
-      },
-      ...(conversations || [])
-    ];
-  }, [conversations, userPhoneState.phase, userPhoneState.messages, userPhoneState.waitExpiresAt, userphoneTick, userPhoneAutoReconnect]);
+    const userphoneRow = {
+      kind: "userphone",
+      id: "userphone",
+      user: { id: "userphone", name: "Userphone", email: "", course: "", avatarUrl: null },
+      isFriend: false,
+      lastMessage,
+      unreadCount: 0
+    };
+    const assistantRow = messagePinnedApps.assistantPinned
+      ? {
+          kind: "assistant",
+          id: "assistant",
+          user: { id: "assistant", name: "SiglaCast AI", email: "", course: "", avatarUrl: null },
+          isFriend: false,
+          lastMessage: {
+            text: "Tap Add in ＋ → Add an app, or open from the compose ＋ menu",
+            createdAt: new Date(0).toISOString(),
+            fromMe: false
+          },
+          unreadCount: 0
+        }
+      : null;
+    return [userphoneRow, ...(assistantRow ? [assistantRow] : []), ...(conversations || [])];
+  }, [
+    conversations,
+    userPhoneState.phase,
+    userPhoneState.messages,
+    userPhoneState.waitExpiresAt,
+    userphoneTick,
+    userPhoneAutoReconnect,
+    messagePinnedApps.assistantPinned
+  ]);
 
   async function loadCore() {
     if (!token) return;
@@ -543,7 +581,7 @@ export default function App() {
   // Poll the active thread every 3 seconds while the page is open (not Userphone / AI).
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;
-    if (activeChat.kind === "userphone") return undefined;
+    if (activeChat.kind === "userphone" || activeChat.kind === "assistant") return undefined;
     const interval = setInterval(async () => {
       const refreshed =
         activeChat.kind === "group"
@@ -760,6 +798,7 @@ export default function App() {
     if (
       activeChat?.kind !== "group" &&
       activeChat?.kind !== "userphone" &&
+      activeChat?.kind !== "assistant" &&
       activeChat?.user?.id === friendId
     ) {
       const thread = await api(`/messages/with/${friendId}`);
@@ -818,6 +857,11 @@ export default function App() {
         waitExpiresAt: next.waitExpiresAt ?? null,
         waitStartedAt: next.waitStartedAt ?? null
       });
+      setSearchResults([]);
+      await loadMessages();
+      return;
+    } else if (kind === "assistant") {
+      setActiveChat({ kind: "assistant", id: "assistant" });
       setSearchResults([]);
       await loadMessages();
       return;
@@ -900,6 +944,10 @@ export default function App() {
   // message via replyToId.
   async function sendChatMessage(text, file, replyToId = null) {
     if (!activeChat) return;
+    if (activeChat.kind === "assistant") {
+      setNotice("Use the SiglaCast AI chat box below to talk to the assistant.");
+      return;
+    }
     if (activeChat.kind === "userphone") {
       if (!activeChat.sessionId) {
         setNotice("Wait until you’re matched with someone.");
@@ -945,7 +993,7 @@ export default function App() {
   // Soft-unsend one of my own messages. The thread is refreshed so the
   // tombstone ("This message was unsent") appears in place of the original.
   async function unsendMessage(message) {
-    if (!message?.id || activeChat?.kind === "userphone") return;
+    if (!message?.id || activeChat?.kind === "userphone" || activeChat?.kind === "assistant") return;
     const res = await api(`/messages/${message.id}`, { method: "DELETE" });
     if (res.error) {
       setNotice(res.error);
@@ -1059,7 +1107,7 @@ export default function App() {
   }
 
   async function reactToMessage(messageId, reaction) {
-    if (activeChat?.kind === "userphone") return;
+    if (activeChat?.kind === "userphone" || activeChat?.kind === "assistant") return;
     const res = await api(`/messages/${messageId}/react`, {
       method: "POST",
       body: { reaction: reaction === undefined ? "like" : reaction }
@@ -1081,7 +1129,7 @@ export default function App() {
 
   async function loadActiveAttachments() {
     if (!activeChat) return [];
-    if (activeChat.kind === "userphone") return [];
+    if (activeChat.kind === "userphone" || activeChat.kind === "assistant") return [];
     const url =
       activeChat.kind === "group"
         ? `/groups/${activeChat.group.id}/attachments`
@@ -1344,7 +1392,7 @@ export default function App() {
           element={
             <MessagesPage
               currentUser={user}
-              conversations={conversationsWithUserphone}
+              conversations={conversationsForSidebar}
               activeChat={activeChat}
               friendIncomingRequests={friendIncomingRequests}
               onAcceptFriendRequest={acceptFriendRequest}
@@ -1379,6 +1427,8 @@ export default function App() {
               onEndGroupUserphoneBridge={endGroupUserphoneBridge}
               userPhoneAutoReconnect={userPhoneAutoReconnect}
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
+              onPinAssistantApp={pinAssistantInMessageList}
+              assistantGroq={(messages) => api("/assistant/chat", { method: "POST", body: { messages } })}
             />
           }
         />

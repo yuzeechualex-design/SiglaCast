@@ -5,6 +5,7 @@ import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import ModalPortal from "../components/ModalPortal.jsx";
+import { AssistantChatCore } from "./AssistantPage.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -38,7 +39,7 @@ export default function MessagesPage({
   onSearchQueryEdited,
   onSearch,
   onAddFriend,
-  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
+  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone" | "assistant"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
@@ -60,7 +61,9 @@ export default function MessagesPage({
   onCancelGroupUserphoneWaiting,
   onEndGroupUserphoneBridge,
   userPhoneAutoReconnect,
-  setUserPhoneAutoReconnect
+  setUserPhoneAutoReconnect,
+  onPinAssistantApp = () => {},
+  assistantGroq = null // (messages)=>Promise returning { reply?, error? }
 }) {
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
@@ -110,6 +113,7 @@ export default function MessagesPage({
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
+  const isAssistant = activeChat?.kind === "assistant";
   const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
   const gpu = isGroup ? activeChat?.groupUserphone : null;
   const groupUserphoneWaiting = gpu?.phase === "waiting";
@@ -151,7 +155,8 @@ export default function MessagesPage({
     activeChat?.group?.id,
     activeChat?.sessionId,
     activeChat?.phase,
-    activeChat?.groupUserphone?.phase
+    activeChat?.groupUserphone?.phase,
+    activeChat?.id
   ]);
 
   useEffect(() => {
@@ -164,7 +169,7 @@ export default function MessagesPage({
 
   // Jump to bottom when switching threads only (not on every poll / inbound message).
   useEffect(() => {
-    if (!activeChat) return;
+    if (!activeChat || activeChat.kind === "assistant") return;
     const id = requestAnimationFrame(() => {
       threadEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
     });
@@ -175,7 +180,8 @@ export default function MessagesPage({
     activeChat?.group?.id,
     activeChat?.sessionId,
     activeChat?.phase,
-    activeChat?.groupUserphone?.phase
+    activeChat?.groupUserphone?.phase,
+    activeChat?.id
   ]);
 
   // Click outside hamburger menu closes it
@@ -323,6 +329,17 @@ export default function MessagesPage({
                         type="button"
                         role="menuitem"
                         className="chat-plus-item chat-plus-item-row"
+                        onClick={() => setPlusMenuPane("apps")}
+                      >
+                        <span className="chat-plus-item-label">Add an app</span>
+                        <span className="muted small" aria-hidden>
+                          ›
+                        </span>
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="chat-plus-item chat-plus-item-row"
                         onClick={() => setPlusMenuPane("requests")}
                       >
                         <span className="chat-plus-item-label">Friend requests</span>
@@ -330,6 +347,54 @@ export default function MessagesPage({
                           <span className="nav-ping chat-dropdown-ping">{incomingFriendCount}</span>
                         ) : null}
                       </button>
+                    </>
+                  ) : plusMenuPane === "apps" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="chat-plus-back"
+                        onClick={() => setPlusMenuPane("main")}
+                      >
+                        ← Back
+                      </button>
+                      <p className="chat-apps-intro muted small">Pinned apps appear in your chat list.</p>
+                      <ul className="chat-apps-menu">
+                        <li className="chat-app-row">
+                          <div className="chat-app-meta">
+                            <strong>Userphone</strong>
+                            <span className="muted small">Anonymous matching chat</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => {
+                              setPlusMenuOpen(false);
+                              setPlusMenuPane("main");
+                              onOpenChat?.("userphone", "userphone");
+                            }}
+                          >
+                            Add
+                          </button>
+                        </li>
+                        <li className="chat-app-row">
+                          <div className="chat-app-meta">
+                            <strong>SiglaCast AI</strong>
+                            <span className="muted small">Groq-powered Sigla Assistant</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => {
+                              onPinAssistantApp?.();
+                              setPlusMenuOpen(false);
+                              setPlusMenuPane("main");
+                              onOpenChat?.("assistant", "assistant");
+                            }}
+                          >
+                            Add
+                          </button>
+                        </li>
+                      </ul>
                     </>
                   ) : (
                     <>
@@ -470,25 +535,33 @@ export default function MessagesPage({
             ) : (
               conversations.map((c) => {
                 const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
+                const isAssistantConv = c.kind === "assistant";
                 const target = c.kind === "group" ? c.group : c.user;
                 const isActive =
-                  (isGroup && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
+                  (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
                   (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
-                  (c.kind === "userphone" && activeChat?.kind === "userphone");
+                  (c.kind === "userphone" && activeChat?.kind === "userphone") ||
+                  (isAssistantConv && activeChat?.kind === "assistant");
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
+                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isAssistantConv ? "conv-assistant" : ""} ${isActive ? "active" : ""}`}
                     onClick={() =>
                       c.kind === "userphone"
                         ? onOpenChat("userphone", "userphone")
-                        : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
+                        : isAssistantConv
+                          ? onOpenChat("assistant", "assistant")
+                          : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
                     }
                   >
                     {c.kind === "userphone" ? (
                       <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
                         📞
+                      </div>
+                    ) : isAssistantConv ? (
+                      <div className="msg-avatar sm placeholder conv-assistant-avatar" aria-hidden>
+                        ✨
                       </div>
                     ) : c.kind === "dm" ? (
                       renderAvatar(target, "sm", { showPresence: true })
@@ -498,10 +571,13 @@ export default function MessagesPage({
                     <div className="conv-item-body">
                       <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
                         {target?.name || "Unknown"}{" "}
-                        {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
+                        {!isDmOrPhone && !isAssistantConv ? (
+                          <span className="pill pill-muted small">group</span>
+                        ) : null}
                         {c.kind === "userphone" ? (
                           <span className="pill pill-muted small">anonymous</span>
                         ) : null}
+                        {isAssistantConv ? <span className="pill pill-muted small">app</span> : null}
                         {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
                       </strong>
                       {c.kind === "dm" && target?.statusNote ? (
@@ -541,7 +617,11 @@ export default function MessagesPage({
                     ← Back
                   </button>
                 ) : null}
-                {isUserphone ? (
+                {isAssistant ? (
+                  <div className="msg-avatar placeholder thread-assistant-icon" aria-hidden>
+                    ✨
+                  </div>
+                ) : isUserphone ? (
                   <div className="msg-avatar placeholder thread-userphone-icon" aria-hidden>
                     📞
                   </div>
@@ -551,13 +631,21 @@ export default function MessagesPage({
                   })
                 )}
                 <div className="thread-header-info">
-                  <strong className={!isGroup && !isUserphone ? "user-line-name" : undefined}>
-                    {isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}
-                    {!isGroup && !isUserphone ? (
+                  <strong className={!isGroup && !isUserphone && !isAssistant ? "user-line-name" : undefined}>
+                    {isAssistant
+                      ? "SiglaCast AI"
+                      : isUserphone
+                        ? "Userphone"
+                        : isGroup
+                          ? activeChat.group?.name
+                          : activeChat.user?.name}
+                    {!isGroup && !isUserphone && !isAssistant ? (
                       <StatusEmojiChip emoji={activeChat.user?.statusEmoji} />
                     ) : null}
                   </strong>
-                  {isUserphone ? (
+                  {isAssistant ? (
+                    <small>Groq-powered campus helper · answers are informal guidance only.</small>
+                  ) : isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
                     <small>{activeChat.group?.members?.length || 0} members</small>
@@ -569,10 +657,10 @@ export default function MessagesPage({
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}
-                  {!isGroup && !isUserphone && activeChat.isFriend ? (
+                  {!isGroup && !isUserphone && !isAssistant && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>
                   ) : null}
-                  {!isGroup && !isUserphone ? (
+                  {!isGroup && !isUserphone && !isAssistant ? (
                     activeChat.incomingRequestId ? (
                       <span className="thread-header-inline-actions">
                         <button
@@ -612,30 +700,54 @@ export default function MessagesPage({
                 >
                   ↻
                 </button>
-                {!isUserphone ? (
-                <div className="thread-menu-wrap" ref={menuRef}>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm thread-menu-btn"
-                    onClick={() => setMenuOpen((v) => !v)}
-                    title="Chat settings"
-                  >
-                    ☰
-                  </button>
-                  {menuOpen ? (
-                    <div className="thread-menu">
-                      {isGroup ? (
-                        <>
-                          <button
-                            type="button"
-                            className="thread-menu-item"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setShowGroupSettings(true);
-                            }}
-                          >
-                            ⚙️ Settings
-                          </button>
+                {!isUserphone && !isAssistant ? (
+                  <div className="thread-menu-wrap" ref={menuRef}>
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm thread-menu-btn"
+                      onClick={() => setMenuOpen((v) => !v)}
+                      title="Chat settings"
+                    >
+                      ☰
+                    </button>
+                    {menuOpen ? (
+                      <div className="thread-menu">
+                        {isGroup ? (
+                          <>
+                            <button
+                              type="button"
+                              className="thread-menu-item"
+                              onClick={() => {
+                                setMenuOpen(false);
+                                setShowGroupSettings(true);
+                              }}
+                            >
+                              ⚙️ Settings
+                            </button>
+                            <button
+                              type="button"
+                              className="thread-menu-item"
+                              onClick={() => {
+                                setMenuOpen(false);
+                                setShowAttachments(true);
+                              }}
+                            >
+                              🖼️ Files & images
+                            </button>
+                            <button
+                              type="button"
+                              className="thread-menu-item danger"
+                              onClick={async () => {
+                                setMenuOpen(false);
+                                if (window.confirm("Leave this group chat?")) {
+                                  await onLeaveGroup?.(activeChat.group.id);
+                                }
+                              }}
+                            >
+                              🚪 Leave group
+                            </button>
+                          </>
+                        ) : (
                           <button
                             type="button"
                             className="thread-menu-item"
@@ -646,34 +758,10 @@ export default function MessagesPage({
                           >
                             🖼️ Files & images
                           </button>
-                          <button
-                            type="button"
-                            className="thread-menu-item danger"
-                            onClick={async () => {
-                              setMenuOpen(false);
-                              if (window.confirm("Leave this group chat?")) {
-                                await onLeaveGroup?.(activeChat.group.id);
-                              }
-                            }}
-                          >
-                            🚪 Leave group
-                          </button>
-                        </>
-                      ) : (
-                        <button
-                          type="button"
-                          className="thread-menu-item"
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setShowAttachments(true);
-                          }}
-                        >
-                          🖼️ Files & images
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
                 ) : null}
               </div>
 
@@ -700,7 +788,11 @@ export default function MessagesPage({
                 </div>
               ) : null}
 
-              {isUserphone && userphonePhase !== "matched" ? (
+              {isAssistant ? (
+                <div className="messages-assistant-slot">
+                  <AssistantChatCore chatWithGroq={assistantGroq} />
+                </div>
+              ) : isUserphone && userphonePhase !== "matched" ? (
                 <div className="userphone-cta-wrap">
                   {userphonePhase === "idle" ? (
                     <>
@@ -765,34 +857,34 @@ export default function MessagesPage({
                   )}
                 </div>
               ) : (
-              <>
-                <div className="thread-messages">
-                  {(activeChat.messages || []).map((m) => (
-                    <MessageBubble
-                      key={m.id}
-                      message={m}
-                      showAuthor={isGroup && !m.fromMe}
-                      minimal={isUserphone}
-                      onReact={onReactToMessage}
-                      onReply={handleReply}
-                      onUnsend={handleUnsend}
-                      onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
-                    />
-                  ))}
-                  {isGroup && groupUserphoneWaiting ? (
-                    <GroupUserphoneQueueBubbleRow
-                      displayName={currentUser?.name || "You"}
-                      secondsLeft={queueSecondsLeft}
-                      pct={queueCountdownPct}
-                      onCancel={() => onCancelGroupUserphoneWaiting?.(activeChat.group.id)}
-                    />
-                  ) : null}
-                  <div ref={threadEndRef} />
-                </div>
-              </>
+                <>
+                  <div className="thread-messages">
+                    {(activeChat.messages || []).map((m) => (
+                      <MessageBubble
+                        key={m.id}
+                        message={m}
+                        showAuthor={isGroup && !m.fromMe}
+                        minimal={isUserphone}
+                        onReact={onReactToMessage}
+                        onReply={handleReply}
+                        onUnsend={handleUnsend}
+                        onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
+                      />
+                    ))}
+                    {isGroup && groupUserphoneWaiting ? (
+                      <GroupUserphoneQueueBubbleRow
+                        displayName={currentUser?.name || "You"}
+                        secondsLeft={queueSecondsLeft}
+                        pct={queueCountdownPct}
+                        onCancel={() => onCancelGroupUserphoneWaiting?.(activeChat.group.id)}
+                      />
+                    ) : null}
+                    <div ref={threadEndRef} />
+                  </div>
+                </>
               )}
 
-              {replyTarget && !isUserphone ? (
+              {replyTarget && !isUserphone && !isAssistant ? (
                 <div className="reply-banner">
                   <div className="reply-banner-info">
                     <span className="reply-banner-label">Replying to {replyTarget.author}</span>
@@ -809,7 +901,7 @@ export default function MessagesPage({
                 </div>
               ) : null}
 
-              {(!isUserphone || userphonePhase === "matched") ? (
+              {!isAssistant && (!isUserphone || userphonePhase === "matched") ? (
               <form className="thread-compose" onSubmit={handleSend}>
                 {!isUserphone ? (
                 <input
@@ -826,7 +918,7 @@ export default function MessagesPage({
                     className="btn btn-icon"
                     aria-expanded={composePlusOpen}
                     aria-haspopup="menu"
-                    title="More — Userphone quick start"
+                    title="Apps & quick actions"
                     onClick={() => setComposePlusOpen((o) => !o)}
                   >
                     ＋
@@ -866,6 +958,21 @@ export default function MessagesPage({
                           </span>
                         </button>
                       )}
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="compose-plus-item"
+                        onClick={() => {
+                          setComposePlusOpen(false);
+                          onPinAssistantApp?.();
+                          onOpenChat?.("assistant", "assistant");
+                        }}
+                      >
+                        <span className="compose-plus-item-title">✨ SiglaCast AI</span>
+                        <span className="compose-plus-item-desc">
+                          Chat with Sigla Assistant here. Pins to your sidebar if it is not listed yet.
+                        </span>
+                      </button>
                     </div>
                   ) : null}
                 </div>
