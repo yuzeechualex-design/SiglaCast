@@ -11,6 +11,7 @@ import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
+import AssistantPage from "./pages/AssistantPage.jsx";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
@@ -1289,6 +1290,12 @@ export default function App() {
           }
         />
         <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} />} />
+        <Route
+          path="/assistant"
+          element={
+            <AssistantPage chatWithGroq={(messages) => api("/assistant/chat", { method: "POST", body: { messages } })} />
+          }
+        />
         <Route
           path="/community"
           element={

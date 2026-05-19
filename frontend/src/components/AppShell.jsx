@@ -43,6 +43,7 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
+          <NavLink to="/assistant" className="nav-btn">🤖 Assistant</NavLink>
           <NavLink to="/community" className="nav-btn">💬 Community</NavLink>
           <NavLink to="/messages" className="nav-btn">
             ✉️ Messages

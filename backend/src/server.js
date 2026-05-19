@@ -24,6 +24,11 @@ const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
+/** Sigla Assistant (Groq) — key must be supplied via environment only, never committed. */
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
+const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+
 /** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
 const USERPHONE_GUEST_ID = "_userphone_guest";
 
@@ -1041,6 +1046,95 @@ await broker.consume("post.created", (m) => console.log("[post.created]", m.id))
 await broker.consume("message.sent", (m) => console.log("[message.sent]", m.fromUserId, "->", m.toUserId));
 
 app.get("/api/health", (_, res) => res.json({ ok: true }));
+
+function sanitizeGroqAssistantMessages(raw) {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const m of raw.slice(-48)) {
+    const role =
+      m?.role === "assistant" ? "assistant" : m?.role === "user" ? "user" : null;
+    if (!role) continue;
+    let content = typeof m.content === "string" ? m.content.trim() : "";
+    if (!content) continue;
+    if (content.length > 12000) content = content.slice(0, 12000);
+    out.push({ role, content });
+  }
+  return out;
+}
+
+const SIGLA_ASSISTANT_SYSTEM_PROMPT = `You are Sigla Assistant, a helpful campus guide for SiglaCast—Davao Oriental State University community app combining campus events voting, announcements, community posts, and messaging.
+
+Rules:
+- Be concise, respectful, and professional. Prefer short paragraphs or bullet lists.
+- If asked about ballots, emphasize one-vote fairness and that admins configure events—you do not know private vote tallies ahead of admins.
+- You have no internal database access—do not invent real schedules, deadlines, grades, legal advice, medical advice, politics outside campus context, or instructions to circumvent security/harassment policies.
+- If unsure, admit uncertainty and suggest checking official DosU announcements in-app or organizers.
+- Prefer English or Filipino lightly mixed if the student writes in Filipino; mirror their tone without slang that could offend.
+
+User role and name snippets are appended by the backend for personalization only—not private academic records.`;
+
+app.post("/api/assistant/chat", authenticate, async (req, res) => {
+  try {
+    if (!GROQ_API_KEY || !String(GROQ_API_KEY).trim()) {
+      return res.status(503).json({
+        error:
+          "Sigla Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
+      });
+    }
+
+    const userTurns = sanitizeGroqAssistantMessages(req.body?.messages);
+    const lastUser = [...userTurns].reverse().find((m) => m.role === "user");
+    if (!lastUser) {
+      return res.status(400).json({ error: "Send at least one user message." });
+    }
+
+    const safeName = String(req.user.name || "Student")
+      .slice(0, 80)
+      .replace(/\\/g, " ")
+      .replace(/"/g, "'");
+    const contextualSystem = `${SIGLA_ASSISTANT_SYSTEM_PROMPT}\nSigned-in campus user role: ${req.user.role}. Name reference only for tone: "${safeName}".`;
+
+    const groqPayload = {
+      model: GROQ_MODEL,
+      messages: [{ role: "system", content: contextualSystem }, ...userTurns],
+      max_tokens: 1024,
+      temperature: 0.65
+    };
+
+    const groqRes = await fetch(GROQ_API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(groqPayload)
+    });
+
+    const data = await groqRes.json().catch(() => ({}));
+    if (!groqRes.ok) {
+      const msg =
+        data?.error?.message ||
+        data?.message ||
+        (typeof data?.error === "string" ? data.error : null) ||
+        `Groq request failed (${groqRes.status})`;
+      console.warn("[assistant/groq]", groqRes.status, msg);
+      return res.status(502).json({ error: msg });
+    }
+
+    const reply =
+      data?.choices?.[0]?.message?.content?.trim?.() ||
+      (typeof data?.choices?.[0]?.text === "string" ? data.choices[0].text.trim() : "");
+    if (!reply) return res.status(502).json({ error: "Empty response from Sigla Assistant." });
+
+    res.json({
+      reply,
+      model: typeof data?.model === "string" ? data.model : GROQ_MODEL
+    });
+  } catch (e) {
+    console.error("[assistant]", e.message);
+    res.status(500).json({ error: e.message || "Assistant failed" });
+  }
+});
 
 app.post("/api/presence/heartbeat", authenticate, async (req, res) => {
   try {

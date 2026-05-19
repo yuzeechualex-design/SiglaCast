@@ -10,6 +10,7 @@ Voting and community application for Davao Oriental State University events. Bui
 - **File storage:** Supabase Storage (avatars, post images, event covers)
 - **Auth:** JWT access + refresh tokens with bcrypt password hashing
 - **Optional broker:** RabbitMQ or Kafka (auto-falls back to in-memory)
+- **Optional Sigla Assistant:** Groq chat API behind `POST /api/assistant/chat` (set `GROQ_API_KEY` on the backend)
 
 ## Integrative programming topics covered
 

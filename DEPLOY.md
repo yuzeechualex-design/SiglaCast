@@ -68,8 +68,9 @@ https://siglacast-backend.onrender.com/api/health  →  { "ok": true }
 1. Go to <https://vercel.com/new> → import the same GitHub repo.
 2. **Root Directory** → `frontend`
 3. Framework preset: **Vite** (auto-detected)
-4. Environment variable:
+4. Environment variables:
    - `VITE_API_BASE_URL` → your Render URL (e.g. `https://siglacast-backend.onrender.com`)
+   - Optional (**Sigla Assistant**): Groq belongs on the **Render backend** — `GROQ_API_KEY` and optionally `GROQ_MODEL`. Do **not** put Groq secrets in Vercel.
 5. Click **Deploy**.
 
 Vercel gives you a URL like `https://siglacast.vercel.app`.
