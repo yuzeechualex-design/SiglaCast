@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { mediaUrl } from "../services/api.js";
+import AvatarEditModal from "../components/AvatarEditModal.jsx";
 
 const AVAILABILITY_IDS = ["online", "idle", "dnd", "invisible"];
 
@@ -47,6 +48,8 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
 
   useEffect(() => {
     setName(user.name);
@@ -105,7 +108,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
     }
   }
 
-  async function handleAvatar(e) {
+  function handleAvatarPick(e) {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
@@ -113,7 +116,20 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
       setNotice("Please choose an image file.");
       return;
     }
-    await onAvatarUpload(file);
+    setPendingAvatarFile(file);
+  }
+
+  async function applyEditedAvatar(croppedFile) {
+    setAvatarUploading(true);
+    try {
+      await onAvatarUpload(croppedFile);
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  function closeAvatarEditor() {
+    if (!avatarUploading) setPendingAvatarFile(null);
   }
 
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
@@ -134,11 +150,20 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
           )}
           <label className="btn btn-secondary profile-avatar-btn">
             Change photo
-            <input type="file" accept="image/*" className="sr-only" onChange={handleAvatar} />
+            <input type="file" accept="image/*" className="sr-only" onChange={handleAvatarPick} />
           </label>
         </div>
         <p className="profile-email">{user.email}</p>
       </div>
+
+      {pendingAvatarFile ? (
+        <AvatarEditModal
+          file={pendingAvatarFile}
+          uploading={avatarUploading}
+          onClose={closeAvatarEditor}
+          onApply={applyEditedAvatar}
+        />
+      ) : null}
 
       <form className="composer profile-form" onSubmit={handleSave}>
         <label className="field-label">Display name</label>

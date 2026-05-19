@@ -1096,6 +1096,88 @@ body.community-thread-overlay-open {
   font-size: 0.92rem;
 }
 
+/* Profile avatar crop editor (Discord-style) */
+.avatar-edit-modal.modal-card {
+  width: min(440px, 100%);
+  max-height: min(92vh, calc(100dvh - 32px));
+}
+
+.avatar-edit-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding-top: 8px !important;
+}
+
+.avatar-edit-stage-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-edit-canvas {
+  border-radius: 14px;
+  box-shadow:
+    inset 0 0 0 1px rgba(31, 94, 199, 0.15),
+    0 12px 32px rgba(13, 71, 161, 0.15);
+  cursor: grab;
+  max-width: 100%;
+  height: auto;
+  display: block;
+}
+
+.avatar-edit-canvas:active {
+  cursor: grabbing;
+}
+
+.avatar-edit-hint {
+  margin: 0;
+  max-width: 320px;
+  text-align: center;
+  line-height: 1.35;
+}
+
+.avatar-edit-zoom-label {
+  display: block;
+  margin-bottom: 4px;
+}
+
+.avatar-edit-zoom-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.avatar-edit-zoom-row input[type="range"] {
+  flex: 1;
+  margin: 0;
+  accent-color: var(--blue-700);
+}
+
+.avatar-edit-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.avatar-edit-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.avatar-edit-rotate {
+  font-size: 1.35rem !important;
+  line-height: 1;
+}
+
 .field-label {
   display: block;
   font-size: 0.78rem;
