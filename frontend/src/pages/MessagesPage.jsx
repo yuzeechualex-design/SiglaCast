@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
@@ -63,6 +63,7 @@ export default function MessagesPage({
   setUserPhoneAutoReconnect,
   onSendSiglaInActiveThread = async () => {}
 }) {
+  const navigate = useNavigate();
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
@@ -382,7 +383,7 @@ export default function MessagesPage({
                         ← Back
                       </button>
                       <p className="chat-apps-intro muted small">
-                        Userphone is listed here as a shortcut. For SiglaCast AI, tap ＋ next to the message box in any group/DM/Userphone chat and toggle “✨ Sigla replies here”.
+                        Shortcuts below. To have Sigla post <strong>inside</strong> a group/DM/Userphone thread, open that chat → ＋ by the composer → ✨ Sigla replies here.
                       </p>
                       <ul className="chat-apps-menu">
                         <li className="chat-app-row">
@@ -397,6 +398,23 @@ export default function MessagesPage({
                               setPlusMenuOpen(false);
                               setPlusMenuPane("main");
                               onOpenChat?.("userphone", "userphone");
+                            }}
+                          >
+                            Open
+                          </button>
+                        </li>
+                        <li className="chat-app-row">
+                          <div className="chat-app-meta">
+                            <strong>SiglaCast AI</strong>
+                            <span className="muted small">Private assistant chat (standalone)</span>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            onClick={() => {
+                              setPlusMenuOpen(false);
+                              setPlusMenuPane("main");
+                              navigate("/assistant");
                             }}
                           >
                             Open
