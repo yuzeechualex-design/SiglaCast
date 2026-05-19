@@ -2291,6 +2291,16 @@ textarea.profile-bio-input::placeholder {
   color: var(--blue-800);
 }
 
+.sidebar-archived-back-row {
+  margin-bottom: 10px;
+}
+
+.sidebar-archived-back-btn {
+  width: 100%;
+  justify-content: flex-start;
+  font-weight: 600;
+}
+
 .conv-item-tail {
   display: flex;
   flex-direction: column;

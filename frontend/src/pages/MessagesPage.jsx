@@ -576,6 +576,18 @@ export default function MessagesPage({
             </div>
           </div>
 
+          {messagesArchivedView ? (
+            <div className="sidebar-archived-back-row">
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm sidebar-archived-back-btn"
+                onClick={() => onToggleMessagesArchived?.()}
+              >
+                ← Active chats
+              </button>
+            </div>
+          ) : null}
+
           <form
             className="friend-search"
             onSubmit={(e) => {
