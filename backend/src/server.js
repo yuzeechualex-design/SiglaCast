@@ -2357,8 +2357,90 @@ app.delete("/api/friends/:friendId", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+async function fetchArchivedChatTargets(me) {
+  const { data } = await supabase.from("user_chat_archive").select("dm_peer_id, conversation_id").eq("user_id", me);
+  const dms = new Set();
+  const groups = new Set();
+  for (const r of data || []) {
+    if (r.dm_peer_id) dms.add(r.dm_peer_id);
+    if (r.conversation_id) groups.add(r.conversation_id);
+  }
+  return { dms, groups };
+}
+
+app.post("/api/messages/conversations/archive", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const dmPeerId = req.body?.dmPeerId != null ? String(req.body.dmPeerId).trim() : "";
+    const conversationId = req.body?.conversationId != null ? String(req.body.conversationId).trim() : "";
+    const hasDm = Boolean(dmPeerId);
+    const hasGroup = Boolean(conversationId);
+    if (hasDm === hasGroup) {
+      return res.status(400).json({ error: "Send exactly one of dmPeerId or conversationId." });
+    }
+    if (hasDm) {
+      if (dmPeerId === me) return res.status(400).json({ error: "Cannot archive chat with yourself." });
+      const other = await fetchUserById(dmPeerId);
+      if (!other) return res.status(404).json({ error: "User not found." });
+      const row = { user_id: me, dm_peer_id: dmPeerId, conversation_id: null };
+      const { error } = await supabase.from("user_chat_archive").insert(row);
+      const ignoreDup =
+        error &&
+        (error.code === "23505" ||
+          String(error.message || "").toLowerCase().includes("duplicate") ||
+          String(error.details || "").toLowerCase().includes("unique"));
+      if (error && !ignoreDup) return res.status(400).json({ error: error.message });
+      return res.json({ success: true });
+    }
+
+    const isMember = await ensureGroupMember(conversationId, me);
+    if (!isMember) return res.status(403).json({ error: "You are not a member of this group chat." });
+    const row = { user_id: me, dm_peer_id: null, conversation_id: conversationId };
+    const { error } = await supabase.from("user_chat_archive").insert(row);
+    const ignoreDup =
+      error &&
+      (error.code === "23505" ||
+        String(error.message || "").toLowerCase().includes("duplicate") ||
+        String(error.details || "").toLowerCase().includes("unique"));
+    if (error && !ignoreDup) return res.status(400).json({ error: error.message });
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/messages/conversations/unarchive", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const dmPeerId = req.body?.dmPeerId != null ? String(req.body.dmPeerId).trim() : "";
+    const conversationId = req.body?.conversationId != null ? String(req.body.conversationId).trim() : "";
+    const hasDm = Boolean(dmPeerId);
+    const hasGroup = Boolean(conversationId);
+    if (hasDm === hasGroup) {
+      return res.status(400).json({ error: "Send exactly one of dmPeerId or conversationId." });
+    }
+    if (hasDm) {
+      const { error } = await supabase
+        .from("user_chat_archive")
+        .delete()
+        .eq("user_id", me)
+        .eq("dm_peer_id", dmPeerId)
+        .is("conversation_id", null);
+      if (error) return res.status(400).json({ error: error.message });
+    } else {
+      const { error } = await supabase.from("user_chat_archive").delete().eq("user_id", me).eq("conversation_id", conversationId);
+      if (error) return res.status(400).json({ error: error.message });
+    }
+    res.json({ success: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.get("/api/messages/conversations", authenticate, async (req, res) => {
   const me = req.user.id;
+  const viewArchived = String(req.query.view || "").trim().toLowerCase() === "archived";
+  const archivedSets = await fetchArchivedChatTargets(me);
   const [{ data: friendsRows }, { data: dmMsgs }, { data: groupMemberRows }] = await Promise.all([
     supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
     supabase
@@ -2382,6 +2464,8 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
     const onlineSet = await presenceOnlineSetForUserIds([...partners]);
     for (const pid of partners) {
       if (pid === SIGLACAST_AI_USER_ID) continue;
+      const archivedDm = archivedSets.dms.has(pid);
+      if (viewArchived !== archivedDm) continue;
       const partner = userMap.get(pid);
       if (!partner) continue;
       const thread = (dmMsgs || []).filter(
@@ -2421,6 +2505,8 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
     ]);
     const convById = new Map((convs || []).map((c) => [c.id, c]));
     for (const gid of groupIds) {
+      const archivedGroup = archivedSets.groups.has(gid);
+      if (viewArchived !== archivedGroup) continue;
       const conv = convById.get(gid);
       if (!conv) continue;
       const thread = (groupMsgs || []).filter((m) => m.conversation_id === gid);

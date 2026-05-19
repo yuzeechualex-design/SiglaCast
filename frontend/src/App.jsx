@@ -52,6 +52,8 @@ export default function App() {
   const [loadingAuth, setLoadingAuth] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState([]);
+  const [messagesArchivedView, setMessagesArchivedView] = useState(false);
+  const [archivedConversationsSidebar, setArchivedConversationsSidebar] = useState([]);
   const [friendIncomingRequests, setFriendIncomingRequests] = useState([]);
   /** Idle / waiting / matched state for sidebar + anonymous thread (polled on /messages). */
   const [userPhoneState, setUserPhoneState] = useState({
@@ -280,12 +282,14 @@ export default function App() {
       lastMessage,
       unreadCount: 0
     };
-    const withoutAiDm = (conversations || []).filter(
+    const withoutAiDm = (messagesArchivedView ? archivedConversationsSidebar : conversations || []).filter(
       (c) => !(c.kind === "dm" && c.user?.id === SIGLACAST_AI_USER_ID)
     );
     return [userphoneRow, ...withoutAiDm];
   }, [
     conversations,
+    archivedConversationsSidebar,
+    messagesArchivedView,
     userPhoneState.phase,
     userPhoneState.messages,
     userPhoneState.waitExpiresAt,
@@ -477,6 +481,38 @@ export default function App() {
     else setFriendIncomingRequests([]);
   }
 
+  async function loadArchivedConversationsList() {
+    if (!token || pathnameRef.current !== "/messages") return;
+    const list = await api("/messages/conversations?view=archived");
+    if (!list.error) setArchivedConversationsSidebar(Array.isArray(list) ? list : []);
+  }
+
+  async function archiveConversation(payload) {
+    const res = await api("/messages/conversations/archive", { method: "POST", body: payload });
+    if (res?.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("");
+    setActiveChat((prev) => {
+      if (!prev || !payload) return prev;
+      if (payload.dmPeerId && prev.kind === "dm" && prev.user?.id === payload.dmPeerId) return null;
+      if (payload.conversationId && prev.kind === "group" && prev.group?.id === payload.conversationId) return null;
+      return prev;
+    });
+    await Promise.all([loadMessages(), loadArchivedConversationsList()]);
+  }
+
+  async function unarchiveConversation(payload) {
+    const res = await api("/messages/conversations/unarchive", { method: "POST", body: payload });
+    if (res?.error) setNotice(res.error);
+    else {
+      setNotice("");
+      await loadArchivedConversationsList();
+      await loadMessages();
+    }
+  }
+
   useEffect(() => {
     if (!token) return undefined;
     async function beat() {
@@ -494,6 +530,26 @@ export default function App() {
     const interval = setInterval(loadMessages, 6000);
     return () => clearInterval(interval);
   }, [token]);
+
+  useEffect(() => {
+    if (!token || location.pathname !== "/messages") return undefined;
+    if (!messagesArchivedView) {
+      setArchivedConversationsSidebar([]);
+      return undefined;
+    }
+    let cancelled = false;
+    async function pullArchived() {
+      const list = await api("/messages/conversations?view=archived");
+      if (cancelled || list?.error || !Array.isArray(list)) return;
+      setArchivedConversationsSidebar(list);
+    }
+    pullArchived();
+    const interval = setInterval(pullArchived, 6000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [token, location.pathname, messagesArchivedView]);
 
   useEffect(() => {
     if (!token) return undefined;
@@ -1453,6 +1509,10 @@ export default function App() {
             <MessagesPage
               currentUser={user}
               conversations={conversationsForSidebar}
+              messagesArchivedView={messagesArchivedView}
+              onToggleMessagesArchived={() => setMessagesArchivedView((v) => !v)}
+              onArchiveConversation={archiveConversation}
+              onUnarchiveConversation={unarchiveConversation}
               activeChat={activeChat}
               friendIncomingRequests={friendIncomingRequests}
               onAcceptFriendRequest={acceptFriendRequest}

@@ -61,6 +61,10 @@ function StatusEmojiChip({ emoji }) {
 export default function MessagesPage({
   currentUser,
   conversations,
+  messagesArchivedView = false,
+  onToggleMessagesArchived,
+  onArchiveConversation,
+  onUnarchiveConversation,
   activeChat,
   friendIncomingRequests = [],
   onAcceptFriendRequest,
@@ -560,6 +564,17 @@ export default function MessagesPage({
             </div>
           </div>
 
+          <div className="sidebar-archive-toolbar">
+            <button
+              type="button"
+              className={`btn btn-sm archive-toolbar-toggle ${messagesArchivedView ? "btn-primary" : "btn-ghost"}`}
+              onClick={() => onToggleMessagesArchived?.()}
+              aria-pressed={messagesArchivedView}
+            >
+              {messagesArchivedView ? "✉️ Active chats" : "📦 Archived"}
+            </button>
+          </div>
+
           <form
             className="friend-search"
             onSubmit={(e) => {
@@ -638,10 +653,12 @@ export default function MessagesPage({
           ) : null}
 
           <div className="conv-list">
-            {(conversations || []).length === 0 ? (
+            {!(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && messagesArchivedView ? (
+              <p className="empty-hint muted small archive-empty-msg">No archived chats. Tap Active chats.</p>
+            ) : !(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && !messagesArchivedView ? (
               <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
-            ) : (
-              conversations.map((c) => {
+            ) : null}
+            {(conversations || []).map((c) => {
                 const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
                 const target = c.kind === "group" ? c.group : c.user;
                 const isActive =
@@ -697,11 +714,53 @@ export default function MessagesPage({
                           : "No messages yet"}
                       </span>
                     </div>
-                    {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
+                    <div className="conv-item-tail">
+                      {!messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm conv-row-archive-btn"
+                          aria-label="Archive chat"
+                          title="Archive"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            if (
+                              window.confirm(
+                                c.kind === "group"
+                                  ? "Archive this group? It hides from Active until restored from Archived."
+                                  : "Archive this chat? It hides from Active until restored from Archived."
+                              )
+                            ) {
+                              void (c.kind === "group"
+                                ? onArchiveConversation?.({ conversationId: c.group.id })
+                                : onArchiveConversation?.({ dmPeerId: c.user.id }));
+                            }
+                          }}
+                        >
+                          📦
+                        </button>
+                      ) : messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
+                        <button
+                          type="button"
+                          className="btn btn-ghost btn-sm conv-row-archive-btn"
+                          aria-label="Restore chat"
+                          title="Restore to active"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void (c.kind === "group"
+                              ? onUnarchiveConversation?.({ conversationId: c.group.id })
+                              : onUnarchiveConversation?.({ dmPeerId: c.user.id }));
+                          }}
+                        >
+                          📤
+                        </button>
+                      ) : null}
+                      {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
+                    </div>
                   </div>
                 );
-              })
-            )}
+              })}
           </div>
         </aside>
 
@@ -834,6 +893,22 @@ export default function MessagesPage({
                             </button>
                             <button
                               type="button"
+                              className="thread-menu-item"
+                              onClick={async () => {
+                                setMenuOpen(false);
+                                if (
+                                  window.confirm(
+                                    "Archive this group? It hides from Active until you restore from Archived."
+                                  )
+                                ) {
+                                  await onArchiveConversation?.({ conversationId: activeChat.group.id });
+                                }
+                              }}
+                            >
+                              📦 Archive group
+                            </button>
+                            <button
+                              type="button"
                               className="thread-menu-item danger"
                               onClick={async () => {
                                 setMenuOpen(false);
@@ -846,16 +921,34 @@ export default function MessagesPage({
                             </button>
                           </>
                         ) : (
-                          <button
-                            type="button"
-                            className="thread-menu-item"
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setShowAttachments(true);
-                            }}
-                          >
-                            🖼️ Files & images
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              className="thread-menu-item"
+                              onClick={() => {
+                                setMenuOpen(false);
+                                setShowAttachments(true);
+                              }}
+                            >
+                              🖼️ Files & images
+                            </button>
+                            <button
+                              type="button"
+                              className="thread-menu-item"
+                              onClick={async () => {
+                                setMenuOpen(false);
+                                if (
+                                  window.confirm(
+                                    "Archive this chat? It hides from Active until you restore from Archived."
+                                  )
+                                ) {
+                                  await onArchiveConversation?.({ dmPeerId: activeChat.user.id });
+                                }
+                              }}
+                            >
+                              📦 Archive chat
+                            </button>
+                          </>
                         )}
                       </div>
                     ) : null}
