@@ -69,7 +69,7 @@ export default function AssistantPage({ chatWithGroq }) {
   return (
     <section className="panel single assistant-panel">
       <div className="panel-head">
-        <h2>🤖 Sigla Assistant</h2>
+        <h2>✨ Sigla Assistant</h2>
         <p>Groq-powered campus helper (students & admins)—answers are unofficial guidance only.</p>
       </div>
       {error ? <div className="assistant-inline-error muted small">{error}</div> : null}
