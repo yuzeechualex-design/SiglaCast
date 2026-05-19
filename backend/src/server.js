@@ -196,6 +196,55 @@ async function fetchUserByEmail(email) {
   const { data } = await supabase.from("users").select("*").ilike("email", email).maybeSingle();
   return data;
 }
+
+/** Explicit `users` projections for routes that cannot use select("*") (secrets). Omit columns at runtime when DB migrations lag. */
+const USER_SEARCH_SELECT_DEFAULT =
+  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note";
+
+const USER_ADMIN_LIST_SELECT_DEFAULT =
+  "id, role, name, email, course, avatar_url, cover_url, bio, availability, created_at";
+
+function parseMissingUsersColumn(errorMessage = "") {
+  const msg = String(errorMessage);
+  let m = msg.match(/column (?:users\.)"?(\w+)"? does not exist/i);
+  if (m) return m[1];
+  m = msg.match(/Could not find the '([^']+)' column of 'users'/i);
+  return m?.[1] || null;
+}
+
+function omitUsersSelectColumn(csv, rawName) {
+  if (!rawName) return csv;
+  const needle = rawName.toLowerCase();
+  return csv
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .filter((col) => {
+      const bare = col.split(".").pop().toLowerCase();
+      return bare !== needle;
+    })
+    .join(", ");
+}
+
+/**
+ * Re-run `users` selects when Postgres/Supabase rejects unknown columns (migrations not applied on host DB).
+ */
+async function usersSelectOmitMissingColumns(run, initialCols, maxPasses = 12) {
+  let cols = initialCols;
+  for (let i = 0; i < maxPasses; i++) {
+    const out = await run(cols);
+    const errMsg = Array.isArray(out)
+      ? out.map((row) => row?.error?.message).find(Boolean)
+      : out?.error?.message;
+    if (!errMsg) return out;
+    const missing = parseMissingUsersColumn(errMsg);
+    const nextCols = omitUsersSelectColumn(cols, missing);
+    if (!missing || nextCols === cols || !nextCols) return out;
+    cols = nextCols;
+  }
+  return run(cols);
+}
+
 async function fetchEventWithCandidates(eventId) {
   const { data: event } = await supabase.from("events").select("*").eq("id", eventId).maybeSingle();
   if (!event) return null;
@@ -1859,10 +1908,12 @@ app.delete("/api/announcements/:id", authenticate, requireAdmin, async (req, res
 
 // List every user (admins only)
 app.get("/api/admin/users", authenticate, requireAdmin, async (_, res) => {
-  const { data, error } = await supabase
-    .from("users")
-    .select("id, role, name, email, course, avatar_url, cover_url, bio, created_at, availability")
-    .order("created_at", { ascending: false });
+  const result = await usersSelectOmitMissingColumns(
+    async (cols) =>
+      await supabase.from("users").select(cols).order("created_at", { ascending: false }),
+    USER_ADMIN_LIST_SELECT_DEFAULT
+  );
+  const { data, error } = result;
   if (error) return res.status(400).json({ error: error.message });
   res.json(
     (data || []).map((u) => ({
@@ -2094,30 +2145,13 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const cleaned = q.replace(/[%_\\]/g, "").trim();
   if (!cleaned) return res.json([]);
   const pattern = `%${cleaned}%`;
-  const selectCols = "id, name, email, role, course, avatar_url, cover_url, bio, availability";
-  const [byName, byEmail, byCourse] = await Promise.all([
-    supabase
-      .from("users")
-      .select(selectCols)
-      .neq("id", me)
-      .neq("id", SIGLACAST_AI_USER_ID)
-      .ilike("name", pattern)
-      .limit(12),
-    supabase
-      .from("users")
-      .select(selectCols)
-      .neq("id", me)
-      .neq("id", SIGLACAST_AI_USER_ID)
-      .ilike("email", pattern)
-      .limit(12),
-    supabase
-      .from("users")
-      .select(selectCols)
-      .neq("id", me)
-      .neq("id", SIGLACAST_AI_USER_ID)
-      .ilike("course", pattern)
-      .limit(12)
-  ]);
+  const [byName, byEmail, byCourse] = await usersSelectOmitMissingColumns(async (cols) => {
+    return Promise.all([
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("name", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("email", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("course", pattern).limit(12)
+    ]);
+  }, USER_SEARCH_SELECT_DEFAULT);
   const firstErr = [byName, byEmail, byCourse].find((r) => r.error)?.error;
   if (firstErr) return res.status(400).json({ error: firstErr.message });
 
