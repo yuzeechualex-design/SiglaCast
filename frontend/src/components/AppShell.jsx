@@ -72,7 +72,7 @@ export default function AppShell({
             ) : null}
           </NavLink>
           <NavLink to="/profile" className="nav-btn">👤 Profile</NavLink>
-          <button type="button" className="nav-logout" onClick={onLogout}>🚪 Logout</button>
+          <button type="button" className="nav-logout" onClick={onLogout}>➜] Logout</button>
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>
