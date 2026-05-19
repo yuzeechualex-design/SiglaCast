@@ -33,7 +33,8 @@ export default function CommunityPage({
   onReactComment,
   onComment,
   onDeletePost,
-  onDeleteComment
+  onDeleteComment,
+  onOpenUserProfile
 }) {
   const isAdmin = currentUser?.role === "admin";
   const [params, setSearchParams] = useSearchParams();
@@ -239,6 +240,7 @@ export default function CommunityPage({
               onComment={onComment}
               onReactComment={onReactComment}
               onDeleteComment={onDeleteComment}
+              onOpenUserProfile={onOpenUserProfile}
               openPostReactors={() =>
                 setRxModal({
                   open: true,
@@ -274,16 +276,17 @@ export default function CommunityPage({
               <div className="community-thread-scroll">
                 {overlayPost ? (
                   <article className="tile post-card community-thread-article" id={`thread-post-${overlayPost.id}`}>
-                    <PostCardBody
-                      post={overlayPost}
-                      canModerateDelete={(isAdmin || overlayPost.authorId === currentUser?.id) && !!onDeletePost}
-                      forceExpandedBody
-                      currentUser={currentUser}
-                      onDeletePost={() => onDeletePost?.(overlayPost)}
-                      onReact={onReact}
-                      onComment={onComment}
-                      onReactComment={onReactComment}
-                      onDeleteComment={onDeleteComment}
+                <PostCardBody
+                  post={overlayPost}
+                  canModerateDelete={(isAdmin || overlayPost.authorId === currentUser?.id) && !!onDeletePost}
+                  forceExpandedBody
+                  currentUser={currentUser}
+                  onDeletePost={() => onDeletePost?.(overlayPost)}
+                  onReact={onReact}
+                  onComment={onComment}
+                  onReactComment={onReactComment}
+                  onDeleteComment={onDeleteComment}
+                  onOpenUserProfile={onOpenUserProfile}
                       openPostReactors={() =>
                         setRxModal({
                           open: true,
@@ -332,16 +335,28 @@ function PostCardBody({
   onReactComment,
   onDeleteComment,
   openPostReactors,
-  openCommentReactors
+  openCommentReactors,
+  onOpenUserProfile
 }) {
   return (
     <>
       <div className="post-header">
-        {post.authorAvatar ? (
-          <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-        ) : (
-          <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
-        )}
+        <button
+          type="button"
+          className="post-profile-avatar-btn"
+          aria-label={`View ${post.author || "user"} profile`}
+          title="View profile"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenUserProfile?.(post.authorId, { name: post.author, avatarUrl: post.authorAvatar, authorAvatar: post.authorAvatar });
+          }}
+        >
+          {post.authorAvatar ? (
+            <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+          ) : (
+            <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+          )}
+        </button>
         <div className="post-header-meta">
           <strong className="author">{post.author}</strong>
           <div className="post-meta">Campus post</div>
@@ -375,12 +390,13 @@ function PostCardBody({
         onReactComment={onReactComment}
         onDeleteComment={onDeleteComment}
         onShowCommentReactors={openCommentReactors}
+        onOpenUserProfile={onOpenUserProfile}
       />
     </>
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors }) {
+function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const comments = post.comments || [];
 
@@ -411,6 +427,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
               onReactComment={onReactComment}
               onDeleteComment={onDeleteComment}
               onShowCommentReactors={onShowCommentReactors}
+              onOpenUserProfile={onOpenUserProfile}
             />
             {c.replies?.length ? (
               <ul className="reply-list">
@@ -427,6 +444,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
                       onReactComment={onReactComment}
                       onDeleteComment={onDeleteComment}
                       onShowCommentReactors={onShowCommentReactors}
+                      onOpenUserProfile={onOpenUserProfile}
                     />
                   </li>
                 ))}
@@ -526,7 +544,8 @@ function CommentRow({
   onCancelReply,
   onReactComment,
   onDeleteComment,
-  onShowCommentReactors
+  onShowCommentReactors,
+  onOpenUserProfile
 }) {
   const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
   function handleDelete() {
@@ -537,11 +556,26 @@ function CommentRow({
   }
   return (
     <div className={`comment-row ${isReply ? "is-reply" : ""}`} id={`comment-${comment.id}`}>
-      {comment.authorAvatar ? (
-        <img className="comment-avatar" src={mediaUrl(comment.authorAvatar)} alt="" />
-      ) : (
-        <div className="comment-avatar placeholder">{comment.author?.charAt(0) || "?"}</div>
-      )}
+      <button
+        type="button"
+        className="comment-profile-avatar-btn"
+        aria-label={`View ${comment.author || "user"} profile`}
+        title="View profile"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpenUserProfile?.(comment.userId, {
+            name: comment.author,
+            avatarUrl: comment.authorAvatar,
+            authorAvatar: comment.authorAvatar
+          });
+        }}
+      >
+        {comment.authorAvatar ? (
+          <img className="comment-avatar" src={mediaUrl(comment.authorAvatar)} alt="" />
+        ) : (
+          <div className="comment-avatar placeholder">{comment.author?.charAt(0) || "?"}</div>
+        )}
+      </button>
       <div className="comment-body">
         <div className="comment-bubble">
           <strong>{comment.author}</strong>{" "}

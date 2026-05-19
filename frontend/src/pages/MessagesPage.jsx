@@ -95,7 +95,8 @@ export default function MessagesPage({
   onEndGroupUserphoneBridge,
   userPhoneAutoReconnect,
   setUserPhoneAutoReconnect,
-  onSendSiglaInActiveThread = async () => {}
+  onSendSiglaInActiveThread = async () => {},
+  onOpenUserProfile
 }) {
   const navigate = useNavigate();
   const [draft, setDraft] = useState("");
@@ -286,14 +287,38 @@ export default function MessagesPage({
     ) : (
       <div className={`${cls} placeholder`}>{entity?.name?.charAt(0) || "?"}</div>
     );
-    if (!showPresence) return inner;
-    const pres = presenceDotAttrs(entity);
-    return (
+    const pres = showPresence ? presenceDotAttrs(entity) : null;
+
+    const profileClick =
+      typeof opts.onProfileClick === "function" && entity?.id && entity.id !== SIGLACAST_AI_USER_ID
+        ? opts.onProfileClick
+        : null;
+
+    const body = showPresence ? (
       <span className="avatar-with-presence">
         {inner}
         <span className={pres.className} title={pres.title} aria-hidden />
       </span>
-    );
+    ) : inner;
+
+    if (profileClick) {
+      return (
+        <button
+          type="button"
+          className="avatar-profile-hit"
+          aria-label={`View ${entity?.name || "profile"}`}
+          title="View profile"
+          onClick={(e) => {
+            e.stopPropagation();
+            profileClick(entity.id, entity);
+          }}
+        >
+          {body}
+        </button>
+      );
+    }
+
+    return body;
   }
 
   async function handleSend(e) {
@@ -491,7 +516,10 @@ export default function MessagesPage({
                         <ul className="friend-requests-menu-list">
                           {friendIncomingRequests.map((r) => (
                             <li key={r.id} className="friend-requests-menu-row">
-                              {renderAvatar(r.from, "sm", { showPresence: true })}
+                              {renderAvatar(r.from, "sm", {
+                                showPresence: true,
+                                onProfileClick: onOpenUserProfile
+                              })}
                               <div className="friend-requests-menu-meta">
                                 <strong className="user-line-name">
                                   {r.from?.name} <StatusEmojiChip emoji={r.from?.statusEmoji} />
@@ -561,7 +589,7 @@ export default function MessagesPage({
               <p className="search-results-title">Search results</p>
               {searchResults.map((u) => (
                 <div key={u.id} className="search-result-row">
-                  {renderAvatar(u, "sm", { showPresence: true })}
+                  {renderAvatar(u, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })}
                   <div className="search-result-info">
                     <strong className="user-line-name">
                       {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
@@ -620,23 +648,32 @@ export default function MessagesPage({
                   (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
                   (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
                   (c.kind === "userphone" && activeChat?.kind === "userphone");
+
+                function openThisConversation() {
+                  if (c.kind === "userphone") return onOpenChat?.("userphone", "userphone");
+                  return onOpenChat?.(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id);
+                }
+
                 return (
-                  <button
+                  <div
                     key={c.id}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
-                    onClick={() =>
-                      c.kind === "userphone"
-                        ? onOpenChat("userphone", "userphone")
-                        : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
-                    }
+                    onClick={openThisConversation}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        openThisConversation();
+                      }
+                    }}
                   >
                     {c.kind === "userphone" ? (
                       <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
                         📞
                       </div>
                     ) : c.kind === "dm" ? (
-                      renderAvatar(target, "sm", { showPresence: true })
+                      renderAvatar(target, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })
                     ) : (
                       renderAvatar(target, "sm")
                     )}
@@ -661,7 +698,7 @@ export default function MessagesPage({
                       </span>
                     </div>
                     {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
-                  </button>
+                  </div>
                 );
               })
             )}
@@ -692,7 +729,11 @@ export default function MessagesPage({
                   </div>
                 ) : (
                   renderAvatar(isGroup ? activeChat.group : activeChat.user, "md", {
-                    showPresence: !isGroup
+                    showPresence: !isGroup,
+                    onProfileClick:
+                      !isGroup && !isUserphone && activeChat.user?.id !== SIGLACAST_AI_USER_ID
+                        ? onOpenUserProfile
+                        : undefined
                   })
                 )}
                 <div className="thread-header-info">
@@ -918,11 +959,14 @@ export default function MessagesPage({
                       message={m}
                       showAuthor={isGroup && !m.fromMe}
                       minimal={isUserphone && m.author !== "SiglaCast AI"}
-                        onReact={onReactToMessage}
-                        onReply={handleReply}
-                        onUnsend={handleUnsend}
-                        onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
-                      />
+                      activeChat={activeChat}
+                      isUserphone={isUserphone}
+                      onReact={onReactToMessage}
+                      onReply={handleReply}
+                      onUnsend={handleUnsend}
+                      onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
+                      onOpenUserProfile={onOpenUserProfile}
+                    />
                     ))}
                     {isGroup && groupUserphoneWaiting ? (
                       <GroupUserphoneQueueBubbleRow
@@ -1123,6 +1167,7 @@ export default function MessagesPage({
           currentUser={currentUser}
           group={activeChat.group}
           onClose={() => setShowGroupSettings(false)}
+          onOpenUserProfile={onOpenUserProfile}
           onSave={async (payload) => {
             await onUpdateGroup(activeChat.group.id, payload);
           }}
@@ -1229,7 +1274,18 @@ function GroupUserphoneQueueBubbleRow({ displayName, secondsLeft, pct, onCancel 
 // a hover reaction picker, quoted-reply preview, and inline Reply/Unsend
 // actions. On touch devices a long-press opens the picker and we cancel the
 // default text-selection menu so it doesn't conflict with reacting.
-function MessageBubble({ message: m, showAuthor, minimal = false, onReact, onReply, onUnsend, onOpenReactors }) {
+function MessageBubble({
+  message: m,
+  showAuthor,
+  minimal = false,
+  activeChat,
+  isUserphone = false,
+  onReact,
+  onReply,
+  onUnsend,
+  onOpenReactors,
+  onOpenUserProfile
+}) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
   const longPressTimer = useRef(null);
@@ -1291,15 +1347,53 @@ function MessageBubble({ message: m, showAuthor, minimal = false, onReact, onRep
     if (!unsent && !minimal) e.preventDefault();
   }
 
+  function senderProfilePeek() {
+    if (m.fromMe || !onOpenUserProfile || !m.fromUserId || m.fromUserId === SIGLACAST_AI_USER_ID) return null;
+    if (isUserphone) return null;
+
+    let prefetch = { name: m.author, avatarUrl: m.authorAvatar, authorAvatar: m.authorAvatar };
+    if (activeChat?.kind === "dm" && activeChat.user?.id === m.fromUserId) {
+      prefetch = activeChat.user;
+    } else if (activeChat?.kind === "group") {
+      const mem = activeChat.group?.members?.find((x) => x.id === m.fromUserId);
+      if (mem) prefetch = mem;
+    }
+
+    return { userId: m.fromUserId, prefetch };
+  }
+
+  const profilePeek = senderProfilePeek();
+
+  function renderIncomingAvatar() {
+    const avatarInner = m.authorAvatar ? (
+      <img className="msg-avatar sm" src={mediaUrl(m.authorAvatar)} alt="" />
+    ) : (
+      <div className="msg-avatar sm placeholder">{m.author?.charAt(0) || "?"}</div>
+    );
+
+    if (profilePeek) {
+      return (
+        <button
+          type="button"
+          className="avatar-profile-hit"
+          title="View profile"
+          aria-label={`View ${m.author || "profile"}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenUserProfile(profilePeek.userId, profilePeek.prefetch);
+          }}
+        >
+          {avatarInner}
+        </button>
+      );
+    }
+
+    return avatarInner;
+  }
+
   return (
     <div className={`bubble-row ${m.fromMe ? "row-me" : "row-them"} ${unsent ? "is-unsent" : ""}`}>
-      {!m.fromMe ? (
-        m.authorAvatar ? (
-          <img className="msg-avatar sm" src={mediaUrl(m.authorAvatar)} alt="" />
-        ) : (
-          <div className="msg-avatar sm placeholder">{m.author?.charAt(0) || "?"}</div>
-        )
-      ) : null}
+      {!m.fromMe ? renderIncomingAvatar() : null}
 
       <div
         className="bubble-stack"
@@ -1563,7 +1657,8 @@ function GroupSettingsModal({
   onRemoveMember,
   onChangeRole,
   onLeaveGroup,
-  onDeleteGroup
+  onDeleteGroup,
+  onOpenUserProfile
 }) {
   const [name, setName] = useState(group?.name || "");
   const [photo, setPhoto] = useState(null);
@@ -1769,14 +1864,33 @@ function GroupSettingsModal({
               const memPres = presenceDotAttrs(m);
               return (
                 <li key={m.id} className="member-row">
-                  <span className="avatar-with-presence">
-                    {m.avatarUrl ? (
-                      <img className="msg-avatar sm" src={mediaUrl(m.avatarUrl)} alt="" />
-                    ) : (
-                      <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
-                    )}
-                    <span className={memPres.className} title={memPres.title} aria-hidden />
-                  </span>
+                  {onOpenUserProfile && m.id !== SIGLACAST_AI_USER_ID ? (
+                    <button
+                      type="button"
+                      className="avatar-profile-hit"
+                      aria-label={`View ${m.name} profile`}
+                      title="View profile"
+                      onClick={() => onOpenUserProfile(m.id, m)}
+                    >
+                      <span className="avatar-with-presence">
+                        {m.avatarUrl ? (
+                          <img className="msg-avatar sm" src={mediaUrl(m.avatarUrl)} alt="" />
+                        ) : (
+                          <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
+                        )}
+                        <span className={memPres.className} title={memPres.title} aria-hidden />
+                      </span>
+                    </button>
+                  ) : (
+                    <span className="avatar-with-presence">
+                      {m.avatarUrl ? (
+                        <img className="msg-avatar sm" src={mediaUrl(m.avatarUrl)} alt="" />
+                      ) : (
+                        <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
+                      )}
+                      <span className={memPres.className} title={memPres.title} aria-hidden />
+                    </span>
+                  )}
                   <div className="member-info">
                     <strong>
                       {m.name} {isMe ? <span className="muted small">(you)</span> : null}

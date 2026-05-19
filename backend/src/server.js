@@ -2130,6 +2130,42 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   res.json(out);
 });
 
+/** Public-ish profile card for avatar popovers (Community, message bubbles). Mirror search-row friend flags. */
+app.get("/api/users/:userId", authenticate, async (req, res) => {
+  const me = req.user.id;
+  const targetId = req.params.userId;
+  if (!targetId) return res.status(400).json({ error: "Missing user id" });
+  if (targetId === SIGLACAST_AI_USER_ID || targetId === USERPHONE_GUEST_ID) {
+    return res.status(404).json({ error: "User not found" });
+  }
+  const row = await fetchUserById(targetId);
+  if (!row) return res.status(404).json({ error: "User not found" });
+
+  const onlineSet = await presenceOnlineSetForUserIds([targetId]);
+
+  let isFriend = false;
+  let incomingRequestId = null;
+  let outgoingRequestPending = false;
+
+  if (me !== targetId) {
+    isFriend = await areFriends(me, targetId);
+    const [{ data: toMeReq }, { data: fromMeReq }] = await Promise.all([
+      supabase.from("friend_requests").select("id").eq("to_user_id", me).eq("from_user_id", targetId).maybeSingle(),
+      supabase.from("friend_requests").select("id").eq("from_user_id", me).eq("to_user_id", targetId).maybeSingle()
+    ]);
+    incomingRequestId = toMeReq?.id || null;
+    outgoingRequestPending = Boolean(fromMeReq?.id);
+  }
+
+  const profile = {
+    ...publicProfileWithPresence(row, me, onlineSet),
+    isFriend,
+    incomingRequestId,
+    outgoingRequestPending
+  };
+  res.json(profile);
+});
+
 app.get("/api/friend-requests", authenticate, async (req, res) => {
   const me = req.user.id;
   const { data: rows } = await supabase

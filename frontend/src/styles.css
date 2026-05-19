@@ -2637,6 +2637,220 @@ input.profile-status-emoji {
   width: min(760px, 100%);
 }
 
+/* -------- User profile popover (Discord-like) -------- */
+.modal-card.user-profile-modal {
+  width: min(640px, 100%);
+  padding: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.modal-card.user-profile-modal .modal-close {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 3;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  line-height: 1;
+}
+
+[data-theme="light"] .modal-card.user-profile-modal .modal-close {
+  background: rgba(0, 0, 0, 0.12);
+  color: var(--ink-900);
+}
+
+.user-profile-modal-layout {
+  display: grid;
+  grid-template-columns: 1fr min(220px, 34%);
+  gap: 0;
+  min-height: 260px;
+}
+
+@media (max-width: 600px) {
+  .user-profile-modal-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .user-profile-modal-aside {
+    border-left: none;
+    border-top: 1px solid var(--line);
+  }
+}
+
+.user-profile-modal-main {
+  min-width: 0;
+}
+
+.user-profile-banner {
+  height: 92px;
+  background: linear-gradient(125deg, var(--blue-950, #0b1e4a), var(--blue-700) 40%, #7c3aed 78%, var(--yellow-500));
+}
+
+.user-profile-avatar-block {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  padding: 0 18px 12px;
+  margin-top: -46px;
+}
+
+.user-profile-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.user-profile-avatar {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid var(--card, #fff);
+  box-shadow: var(--shadow-soft);
+  display: block;
+  background: var(--surface);
+}
+
+.user-profile-avatar.placeholder {
+  display: grid;
+  place-items: center;
+  font-size: 2rem;
+  font-weight: 800;
+  color: var(--blue-800);
+}
+
+.user-profile-avatar-wrap .presence-dot {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  width: 18px;
+  height: 18px;
+}
+
+.user-profile-name-block {
+  flex: 1;
+  min-width: 0;
+  padding-top: 52px;
+}
+
+.user-profile-display-name {
+  margin: 0 0 4px;
+  font-size: 1.32rem;
+  line-height: 1.2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-profile-presence-line {
+  margin: 0 0 6px;
+  font-size: 0.88rem;
+}
+
+.user-profile-custom-status {
+  margin: 0 0 6px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.user-profile-email {
+  margin: 0;
+  word-break: break-all;
+}
+
+.user-profile-modal-aside {
+  padding: 18px 16px 22px;
+  border-left: 1px solid var(--line);
+  background: rgba(13, 71, 161, 0.05);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-content: flex-start;
+}
+
+[data-theme="dark"] .user-profile-modal-aside {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.user-profile-aside-title {
+  margin: 0 0 4px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-600);
+}
+
+.user-profile-modal-aside .btn {
+  width: 100%;
+  justify-content: center;
+}
+
+.user-profile-modal-aside .wide-pill {
+  text-align: center;
+  width: 100%;
+}
+
+.user-profile-friend-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-profile-fetch-err {
+  margin-top: 10px;
+}
+
+.user-profile-loading {
+  margin: 4px 0 0;
+}
+
+button.avatar-profile-hit {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+  align-self: flex-start;
+  -webkit-tap-highlight-color: rgba(31, 94, 199, 0.12);
+}
+
+button.avatar-profile-hit:focus-visible {
+  outline: 2px solid var(--blue-700);
+  outline-offset: 2px;
+}
+
+button.post-profile-avatar-btn,
+button.comment-profile-avatar-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 0;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: rgba(31, 94, 199, 0.12);
+}
+
+button.post-profile-avatar-btn:focus-visible,
+button.comment-profile-avatar-btn:focus-visible {
+  outline: 2px solid var(--blue-700);
+  outline-offset: 2px;
+}
+
+.conv-item:focus-visible {
+  outline: 2px solid var(--blue-700);
+  outline-offset: 2px;
+}
+
 @keyframes modal-pop {
   from { transform: translateY(12px) scale(0.96); opacity: 0; }
   to { transform: translateY(0) scale(1); opacity: 1; }

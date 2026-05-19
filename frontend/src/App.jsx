@@ -12,6 +12,7 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
+import UserProfileModal from "./components/UserProfileModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
@@ -80,6 +81,8 @@ export default function App() {
   const [adminUsers, setAdminUsers] = useState([]);
   /** Bumps nav badge calculations after localStorage changes (announcements seen). */
   const [navBadgeTick, setNavBadgeTick] = useState(0);
+  /** `{ userId, prefetch? }` — public profile popover from avatars in Community / Messages. */
+  const [userProfilePeek, setUserProfilePeek] = useState(null);
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -811,6 +814,21 @@ export default function App() {
     }
   }
 
+  async function openDmAndFocusUser(userId) {
+    setUserProfilePeek(null);
+    navigate("/messages");
+    await openChat("dm", userId);
+  }
+
+  function openUserProfileModal(userId, prefetch) {
+    if (!userId || userId === SIGLACAST_AI_USER_ID) return;
+    if (userId === user?.id) {
+      navigate("/profile");
+      return;
+    }
+    setUserProfilePeek({ userId, prefetch: prefetch || null });
+  }
+
   async function openChat(kind, id) {
     setPeopleSearchHint("");
     if (kind === "group") {
@@ -1381,6 +1399,7 @@ export default function App() {
               onDeletePost={deletePost}
               onReactComment={reactToComment}
               onDeleteComment={deleteComment}
+              onOpenUserProfile={openUserProfileModal}
             />
           }
         />
@@ -1453,11 +1472,23 @@ export default function App() {
               userPhoneAutoReconnect={userPhoneAutoReconnect}
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
               onSendSiglaInActiveThread={sendSiglaInActiveThread}
+              onOpenUserProfile={openUserProfileModal}
             />
           }
         />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <UserProfileModal
+        peek={userProfilePeek}
+        onClose={() => setUserProfilePeek(null)}
+        currentUser={user}
+        api={api}
+        navigate={navigate}
+        onOpenDm={openDmAndFocusUser}
+        onAddFriend={addFriend}
+        onAcceptFriendRequest={acceptFriendRequest}
+        onRejectFriendRequest={rejectFriendRequest}
+      />
     </AppShell>
   );
 }
