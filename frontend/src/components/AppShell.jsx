@@ -1,5 +1,7 @@
+import { useRef } from "react";
 import { NavLink } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle.jsx";
+import FloatingQuickNav from "./FloatingQuickNav.jsx";
 
 function formatNavPing(n) {
   if (typeof n !== "number" || n <= 0) return null;
@@ -20,9 +22,12 @@ export default function AppShell({
   const ann = formatNavPing(navBadges.announcements);
   const bell = formatNavPing(navBadges.notifications);
 
+  /** Observed so the floating quick-nav dock appears after this block scrolls out of view (long feeds / threads). */
+  const dashboardHeaderRef = useRef(null);
+
   return (
     <div className="app">
-      <header className="hero">
+      <header ref={dashboardHeaderRef} className="hero">
         <div className="hero-main">
           <p className="eyebrow">Davao Oriental State University</p>
           <div className="hero-title-row">
@@ -77,6 +82,7 @@ export default function AppShell({
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>
       <main className="grid">{children}</main>
+      <FloatingQuickNav headerRef={dashboardHeaderRef} navBadges={navBadges} onLogout={onLogout} />
     </div>
   );
 }

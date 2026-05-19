@@ -323,6 +323,175 @@ button.nav-logout:hover {
   box-shadow: none;
 }
 
+/* ---------- Floating quick nav (shows when dashboard header scrolls away) ---------- */
+body.floating-quick-nav-open main.grid {
+  padding-bottom: 92px;
+}
+
+@media (max-width: 680px) {
+  body.floating-quick-nav-open main.grid {
+    padding-bottom: 108px;
+  }
+}
+
+.floating-quick-nav-shell {
+  position: fixed;
+  inset: auto 0 0 0;
+  z-index: 70;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  padding: 0 12px calc(14px + env(safe-area-inset-bottom, 0px));
+}
+
+.floating-quick-nav {
+  pointer-events: auto;
+  width: min(960px, 100%);
+}
+
+.floating-quick-nav-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(13, 71, 161, 0.16);
+  box-shadow:
+    0 -10px 36px rgba(13, 71, 161, 0.12),
+    0 14px 40px rgba(0, 0, 0, 0.1);
+  backdrop-filter: saturate(150%) blur(12px);
+  animation: fq-dock-rise 0.26s ease both;
+}
+
+@keyframes fq-dock-rise {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-quick-nav-inner {
+    animation: none;
+  }
+}
+
+[data-theme="dark"] .floating-quick-nav-inner {
+  background: rgba(19, 28, 46, 0.94);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.floating-quick-top {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-900);
+  font-weight: 700;
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.floating-quick-top:hover {
+  background: var(--surface);
+  border-color: var(--yellow-500);
+}
+
+.floating-quick-links {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.floating-quick-links::-webkit-scrollbar {
+  height: 4px;
+}
+
+.fq-link,
+.fq-logout {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  min-width: 54px;
+  padding: 6px 6px;
+  border-radius: 12px;
+  border: none;
+  background: transparent;
+  text-decoration: none;
+  color: var(--ink-900);
+  font-size: 1.06rem;
+  line-height: 1.15;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+}
+
+.fq-link:hover,
+.fq-logout:hover {
+  background: rgba(31, 94, 199, 0.08);
+  transform: translateY(-1px);
+}
+
+.fq-link.fq-active {
+  background: linear-gradient(140deg, var(--yellow-300), var(--yellow-500));
+  color: #172238;
+}
+
+[data-theme="dark"] .fq-link.fq-active {
+  color: #0b1220;
+}
+
+.fq-label {
+  display: block;
+  font-size: 0.59rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin-top: 2px;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+}
+
+.fq-ping {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #e53935;
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 16px;
+  text-align: center;
+  pointer-events: none;
+  border: 2px solid var(--white);
+}
+
+.fq-logout {
+  font-weight: 700;
+}
+
 .grid {
   margin-top: 20px;
   display: grid;
