@@ -2851,6 +2851,7 @@ textarea.profile-bio-input::placeholder {
 .user-profile-avatar-block {
   display: flex;
   flex-wrap: wrap;
+  align-items: flex-start;
   gap: 14px 18px;
   padding: 0 18px 12px;
   margin-top: -46px;
