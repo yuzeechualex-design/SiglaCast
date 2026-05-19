@@ -1,6 +1,5 @@
 import { NavLink } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle.jsx";
-import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 
 function formatNavPing(n) {
   if (typeof n !== "number" || n <= 0) return null;
@@ -44,8 +43,8 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
-          <NavLink to={{ pathname: "/messages", search: `?dm=${SIGLACAST_AI_USER_ID}` }} className="nav-btn">
-            ✨ SiglaCast AI
+          <NavLink to="/assistant" className="nav-btn">
+            ✨ Assistant
           </NavLink>
           <NavLink to="/community" className="nav-btn">💬 Community</NavLink>
           <NavLink to="/messages" className="nav-btn">

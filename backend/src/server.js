@@ -2233,6 +2233,7 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
     const userMap = new Map((users || []).map((u) => [u.id, u]));
     const onlineSet = await presenceOnlineSetForUserIds([...partners]);
     for (const pid of partners) {
+      if (pid === SIGLACAST_AI_USER_ID) continue;
       const partner = userMap.get(pid);
       if (!partner) continue;
       const thread = (dmMsgs || []).filter(

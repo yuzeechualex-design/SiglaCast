@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 import MentionInput from "../components/MentionInput.jsx";
@@ -64,6 +64,7 @@ export default function MessagesPage({
   setUserPhoneAutoReconnect,
   onSendSiglaInActiveThread = async () => {}
 }) {
+  const navigate = useNavigate();
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
@@ -92,6 +93,19 @@ export default function MessagesPage({
 
   useEffect(() => {
     if (!deepLinkDm && !deepLinkGroup) return undefined;
+    if (deepLinkDm === SIGLACAST_AI_USER_ID) {
+      navigate("/assistant", { replace: true });
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("dm");
+          next.delete("group");
+          return next;
+        },
+        { replace: true }
+      );
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       if (deepLinkDm) await onOpenChat?.("dm", deepLinkDm);
@@ -110,7 +124,15 @@ export default function MessagesPage({
     return () => {
       cancelled = true;
     };
-  }, [deepLinkDm, deepLinkGroup, onOpenChat, setSearchParams]);
+  }, [deepLinkDm, deepLinkGroup, navigate, onOpenChat, setSearchParams]);
+
+  /** Dedicated Assistant lives on `/assistant`; don’t leave the sentinel bot thread open inside Messages. */
+  useEffect(() => {
+    const isAiDm = activeChat?.kind === "dm" && activeChat?.user?.id === SIGLACAST_AI_USER_ID;
+    if (!isAiDm) return undefined;
+    onCloseMobileChat?.();
+    return undefined;
+  }, [activeChat?.kind, activeChat?.user?.id, onCloseMobileChat]);
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
@@ -384,7 +406,9 @@ export default function MessagesPage({
                         ← Back
                       </button>
                       <p className="chat-apps-intro muted small">
-                        Shortcuts below. To have Sigla post <strong>inside</strong> a group/DM/Userphone thread, open that chat → ＋ by the composer → ✨ Sigla replies here.
+                        <strong>Assistant</strong> opens its own page (not mixed into your Chats list). To drop Sigla{" "}
+                        <strong>into an existing thread</strong> as a participant, open that chat → ＋ by the composer → ✨
+                        Sigla replies here.
                       </p>
                       <ul className="chat-apps-menu">
                         <li className="chat-app-row">
@@ -406,8 +430,8 @@ export default function MessagesPage({
                         </li>
                         <li className="chat-app-row">
                           <div className="chat-app-meta">
-                            <strong>SiglaCast AI</strong>
-                            <span className="muted small">AI replies in your Messages thread</span>
+                            <strong>Assistant</strong>
+                            <span className="muted small">Standalone AI chat (same as ✨ Assistant in the top nav)</span>
                           </div>
                           <button
                             type="button"
@@ -415,7 +439,7 @@ export default function MessagesPage({
                             onClick={() => {
                               setPlusMenuOpen(false);
                               setPlusMenuPane("main");
-                              void onOpenChat?.("dm", SIGLACAST_AI_USER_ID);
+                              navigate("/assistant");
                             }}
                           >
                             Open

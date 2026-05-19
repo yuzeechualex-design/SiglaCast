@@ -12,6 +12,7 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
+import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
@@ -276,7 +277,10 @@ export default function App() {
       lastMessage,
       unreadCount: 0
     };
-    return [userphoneRow, ...(conversations || [])];
+    const withoutAiDm = (conversations || []).filter(
+      (c) => !(c.kind === "dm" && c.user?.id === SIGLACAST_AI_USER_ID)
+    );
+    return [userphoneRow, ...withoutAiDm];
   }, [
     conversations,
     userPhoneState.phase,

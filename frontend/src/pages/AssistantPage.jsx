@@ -113,7 +113,7 @@ export default function AssistantPage({ chatWithGroq }) {
   return (
     <section className="panel single assistant-panel">
       <div className="panel-head">
-        <h2>✨ Sigla Assistant</h2>
+        <h2>Assistant</h2>
         <p>Groq-powered general assistant (students & admins)—campus features, academics, drafts, trivia, plus whatever you&apos;d normally ask any AI helper.</p>
       </div>
       <AssistantChatCore chatWithGroq={chatWithGroq} />
