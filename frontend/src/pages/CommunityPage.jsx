@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
@@ -98,9 +99,19 @@ export default function CommunityPage({
 
   useEffect(() => {
     const open = !!(isCommunityNarrow && mobileThreadParam);
-    if (!open) document.body.classList.remove("community-thread-overlay-open");
-    else document.body.classList.add("community-thread-overlay-open");
-    return () => document.body.classList.remove("community-thread-overlay-open");
+    const root = typeof document !== "undefined" ? document.documentElement : null;
+    const cls = "community-thread-overlay-open";
+    if (!open) {
+      document.body.classList.remove(cls);
+      root?.classList.remove(cls);
+      return undefined;
+    }
+    document.body.classList.add(cls);
+    root?.classList.add(cls);
+    return () => {
+      document.body.classList.remove(cls);
+      root?.classList.remove(cls);
+    };
   }, [isCommunityNarrow, mobileThreadParam]);
 
   useEffect(() => {
@@ -244,51 +255,59 @@ export default function CommunityPage({
           </article>
         );
       })}
-      {isCommunityNarrow && mobileThreadParam ? (
-        <div className="community-thread-overlay" role="dialog" aria-modal="true" aria-labelledby="community-thread-heading">
-          <header className="community-thread-toolbar">
-            <button type="button" className="btn btn-ghost btn-sm community-thread-back" onClick={closeMobileThread}>
-              ← Back
-            </button>
-            <h2 id="community-thread-heading" className="community-thread-title">
-              {overlayPost?.author ? `Post · ${overlayPost.author}` : "Post"}
-            </h2>
-          </header>
-          <div className="community-thread-scroll">
-            {overlayPost ? (
-              <article className="tile post-card community-thread-article" id={`thread-post-${overlayPost.id}`}>
-                <PostCardBody
-                  post={overlayPost}
-                  canModerateDelete={(isAdmin || overlayPost.authorId === currentUser?.id) && !!onDeletePost}
-                  forceExpandedBody
-                  currentUser={currentUser}
-                  onDeletePost={() => onDeletePost?.(overlayPost)}
-                  onReact={onReact}
-                  onComment={onComment}
-                  onReactComment={onReactComment}
-                  onDeleteComment={onDeleteComment}
-                  openPostReactors={() =>
-                    setRxModal({
-                      open: true,
-                      title: "Post reactions",
-                      path: `/community/posts/${overlayPost.id}/reactors`
-                    })}
-                  openCommentReactors={(commentId) =>
-                    setRxModal({
-                      open: true,
-                      title: "Comment reactions",
-                      path: `/community/comments/${commentId}/reactors`
-                    })}
-                />
-              </article>
-            ) : (
-              <p className="muted community-thread-missing">
-                Could not load this post. Tap <strong>← Back</strong> and pull to refresh the feed if it was removed.
-              </p>
-            )}
-          </div>
-        </div>
-      ) : null}
+      {isCommunityNarrow && mobileThreadParam && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              className="community-thread-overlay"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="community-thread-heading"
+            >
+              <header className="community-thread-toolbar">
+                <button type="button" className="btn btn-ghost btn-sm community-thread-back" onClick={closeMobileThread}>
+                  ← Back
+                </button>
+                <h2 id="community-thread-heading" className="community-thread-title">
+                  {overlayPost?.author ? `Post · ${overlayPost.author}` : "Post"}
+                </h2>
+              </header>
+              <div className="community-thread-scroll">
+                {overlayPost ? (
+                  <article className="tile post-card community-thread-article" id={`thread-post-${overlayPost.id}`}>
+                    <PostCardBody
+                      post={overlayPost}
+                      canModerateDelete={(isAdmin || overlayPost.authorId === currentUser?.id) && !!onDeletePost}
+                      forceExpandedBody
+                      currentUser={currentUser}
+                      onDeletePost={() => onDeletePost?.(overlayPost)}
+                      onReact={onReact}
+                      onComment={onComment}
+                      onReactComment={onReactComment}
+                      onDeleteComment={onDeleteComment}
+                      openPostReactors={() =>
+                        setRxModal({
+                          open: true,
+                          title: "Post reactions",
+                          path: `/community/posts/${overlayPost.id}/reactors`
+                        })}
+                      openCommentReactors={(commentId) =>
+                        setRxModal({
+                          open: true,
+                          title: "Comment reactions",
+                          path: `/community/comments/${commentId}/reactors`
+                        })}
+                    />
+                  </article>
+                ) : (
+                  <p className="muted community-thread-missing">
+                    Could not load this post. Tap <strong>← Back</strong> and pull to refresh the feed if it was removed.
+                  </p>
+                )}
+              </div>
+            </div>,
+            document.body
+          )
+        : null}
       {rxModal.open ? (
         <ReactionActorsModal
           title={rxModal.title}

@@ -877,6 +877,7 @@ label.btn-secondary:hover {
 
 /* ------- Community mobile fullscreen thread (?thread=) — max-width syncs COMMUNITY_MOBILE_MAX_PX in CommunityPage.jsx ------- */
 
+html.community-thread-overlay-open,
 body.community-thread-overlay-open {
   overflow: hidden;
 }
@@ -896,11 +897,16 @@ body.community-thread-overlay-open {
 .community-thread-overlay {
   position: fixed;
   inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
   z-index: 95;
   display: flex;
   flex-direction: column;
   background: var(--body-bg-4, var(--surface));
   box-shadow: 0 -4px 24px rgba(13, 71, 161, 0.08);
+  overscroll-behavior: none;
 }
 
 .community-thread-toolbar {
@@ -935,6 +941,8 @@ body.community-thread-overlay-open {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
   padding: 14px;
   padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
 }
