@@ -115,6 +115,7 @@ export default function UserProfileModal({
         email: prefetch?.email,
         course: prefetch?.course,
         avatarUrl: prefetch?.avatarUrl ?? prefetch?.authorAvatar,
+        coverUrl: prefetch?.coverUrl,
         statusEmoji: prefetch?.statusEmoji,
         statusNote: prefetch?.statusNote,
         bio: prefetch?.bio,
@@ -189,7 +190,20 @@ export default function UserProfileModal({
 
           <div className="user-profile-modal-layout">
             <div className="user-profile-modal-main">
-              <div className="user-profile-banner" aria-hidden />
+              <div
+                className={`user-profile-banner${merged.coverUrl ? " user-profile-banner-has-cover" : ""}`}
+                style={
+                  merged.coverUrl
+                    ? {
+                        backgroundImage: `url(${mediaUrl(merged.coverUrl)})`,
+                        backgroundSize: "cover",
+                        backgroundPosition: "center center",
+                        backgroundRepeat: "no-repeat"
+                      }
+                    : undefined
+                }
+                aria-hidden
+              />
 
               <div className="user-profile-avatar-block">
                 <div className="user-profile-avatar-wrap">

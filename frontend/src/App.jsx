@@ -1197,6 +1197,21 @@ export default function App() {
     setNotice("Profile photo updated");
   }
 
+  async function uploadCover(file) {
+    const formData = new FormData();
+    formData.append("cover", file);
+    const res = await apiForm("/profile/cover", formData);
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.user) {
+      setUser(res.user);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+    }
+    setNotice("Cover updated");
+  }
+
   async function createAnnouncement() {
     const res = await api("/announcements", {
       method: "POST",
@@ -1410,6 +1425,7 @@ export default function App() {
               user={user}
               onProfileSave={saveProfile}
               onAvatarUpload={uploadAvatar}
+              onCoverUpload={uploadCover}
               setNotice={setNotice}
             />
           }

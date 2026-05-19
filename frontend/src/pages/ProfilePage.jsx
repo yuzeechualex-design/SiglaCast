@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 import AvatarEditModal from "../components/AvatarEditModal.jsx";
+import CoverEditModal from "../components/CoverEditModal.jsx";
 
 const AVAILABILITY_IDS = ["online", "idle", "dnd", "invisible"];
 const BIO_MAX_LEN = 500;
@@ -41,7 +42,7 @@ const AVAILABILITY_CHOICES = [
   }
 ];
 
-export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNotice }) {
+export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice }) {
   const [name, setName] = useState(user.name);
   const [statusEmoji, setStatusEmoji] = useState(() => user.statusEmoji || "");
   const [statusNote, setStatusNote] = useState(() => user.statusNote || "");
@@ -52,6 +53,8 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
   const [saving, setSaving] = useState(false);
   const [pendingAvatarFile, setPendingAvatarFile] = useState(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [pendingCoverFile, setPendingCoverFile] = useState(null);
+  const [coverUploading, setCoverUploading] = useState(false);
 
   useEffect(() => {
     setName(user.name);
@@ -59,7 +62,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
     setStatusEmoji(user.statusEmoji || "");
     setStatusNote(user.statusNote || "");
     setAvailability(normalizeAvailability(user.availability));
-  }, [user.name, user.avatarUrl, user.bio, user.statusEmoji, user.statusNote, user.availability]);
+  }, [user.name, user.avatarUrl, user.coverUrl, user.bio, user.statusEmoji, user.statusNote, user.availability]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -134,20 +137,73 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
     }
   }
 
+  function closeCoverEditor() {
+    if (!coverUploading) setPendingCoverFile(null);
+  }
+
+  function handleCoverPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setNotice("Please choose an image file.");
+      return;
+    }
+    setPendingCoverFile(file);
+  }
+
+  async function applyEditedCover(croppedFile) {
+    if (!onCoverUpload) return;
+    setCoverUploading(true);
+    try {
+      await onCoverUpload(croppedFile);
+    } finally {
+      setCoverUploading(false);
+    }
+  }
+
+  async function handleRemoveCover() {
+    if (!user.coverUrl) return;
+    if (!window.confirm("Remove your profile cover image?")) return;
+    await onProfileSave({ removeCover: true });
+  }
+
   function closeAvatarEditor() {
     if (!avatarUploading) setPendingAvatarFile(null);
   }
 
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
+  const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
 
   return (
     <section className="panel single">
       <div className="panel-head">
         <h2>👤 Profile</h2>
-        <p>Update your display name, bio, availability, custom status, password, and profile picture.</p>
+        <p>Update your cover, profile photo, display name, bio, availability, custom status, and password.</p>
       </div>
 
       <div className="profile-hero">
+        <div className="profile-cover-block">
+          <div
+            className={`profile-cover-preview${coverSrc ? " profile-cover-preview-has-image" : ""}`}
+            style={coverSrc ? { backgroundImage: `url(${coverSrc})` } : undefined}
+            role="img"
+            aria-label={coverSrc ? "Your profile cover preview" : "Default cover gradient"}
+          />
+          <div className="profile-cover-actions">
+            <label className="btn btn-secondary btn-sm">
+              Change cover
+              <input type="file" accept="image/*" className="sr-only" onChange={handleCoverPick} />
+            </label>
+            {user.coverUrl ? (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => void handleRemoveCover()}>
+                Remove cover
+              </button>
+            ) : null}
+          </div>
+          <p className="muted small profile-cover-hint">Wide banner shown behind your avatar when others view your profile.</p>
+        </div>
+
         <div className="profile-avatar-wrap">
           {avatarSrc ? (
             <img className="profile-avatar" src={avatarSrc} alt="" />
@@ -161,6 +217,15 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
         </div>
         <p className="profile-email">{user.email}</p>
       </div>
+
+      {pendingCoverFile ? (
+        <CoverEditModal
+          file={pendingCoverFile}
+          uploading={coverUploading}
+          onClose={closeCoverEditor}
+          onApply={applyEditedCover}
+        />
+      ) : null}
 
       {pendingAvatarFile ? (
         <AvatarEditModal

@@ -1380,7 +1380,8 @@ app.get("/api/auth/me", authenticate, (req, res) => {
 
 app.patch("/api/profile", authenticate, async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio } = req.body || {};
+    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio, removeCover } =
+      req.body || {};
     const updates = {};
     const trimmedName = name !== undefined ? String(name).trim() : "";
     if (trimmedName) updates.name = trimmedName;
@@ -1398,6 +1399,9 @@ app.patch("/api/profile", authenticate, async (req, res) => {
     if (bio !== undefined) {
       const b = String(bio).trim();
       updates.bio = b ? b.slice(0, 500) : null;
+    }
+    if (removeCover === true) {
+      updates.cover_url = null;
     }
     if (newPassword) {
       if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
@@ -1425,6 +1429,23 @@ app.post("/api/profile/avatar", authenticate, (req, res, next) => {
     if (!req.file) return res.status(400).json({ error: "No image file provided" });
     const publicUrl = await uploadToBucket("avatars", req.file);
     const { data, error } = await supabase.from("users").update({ avatar_url: publicUrl }).eq("id", req.user.id).select().maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ user: authUserPayload(data) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/profile/cover", authenticate, (req, res, next) => {
+  uploadImage.single("cover")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No image file provided" });
+    const publicUrl = await uploadToBucket("avatars", req.file);
+    const { data, error } = await supabase.from("users").update({ cover_url: publicUrl }).eq("id", req.user.id).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     res.json({ user: authUserPayload(data) });
   } catch (e) {
@@ -1840,7 +1861,7 @@ app.delete("/api/announcements/:id", authenticate, requireAdmin, async (req, res
 app.get("/api/admin/users", authenticate, requireAdmin, async (_, res) => {
   const { data, error } = await supabase
     .from("users")
-    .select("id, role, name, email, course, avatar_url, bio, created_at, availability")
+    .select("id, role, name, email, course, avatar_url, cover_url, bio, created_at, availability")
     .order("created_at", { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
   res.json(
@@ -2073,7 +2094,7 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const cleaned = q.replace(/[%_\\]/g, "").trim();
   if (!cleaned) return res.json([]);
   const pattern = `%${cleaned}%`;
-  const selectCols = "id, name, email, role, course, avatar_url, bio, availability";
+  const selectCols = "id, name, email, role, course, avatar_url, cover_url, bio, availability";
   const [byName, byEmail, byCourse] = await Promise.all([
     supabase
       .from("users")

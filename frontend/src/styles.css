@@ -1062,6 +1062,37 @@ body.community-thread-overlay-open {
   margin-bottom: 16px;
 }
 
+.profile-cover-block {
+  width: 100%;
+}
+
+.profile-cover-preview {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  max-height: 180px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: linear-gradient(125deg, var(--blue-950, #0b1e4a), var(--blue-700) 40%, #7c3aed 78%, var(--yellow-500));
+}
+
+.profile-cover-preview-has-image {
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
+.profile-cover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+  align-items: center;
+}
+
+.profile-cover-hint {
+  margin: 4px 0 0 !important;
+}
+
 .profile-avatar-wrap {
   display: flex;
   align-items: center;
@@ -1100,6 +1131,21 @@ body.community-thread-overlay-open {
 .avatar-edit-modal.modal-card {
   width: min(440px, 100%);
   max-height: min(92vh, calc(100dvh - 32px));
+}
+
+.modal-card.cover-edit-modal {
+  width: min(520px, 100%);
+  max-height: min(92vh, calc(100dvh - 32px));
+}
+
+.cover-edit-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 12px;
+  box-shadow:
+    inset 0 0 0 1px rgba(31, 94, 199, 0.15),
+    0 12px 32px rgba(13, 71, 161, 0.15);
 }
 
 .avatar-edit-body {
@@ -2788,8 +2834,18 @@ textarea.profile-bio-input::placeholder {
 }
 
 .user-profile-banner {
+  position: relative;
   height: 92px;
+  overflow: hidden;
   background: linear-gradient(125deg, var(--blue-950, #0b1e4a), var(--blue-700) 40%, #7c3aed 78%, var(--yellow-500));
+}
+
+.user-profile-banner-has-cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent 40%, rgba(0, 0, 0, 0.38));
 }
 
 .user-profile-avatar-block {

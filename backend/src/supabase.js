@@ -21,6 +21,7 @@ export function toPublicUser(row) {
     email: row.email,
     course: row.course || null,
     avatarUrl: row.avatar_url || null,
+    coverUrl: row.cover_url || null,
     statusEmoji: row.status_emoji || null,
     statusNote: row.status_note || null,
     bio: row.bio || null
