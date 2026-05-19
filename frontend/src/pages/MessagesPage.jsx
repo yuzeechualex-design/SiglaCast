@@ -453,6 +453,18 @@ export default function MessagesPage({
                           <span className="nav-ping chat-dropdown-ping">{incomingFriendCount}</span>
                         ) : null}
                       </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="chat-plus-item"
+                        aria-pressed={messagesArchivedView}
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          onToggleMessagesArchived?.();
+                        }}
+                      >
+                        {messagesArchivedView ? "✉️ Active chats" : "📦 Archived chats"}
+                      </button>
                     </>
                   ) : plusMenuPane === "apps" ? (
                     <>
@@ -562,17 +574,6 @@ export default function MessagesPage({
                 </div>
               ) : null}
             </div>
-          </div>
-
-          <div className="sidebar-archive-toolbar">
-            <button
-              type="button"
-              className={`btn btn-sm archive-toolbar-toggle ${messagesArchivedView ? "btn-primary" : "btn-ghost"}`}
-              onClick={() => onToggleMessagesArchived?.()}
-              aria-pressed={messagesArchivedView}
-            >
-              {messagesArchivedView ? "✉️ Active chats" : "📦 Archived"}
-            </button>
           </div>
 
           <form
