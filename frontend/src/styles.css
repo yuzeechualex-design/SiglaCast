@@ -1681,6 +1681,18 @@ input.profile-status-emoji {
   color: var(--ink-600);
 }
 
+.compose-plus-item-active {
+  background: rgba(124, 92, 255, 0.12) !important;
+  outline: 1px solid rgba(124, 92, 255, 0.35);
+}
+
+.sigla-compose-hint {
+  padding: 8px 14px;
+  margin: 0 12px 8px;
+  border-radius: 10px;
+  border: 1px dashed var(--line);
+}
+
 .compose-plus-item:hover {
   background: rgba(37, 99, 235, 0.08);
 }

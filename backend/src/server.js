@@ -31,6 +31,8 @@ const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
 const USERPHONE_GUEST_ID = "_userphone_guest";
+/** Bot user row for SiglaCast AI replies in group/DM threads (migration 0009). */
+const SIGLACAST_AI_USER_ID = "_siglacast_ai";
 
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
 // 25 MB cap — large enough for original-resolution camera shots without re-compression.
@@ -617,15 +619,30 @@ async function decorateChatMessages(rows, viewerId) {
     const sender =
       row.from_user_id === USERPHONE_GUEST_ID ? null : senderMap.get(row.from_user_id);
     const rx = reactionsByMessage.get(row.id) || { breakdown: {}, mine: null };
+    const isGuestBridge = row.from_user_id === USERPHONE_GUEST_ID;
+    const isSiglaAi = row.from_user_id === SIGLACAST_AI_USER_ID;
     return {
       ...serializeChatMessage(row, viewerId),
-      author: row.from_user_id === USERPHONE_GUEST_ID ? "Anonymous" : (sender?.name || "Unknown"),
-      authorAvatar: row.from_user_id === USERPHONE_GUEST_ID ? null : (sender?.avatar_url || null),
+      author: isGuestBridge ? "Anonymous" : isSiglaAi ? "SiglaCast AI" : (sender?.name || "Unknown"),
+      authorAvatar: isGuestBridge || isSiglaAi ? null : (sender?.avatar_url || null),
       reactionBreakdown: row.is_unsent ? {} : rx.breakdown,
       myReaction: row.is_unsent ? null : rx.mine,
       replyTo: row.reply_to_id ? (replyMap.get(row.reply_to_id) || null) : null
     };
   });
+}
+
+/** DM thread rows: pairwise human messages plus SiglaCast AI replies bound to either participant (`to_user_id`). */
+async function fetchDmMessagesRaw(me, otherId) {
+  const { data } = await supabase
+    .from("messages")
+    .select("*")
+    .is("conversation_id", null)
+    .or(
+      `and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${otherId})`
+    )
+    .order("created_at", { ascending: true });
+  return data || [];
 }
 
 /** Max time to stay in the Userphone match queue before auto-dropping to idle (ms). */
@@ -798,8 +815,14 @@ function serializeUserphoneMessages(rows, viewerId) {
     text: row.text || "",
     fromMe: row.from_user_id === viewerId,
     createdAt: row.created_at,
-    author: row.from_user_id === viewerId ? "You" : "Anonymous",
-    anonymous: true
+    author:
+      row.from_user_id === SIGLACAST_AI_USER_ID
+        ? "SiglaCast AI"
+        : row.from_user_id === viewerId
+          ? "You"
+          : "Anonymous",
+    anonymous:
+      row.from_user_id !== viewerId && row.from_user_id !== SIGLACAST_AI_USER_ID ? true : false
   }));
 }
 
@@ -987,6 +1010,7 @@ async function getGroupThreadPayload(gid, me) {
 async function relayGroupBridgeMessage(insertedRow) {
   if (!insertedRow?.conversation_id || insertedRow.bridge_mirror) return;
   if (insertedRow.from_user_id === USERPHONE_GUEST_ID) return;
+  if (insertedRow.from_user_id === SIGLACAST_AI_USER_ID) return;
   const gid = insertedRow.conversation_id;
   const session = await fetchActiveBridgeSessionForConversation(gid);
   if (!session?.id || session.ended_at) return;
@@ -1079,63 +1103,119 @@ Prefer matching the user’s language (English, Filipino/Bisaya, Taglish okay). 
 
 Personalization appended below is ONLY for rapport (name + role)—not access to grades or accounts.`;
 
+const SIGLA_THREAD_TRANSCRIPT_NOTE = `\nTranscript convention: Participants appear as prefixed lines (“You:”, member names, “Anonymous” from Userphone or bridge, or Sigla Assistant’s earlier replies marked assistant role). Speak as Sigla Assistant; answer the MOST RECENT user message(s) naturally.`;
+
+function compactGroqUserAssistantRuns(msgs) {
+  const out = [];
+  for (const m of msgs || []) {
+    const role = m.role;
+    const content = typeof m.content === "string" ? m.content.trim() : "";
+    if (!content) continue;
+    const prev = out[out.length - 1];
+    if (prev && prev.role === "user" && role === "user") prev.content += "\n\n" + content;
+    else out.push({ role, content });
+  }
+  return out;
+}
+
+function transcriptTurnsFromDecorated(decorated) {
+  /** @type {{role:string,content:string}[]} */
+  const turns = [];
+  for (const m of decorated || []) {
+    if (m.isUnsent) continue;
+    let text = typeof m.text === "string" ? m.text.trim() : "";
+    if (!text && m.attachment) text = m.attachment.isImage ? "📷 [image]" : "📁 [file]";
+    if (!text) continue;
+    if (m.fromUserId === SIGLACAST_AI_USER_ID) turns.push({ role: "assistant", content: text });
+    else if (m.fromUserId === USERPHONE_GUEST_ID || m.author === "Anonymous") {
+      turns.push({ role: "user", content: `Anonymous: ${text}` });
+    } else if (m.fromMe === true || m.author === "You") turns.push({ role: "user", content: `You: ${text}` });
+    else {
+      const nm = typeof m.author === "string" && m.author.trim() ? m.author : "Member";
+      turns.push({ role: "user", content: `${nm}: ${text}` });
+    }
+  }
+  return compactGroqUserAssistantRuns(turns);
+}
+
+function anonUserphoneRowsToGroqTurns(rows, viewerId) {
+  /** @type {{role:string,content:string}[]} */
+  const turns = [];
+  for (const row of rows || []) {
+    const text = String(row.text || "").trim();
+    if (!text) continue;
+    if (row.from_user_id === SIGLACAST_AI_USER_ID) turns.push({ role: "assistant", content: text });
+    else if (row.from_user_id === viewerId) turns.push({ role: "user", content: `You: ${text}` });
+    else turns.push({ role: "user", content: `Anonymous: ${text}` });
+  }
+  return compactGroqUserAssistantRuns(turns);
+}
+
+/** Base prompt + threaded-chat instructions + personalization (Groq system message). */
+function buildSiglaContextualPrompt(reqUser) {
+  const safeName = String(reqUser?.name || "Student")
+    .slice(0, 80)
+    .replace(/\\/g, " ")
+    .replace(/"/g, "'");
+  return `${SIGLA_ASSISTANT_SYSTEM_PROMPT}${SIGLA_THREAD_TRANSCRIPT_NOTE}\nSigned-in user role (for rapport): ${reqUser?.role}. Preferred name/reference: "${safeName}".`;
+}
+
+async function groqCompletion(systemContent, openAiStyleMessages) {
+  if (!GROQ_API_KEY || !String(GROQ_API_KEY).trim()) {
+    return {
+      error: "Sigla Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
+    };
+  }
+  const groqPayload = {
+    model: GROQ_MODEL,
+    messages: [{ role: "system", content: systemContent }, ...openAiStyleMessages],
+    max_tokens: 2048,
+    temperature: 0.75
+  };
+  const groqRes = await fetch(GROQ_API_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${GROQ_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(groqPayload)
+  });
+  const data = await groqRes.json().catch(() => ({}));
+  if (!groqRes.ok) {
+    const msg =
+      data?.error?.message ||
+      data?.message ||
+      (typeof data?.error === "string" ? data.error : null) ||
+      `Groq request failed (${groqRes.status})`;
+    console.warn("[assistant/groq]", groqRes.status, msg);
+    return { error: msg };
+  }
+  const reply =
+    data?.choices?.[0]?.message?.content?.trim?.() ||
+    (typeof data?.choices?.[0]?.text === "string" ? data.choices[0].text.trim() : "");
+  if (!reply) return { error: "Empty response from Sigla Assistant." };
+  return {
+    reply,
+    model: typeof data?.model === "string" ? data.model : GROQ_MODEL
+  };
+}
+
 app.post("/api/assistant/chat", authenticate, async (req, res) => {
   try {
-    if (!GROQ_API_KEY || !String(GROQ_API_KEY).trim()) {
-      return res.status(503).json({
-        error:
-          "Sigla Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
-      });
-    }
-
     const userTurns = sanitizeGroqAssistantMessages(req.body?.messages);
     const lastUser = [...userTurns].reverse().find((m) => m.role === "user");
     if (!lastUser) {
       return res.status(400).json({ error: "Send at least one user message." });
     }
 
-    const safeName = String(req.user.name || "Student")
-      .slice(0, 80)
-      .replace(/\\/g, " ")
-      .replace(/"/g, "'");
-    const contextualSystem = `${SIGLA_ASSISTANT_SYSTEM_PROMPT}\nSigned-in user role (for rapport): ${req.user.role}. Preferred name/reference: "${safeName}".`;
+    const contextualSystem = buildSiglaContextualPrompt(req.user);
 
-    const groqPayload = {
-      model: GROQ_MODEL,
-      messages: [{ role: "system", content: contextualSystem }, ...userTurns],
-      max_tokens: 2048,
-      temperature: 0.75
-    };
-
-    const groqRes = await fetch(GROQ_API_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${GROQ_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(groqPayload)
-    });
-
-    const data = await groqRes.json().catch(() => ({}));
-    if (!groqRes.ok) {
-      const msg =
-        data?.error?.message ||
-        data?.message ||
-        (typeof data?.error === "string" ? data.error : null) ||
-        `Groq request failed (${groqRes.status})`;
-      console.warn("[assistant/groq]", groqRes.status, msg);
-      return res.status(502).json({ error: msg });
+    const result = await groqCompletion(contextualSystem, userTurns);
+    if (result?.error) {
+      const code = String(result.error).includes("unavailable") ? 503 : 502;
+      return res.status(code).json({ error: result.error });
     }
-
-    const reply =
-      data?.choices?.[0]?.message?.content?.trim?.() ||
-      (typeof data?.choices?.[0]?.text === "string" ? data.choices[0].text.trim() : "");
-    if (!reply) return res.status(502).json({ error: "Empty response from Sigla Assistant." });
-
-    res.json({
-      reply,
-      model: typeof data?.model === "string" ? data.model : GROQ_MODEL
-    });
+    res.json({ reply: result.reply, model: result.model });
   } catch (e) {
     console.error("[assistant]", e.message);
     res.status(500).json({ error: e.message || "Assistant failed" });
@@ -1881,6 +1961,52 @@ app.post("/api/userphone/:sessionId/messages", authenticate, async (req, res) =>
   res.status(201).json({ message: msg });
 });
 
+/** Ask SiglaCast AI inside a matched 1-on-1 Userphone — shows as “SiglaCast AI” bubbles for both users. */
+app.post("/api/userphone/:sessionId/messages/sigla-ai", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const sessionId = req.params.sessionId;
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Message text is required" });
+    const session = await fetchActiveSoloUserphoneSession(me);
+    if (!session || session.id !== sessionId) {
+      return res.status(400).json({ error: "No active anonymous call" });
+    }
+    if (session.participant_a !== me && session.participant_b !== me) {
+      return res.status(403).json({ error: "Not in this session" });
+    }
+
+    const upId = `upm${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { error: upErr } = await supabase
+      .from("anon_userphone_messages")
+      .insert({ id: upId, session_id: sessionId, from_user_id: me, text });
+    if (upErr) return res.status(400).json({ error: upErr.message });
+
+    const { data: anonRows } = await supabase
+      .from("anon_userphone_messages")
+      .select("*")
+      .eq("session_id", sessionId)
+      .order("created_at", { ascending: true });
+    const transcript = anonUserphoneRowsToGroqTurns(anonRows || [], me);
+
+    const g = await groqCompletion(buildSiglaContextualPrompt(req.user), transcript);
+    if (g.error) return res.status(502).json({ error: g.error });
+
+    const aiId = `upm${Date.now()}-sigla-${Math.random().toString(36).slice(2, 8)}`;
+    const { error: aiErr } = await supabase.from("anon_userphone_messages").insert({
+      id: aiId,
+      session_id: sessionId,
+      from_user_id: SIGLACAST_AI_USER_ID,
+      text: g.reply
+    });
+    if (aiErr) return res.status(400).json({ error: aiErr.message });
+
+    res.json(await buildUserphoneState(me));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 // Messaging + friends
 app.get("/api/users/search", authenticate, async (req, res) => {
   const me = req.user.id;
@@ -1892,9 +2018,27 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const pattern = `%${cleaned}%`;
   const selectCols = "id, name, email, role, course, avatar_url";
   const [byName, byEmail, byCourse] = await Promise.all([
-    supabase.from("users").select(selectCols).neq("id", me).ilike("name", pattern).limit(12),
-    supabase.from("users").select(selectCols).neq("id", me).ilike("email", pattern).limit(12),
-    supabase.from("users").select(selectCols).neq("id", me).ilike("course", pattern).limit(12)
+    supabase
+      .from("users")
+      .select(selectCols)
+      .neq("id", me)
+      .neq("id", SIGLACAST_AI_USER_ID)
+      .ilike("name", pattern)
+      .limit(12),
+    supabase
+      .from("users")
+      .select(selectCols)
+      .neq("id", me)
+      .neq("id", SIGLACAST_AI_USER_ID)
+      .ilike("email", pattern)
+      .limit(12),
+    supabase
+      .from("users")
+      .select(selectCols)
+      .neq("id", me)
+      .neq("id", SIGLACAST_AI_USER_ID)
+      .ilike("course", pattern)
+      .limit(12)
   ]);
   const firstErr = [byName, byEmail, byCourse].find((r) => r.error)?.error;
   if (firstErr) return res.status(400).json({ error: firstErr.message });
@@ -2166,13 +2310,8 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
   const otherId = req.params.userId;
   const other = await fetchUserById(otherId);
   if (!other) return res.status(404).json({ error: "User not found" });
-  const { data: msgs } = await supabase
-    .from("messages")
-    .select("*")
-    .is("conversation_id", null)
-    .or(`and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`)
-    .order("created_at", { ascending: true });
-  const unreadIds = (msgs || []).filter((m) => m.to_user_id === me && !m.read).map((m) => m.id);
+  const msgs = await fetchDmMessagesRaw(me, otherId);
+  const unreadIds = msgs.filter((m) => m.to_user_id === me && !m.read).map((m) => m.id);
   if (unreadIds.length) await supabase.from("messages").update({ read: true }).in("id", unreadIds);
   const onlineSet = await presenceOnlineSetForUserIds([otherId]);
   const [{ data: incomingReq }, { data: outgoingReq }] = await Promise.all([
@@ -2230,7 +2369,9 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       const sameThread = target
         && !target.conversation_id
         && ((target.from_user_id === me && target.to_user_id === otherId) ||
-            (target.from_user_id === otherId && target.to_user_id === me));
+            (target.from_user_id === otherId && target.to_user_id === me) ||
+            (target.from_user_id === SIGLACAST_AI_USER_ID &&
+              (target.to_user_id === me || target.to_user_id === otherId)));
       if (sameThread) replyToId = target.id;
     }
 
@@ -2264,6 +2405,130 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/** Ask SiglaCast AI inside a 1-on-1 DM thread — persists your message + Sigla replies for both participants (two mirrored rows per answer). */
+app.post("/api/messages/with/:userId/sigla-ai", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const otherId = req.params.userId;
+    if (otherId === me) return res.status(400).json({ error: "Cannot message yourself" });
+    if (otherId === SIGLACAST_AI_USER_ID) return res.status(400).json({ error: "Invalid recipient" });
+
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Ask Sigla AI with a short text prompt." });
+
+    const other = await fetchUserById(otherId);
+    if (!other) return res.status(404).json({ error: "User not found" });
+
+    let replyToId = null;
+    const rawReplyTo = req.body?.replyToId ? String(req.body.replyToId) : "";
+    if (rawReplyTo) {
+      const { data: target } = await supabase
+        .from("messages")
+        .select("id, from_user_id, to_user_id, conversation_id")
+        .eq("id", rawReplyTo)
+        .maybeSingle();
+      const sameThread = target
+        && !target.conversation_id
+        && ((target.from_user_id === me && target.to_user_id === otherId) ||
+          (target.from_user_id === otherId && target.to_user_id === me) ||
+          (target.from_user_id === SIGLACAST_AI_USER_ID &&
+            (target.to_user_id === me || target.to_user_id === otherId)));
+      if (sameThread) replyToId = target.id;
+    }
+
+    const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: message, error } = await supabase
+      .from("messages")
+      .insert({
+        id,
+        from_user_id: me,
+        to_user_id: otherId,
+        text,
+        read: false,
+        reply_to_id: replyToId,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null
+      })
+      .select()
+      .maybeSingle();
+    if (error || !message) return res.status(400).json({ error: error?.message || "Could not insert message." });
+    await broker.publish("message.sent", { id, fromUserId: me, toUserId: otherId });
+    await bumpAggregatedNotification({
+      userId: otherId,
+      sourceKey: `dm:${me}`,
+      kind: "dm",
+      textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`,
+      linkPath: `/messages?dm=${encodeURIComponent(me)}`
+    });
+    if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me, `/messages?dm=${encodeURIComponent(me)}`);
+
+    let rawThread = await fetchDmMessagesRaw(me, otherId);
+    let decorated = await decorateChatMessages(rawThread, me);
+    let transcript = transcriptTurnsFromDecorated(decorated);
+
+    const g = await groqCompletion(buildSiglaContextualPrompt(req.user), transcript);
+    if (g.error) return res.status(502).json({ error: g.error });
+
+    const aiA = `msg${Date.now()}-a-${Math.random().toString(36).slice(2, 9)}`;
+    const aiB = `msg${Date.now()}-b-${Math.random().toString(36).slice(2, 9)}`;
+    const { error: aiErr } = await supabase.from("messages").insert([
+      {
+        id: aiA,
+        from_user_id: SIGLACAST_AI_USER_ID,
+        to_user_id: me,
+        text: g.reply,
+        read: false,
+        reply_to_id: null,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        bridge_mirror: false
+      },
+      {
+        id: aiB,
+        from_user_id: SIGLACAST_AI_USER_ID,
+        to_user_id: otherId,
+        text: g.reply,
+        read: false,
+        reply_to_id: null,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        bridge_mirror: false
+      }
+    ]);
+    if (aiErr) return res.status(400).json({ error: aiErr.message });
+
+    rawThread = await fetchDmMessagesRaw(me, otherId);
+    decorated = await decorateChatMessages(rawThread, me);
+
+    /** Drop duplicate mirrored Sigla replies (same text, same assistant, within ~4s). */
+    const folded = [];
+    for (let i = 0; i < decorated.length; i++) {
+      const cur = decorated[i];
+      folded.push(cur);
+      const nx = decorated[i + 1];
+      if (
+        nx &&
+        cur.fromUserId === SIGLACAST_AI_USER_ID &&
+        nx.fromUserId === SIGLACAST_AI_USER_ID &&
+        cur.text === nx.text &&
+        new Date(nx.createdAt).getTime() - new Date(cur.createdAt).getTime() < 5000
+      ) {
+        i += 1;
+      }
+    }
+
+    res.json({ messages: folded });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -2518,6 +2783,91 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+/** Ask SiglaCast AI inside a group — persists your bubble + assistant reply into this thread for everyone (not mirrored across Userphone bridge). */
+app.post("/api/groups/:id/messages/sigla-ai", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const gid = req.params.id;
+    if (!(await ensureGroupMember(gid, me))) return res.status(403).json({ error: "You are not a member of this group" });
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Ask Sigla AI with a short text prompt." });
+
+    let replyToId = null;
+    const rawReplyTo = req.body?.replyToId ? String(req.body.replyToId) : "";
+    if (rawReplyTo) {
+      const { data: target } = await supabase
+        .from("messages")
+        .select("id, conversation_id")
+        .eq("id", rawReplyTo)
+        .maybeSingle();
+      if (target && target.conversation_id === gid) replyToId = target.id;
+    }
+
+    const id = `msg${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const { data: message, error } = await supabase
+      .from("messages")
+      .insert({
+        id,
+        conversation_id: gid,
+        from_user_id: me,
+        to_user_id: null,
+        text,
+        read: false,
+        reply_to_id: replyToId,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        bridge_mirror: false
+      })
+      .select()
+      .maybeSingle();
+    if (error || !message) return res.status(400).json({ error: error?.message || "Could not insert message." });
+    await relayGroupBridgeMessage(message);
+    await broker.publish("message.sent", { id, fromUserId: me, conversationId: gid });
+    if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me, `/messages?group=${encodeURIComponent(gid)}`);
+
+    const { data: allRows } = await supabase
+      .from("messages")
+      .select("*")
+      .eq("conversation_id", gid)
+      .order("created_at", { ascending: true });
+    const decorated = await decorateChatMessages(allRows || [], me);
+    const transcript = transcriptTurnsFromDecorated(decorated);
+
+    const g = await groqCompletion(buildSiglaContextualPrompt(req.user), transcript);
+    if (g.error) return res.status(502).json({ error: g.error });
+
+    const aiMsgId = `msg${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+    const { error: aiErr } = await supabase.from("messages").insert({
+      id: aiMsgId,
+      conversation_id: gid,
+      from_user_id: SIGLACAST_AI_USER_ID,
+      to_user_id: null,
+      text: g.reply,
+      read: false,
+      reply_to_id: null,
+      bridge_mirror: false,
+      attachment_url: null,
+      attachment_type: null,
+      attachment_name: null,
+      attachment_size: null
+    });
+    if (aiErr) return res.status(400).json({ error: aiErr.message });
+
+    const payload = await getGroupThreadPayload(gid, me);
+    if (payload.errorStatus === 403) return res.status(403).json({ error: payload.errorMessage });
+    if (payload.errorStatus === 404) return res.status(404).json({ error: payload.errorMessage });
+    res.json({
+      group: payload.group,
+      messages: payload.messages,
+      groupUserphone: payload.groupUserphone
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

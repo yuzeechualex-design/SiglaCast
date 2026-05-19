@@ -15,7 +15,6 @@ import AssistantPage from "./pages/AssistantPage.jsx";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
-const STORAGE_MESSAGES_APPS = "siglacast_messages_pinned_apps";
 
 export default function App() {
   const navigate = useNavigate();
@@ -69,23 +68,6 @@ export default function App() {
       return false;
     }
   });
-  const [messagePinnedApps, setMessagePinnedApps] = useState(() => {
-    try {
-      const raw = JSON.parse(localStorage.getItem(STORAGE_MESSAGES_APPS) || "{}");
-      return { assistantPinned: !!raw.assistantPinned };
-    } catch {
-      return { assistantPinned: false };
-    }
-  });
-  function pinAssistantInMessageList() {
-    setMessagePinnedApps((prev) => {
-      const next = { ...prev, assistantPinned: true };
-      try {
-        localStorage.setItem(STORAGE_MESSAGES_APPS, JSON.stringify(next));
-      } catch (_) { /* ignore */ }
-      return next;
-    });
-  }
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_USERPHONE_AUTO_QUEUE, userPhoneAutoReconnect ? "1" : "0");
@@ -294,29 +276,14 @@ export default function App() {
       lastMessage,
       unreadCount: 0
     };
-    const assistantRow = messagePinnedApps.assistantPinned
-      ? {
-          kind: "assistant",
-          id: "assistant",
-          user: { id: "assistant", name: "SiglaCast AI", email: "", course: "", avatarUrl: null },
-          isFriend: false,
-          lastMessage: {
-            text: "Homework hints, trivia, Filipino/English, SiglaCast help—say hi",
-            createdAt: new Date(0).toISOString(),
-            fromMe: false
-          },
-          unreadCount: 0
-        }
-      : null;
-    return [userphoneRow, ...(assistantRow ? [assistantRow] : []), ...(conversations || [])];
+    return [userphoneRow, ...(conversations || [])];
   }, [
     conversations,
     userPhoneState.phase,
     userPhoneState.messages,
     userPhoneState.waitExpiresAt,
     userphoneTick,
-    userPhoneAutoReconnect,
-    messagePinnedApps.assistantPinned
+    userPhoneAutoReconnect
   ]);
 
   async function loadCore() {
@@ -578,10 +545,10 @@ export default function App() {
     });
   }, [userPhoneState]);
 
-  // Poll the active thread every 3 seconds while the page is open (not Userphone / AI).
+  // Poll the active thread every 3 seconds while the page is open (not solo Userphone).
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;
-    if (activeChat.kind === "userphone" || activeChat.kind === "assistant") return undefined;
+    if (activeChat.kind === "userphone") return undefined;
     const interval = setInterval(async () => {
       const refreshed =
         activeChat.kind === "group"
@@ -798,7 +765,6 @@ export default function App() {
     if (
       activeChat?.kind !== "group" &&
       activeChat?.kind !== "userphone" &&
-      activeChat?.kind !== "assistant" &&
       activeChat?.user?.id === friendId
     ) {
       const thread = await api(`/messages/with/${friendId}`);
@@ -857,11 +823,6 @@ export default function App() {
         waitExpiresAt: next.waitExpiresAt ?? null,
         waitStartedAt: next.waitStartedAt ?? null
       });
-      setSearchResults([]);
-      await loadMessages();
-      return;
-    } else if (kind === "assistant") {
-      setActiveChat({ kind: "assistant", id: "assistant" });
       setSearchResults([]);
       await loadMessages();
       return;
@@ -944,10 +905,6 @@ export default function App() {
   // message via replyToId.
   async function sendChatMessage(text, file, replyToId = null) {
     if (!activeChat) return;
-    if (activeChat.kind === "assistant") {
-      setNotice("Use the SiglaCast AI chat box below to talk to the assistant.");
-      return;
-    }
     if (activeChat.kind === "userphone") {
       if (!activeChat.sessionId) {
         setNotice("Wait until you’re matched with someone.");
@@ -990,10 +947,73 @@ export default function App() {
     await loadMessages();
   }
 
+  /** SiglaCast AI replies inside this thread — everyone in the chat sees assistant bubbles like a participant. */
+  async function sendSiglaInActiveThread(text, replyToId = null) {
+    if (!activeChat) return;
+    const body = {
+      text: String(text || "").trim(),
+      replyToId: replyToId || undefined
+    };
+    if (!body.text) return;
+    if (activeChat.kind === "group") {
+      const gid = activeChat.group?.id;
+      if (!gid) return;
+      const res = await api(`/groups/${gid}/messages/sigla-ai`, { method: "POST", body });
+      if (res.error) {
+        setNotice(res.error);
+        return;
+      }
+      setActiveChat((prev) => ({
+        ...prev,
+        kind: "group",
+        group: res.group ?? prev.group,
+        messages: Array.isArray(res.messages) ? res.messages : [],
+        groupUserphone: res.groupUserphone ?? prev.groupUserphone
+      }));
+      await loadMessages();
+      return;
+    }
+    if (activeChat.kind === "dm") {
+      const peerId = activeChat.user?.id;
+      if (!peerId) return;
+      const res = await api(`/messages/with/${peerId}/sigla-ai`, { method: "POST", body });
+      if (res.error) {
+        setNotice(res.error);
+        return;
+      }
+      setActiveChat((prev) => ({
+        ...prev,
+        kind: "dm",
+        messages: Array.isArray(res.messages) ? res.messages : [],
+        user: prev.user,
+        isFriend: prev.isFriend,
+        incomingRequestId: prev.incomingRequestId,
+        outgoingRequestPending: prev.outgoingRequestPending
+      }));
+      await loadMessages();
+      return;
+    }
+    if (activeChat.kind === "userphone") {
+      const sid = activeChat.sessionId;
+      const phase = activeChat.phase || "idle";
+      if (!sid || phase !== "matched") {
+        setNotice("Match with someone on Userphone first—or use Sigla AI in a group/DM.");
+        return;
+      }
+      const res = await api(`/userphone/${sid}/messages/sigla-ai`, { method: "POST", body });
+      if (res.error) {
+        setNotice(res.error);
+        return;
+      }
+      applyUserPhoneServerPayload(res);
+      await loadMessages();
+    }
+  }
+
   // Soft-unsend one of my own messages. The thread is refreshed so the
   // tombstone ("This message was unsent") appears in place of the original.
   async function unsendMessage(message) {
-    if (!message?.id || activeChat?.kind === "userphone" || activeChat?.kind === "assistant") return;
+    if (!message?.id || activeChat?.kind === "userphone") return;
     const res = await api(`/messages/${message.id}`, { method: "DELETE" });
     if (res.error) {
       setNotice(res.error);
@@ -1107,7 +1127,7 @@ export default function App() {
   }
 
   async function reactToMessage(messageId, reaction) {
-    if (activeChat?.kind === "userphone" || activeChat?.kind === "assistant") return;
+    if (activeChat?.kind === "userphone") return;
     const res = await api(`/messages/${messageId}/react`, {
       method: "POST",
       body: { reaction: reaction === undefined ? "like" : reaction }
@@ -1129,7 +1149,7 @@ export default function App() {
 
   async function loadActiveAttachments() {
     if (!activeChat) return [];
-    if (activeChat.kind === "userphone" || activeChat.kind === "assistant") return [];
+    if (activeChat.kind === "userphone") return [];
     const url =
       activeChat.kind === "group"
         ? `/groups/${activeChat.group.id}/attachments`
@@ -1427,8 +1447,7 @@ export default function App() {
               onEndGroupUserphoneBridge={endGroupUserphoneBridge}
               userPhoneAutoReconnect={userPhoneAutoReconnect}
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
-              onPinAssistantApp={pinAssistantInMessageList}
-              assistantGroq={(messages) => api("/assistant/chat", { method: "POST", body: { messages } })}
+              onSendSiglaInActiveThread={sendSiglaInActiveThread}
             />
           }
         />

@@ -5,7 +5,6 @@ import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import ModalPortal from "../components/ModalPortal.jsx";
-import { AssistantChatCore } from "./AssistantPage.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -39,7 +38,7 @@ export default function MessagesPage({
   onSearchQueryEdited,
   onSearch,
   onAddFriend,
-  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone" | "assistant"
+  onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
@@ -62,13 +61,14 @@ export default function MessagesPage({
   onEndGroupUserphoneBridge,
   userPhoneAutoReconnect,
   setUserPhoneAutoReconnect,
-  onPinAssistantApp = () => {},
-  assistantGroq = null // (messages)=>Promise returning { reply?, error? }
+  onSendSiglaInActiveThread = async () => {}
 }) {
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
   const [composePlusOpen, setComposePlusOpen] = useState(false);
+  /** When enabled, Send asks SiglaCast AI and posts assistant bubbles into this chat. */
+  const [composeSiglaMode, setComposeSiglaMode] = useState(false);
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
   const [showCreateGroup, setShowCreateGroup] = useState(false);
@@ -113,12 +113,13 @@ export default function MessagesPage({
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
-  const isAssistant = activeChat?.kind === "assistant";
   const userphonePhase = isUserphone ? activeChat?.phase || "idle" : null;
   const gpu = isGroup ? activeChat?.groupUserphone : null;
   const groupUserphoneWaiting = gpu?.phase === "waiting";
   const groupUserphoneMatched = gpu?.phase === "matched";
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
+  /** DM/group always; solo Userphone only after a match so we can mirror anonymous + AI replies. */
+  const showThreadComposer = !!activeChat && (!isUserphone || userphonePhase === "matched");
 
   /** Must match backend USERPHONE_WAIT_MS / 1000 in server.js */
   const USERPHONE_QUEUE_SEC = 10;
@@ -149,6 +150,7 @@ export default function MessagesPage({
     setMenuOpen(false);
     setReplyTarget(null);
     setComposePlusOpen(false);
+    setComposeSiglaMode(false);
   }, [
     activeChat?.kind,
     activeChat?.user?.id,
@@ -169,7 +171,7 @@ export default function MessagesPage({
 
   // Jump to bottom when switching threads only (not on every poll / inbound message).
   useEffect(() => {
-    if (!activeChat || activeChat.kind === "assistant") return;
+    if (!activeChat) return;
     const id = requestAnimationFrame(() => {
       threadEndRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
     });
@@ -245,6 +247,28 @@ export default function MessagesPage({
     e.preventDefault();
     const text = draft.trim();
     if ((!text && !draftFile) || sending) return;
+
+    if (composeSiglaMode) {
+      if (!text) return;
+      if (draftFile) {
+        window.alert("Remove the attachment — Sigla replies are text-only in chat.");
+        return;
+      }
+      setSending(true);
+      try {
+        await onSendSiglaInActiveThread?.(text, replyTarget?.id || null);
+        requestAnimationFrame(() => {
+          threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+        });
+        setDraft("");
+        setReplyTarget(null);
+        if (fileRef.current) fileRef.current.value = "";
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
     setSending(true);
     await onSendMessage(text, draftFile, replyTarget?.id || null);
     requestAnimationFrame(() => {
@@ -357,7 +381,9 @@ export default function MessagesPage({
                       >
                         ← Back
                       </button>
-                      <p className="chat-apps-intro muted small">Pinned apps appear in your chat list.</p>
+                      <p className="chat-apps-intro muted small">
+                        Userphone is listed here as a shortcut. For SiglaCast AI, tap ＋ next to the message box in any group/DM/Userphone chat and toggle “✨ Sigla replies here”.
+                      </p>
                       <ul className="chat-apps-menu">
                         <li className="chat-app-row">
                           <div className="chat-app-meta">
@@ -373,25 +399,7 @@ export default function MessagesPage({
                               onOpenChat?.("userphone", "userphone");
                             }}
                           >
-                            Add
-                          </button>
-                        </li>
-                        <li className="chat-app-row">
-                          <div className="chat-app-meta">
-                            <strong>SiglaCast AI</strong>
-                            <span className="muted small">General-purpose AI assistant</span>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-primary btn-sm"
-                            onClick={() => {
-                              onPinAssistantApp?.();
-                              setPlusMenuOpen(false);
-                              setPlusMenuPane("main");
-                              onOpenChat?.("assistant", "assistant");
-                            }}
-                          >
-                            Add
+                            Open
                           </button>
                         </li>
                       </ul>
@@ -535,33 +543,25 @@ export default function MessagesPage({
             ) : (
               conversations.map((c) => {
                 const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
-                const isAssistantConv = c.kind === "assistant";
                 const target = c.kind === "group" ? c.group : c.user;
                 const isActive =
                   (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
                   (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
-                  (c.kind === "userphone" && activeChat?.kind === "userphone") ||
-                  (isAssistantConv && activeChat?.kind === "assistant");
+                  (c.kind === "userphone" && activeChat?.kind === "userphone");
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isAssistantConv ? "conv-assistant" : ""} ${isActive ? "active" : ""}`}
+                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
                     onClick={() =>
                       c.kind === "userphone"
                         ? onOpenChat("userphone", "userphone")
-                        : isAssistantConv
-                          ? onOpenChat("assistant", "assistant")
-                          : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
+                        : onOpenChat(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id)
                     }
                   >
                     {c.kind === "userphone" ? (
                       <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
                         📞
-                      </div>
-                    ) : isAssistantConv ? (
-                      <div className="msg-avatar sm placeholder conv-assistant-avatar" aria-hidden>
-                        ✨
                       </div>
                     ) : c.kind === "dm" ? (
                       renderAvatar(target, "sm", { showPresence: true })
@@ -571,13 +571,10 @@ export default function MessagesPage({
                     <div className="conv-item-body">
                       <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
                         {target?.name || "Unknown"}{" "}
-                        {!isDmOrPhone && !isAssistantConv ? (
-                          <span className="pill pill-muted small">group</span>
-                        ) : null}
+                        {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
                         {c.kind === "userphone" ? (
                           <span className="pill pill-muted small">anonymous</span>
                         ) : null}
-                        {isAssistantConv ? <span className="pill pill-muted small">app</span> : null}
                         {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
                       </strong>
                       {c.kind === "dm" && target?.statusNote ? (
@@ -617,11 +614,7 @@ export default function MessagesPage({
                     ← Back
                   </button>
                 ) : null}
-                {isAssistant ? (
-                  <div className="msg-avatar placeholder thread-assistant-icon" aria-hidden>
-                    ✨
-                  </div>
-                ) : isUserphone ? (
+                {isUserphone ? (
                   <div className="msg-avatar placeholder thread-userphone-icon" aria-hidden>
                     📞
                   </div>
@@ -631,21 +624,13 @@ export default function MessagesPage({
                   })
                 )}
                 <div className="thread-header-info">
-                  <strong className={!isGroup && !isUserphone && !isAssistant ? "user-line-name" : undefined}>
-                    {isAssistant
-                      ? "SiglaCast AI"
-                      : isUserphone
-                        ? "Userphone"
-                        : isGroup
-                          ? activeChat.group?.name
-                          : activeChat.user?.name}
-                    {!isGroup && !isUserphone && !isAssistant ? (
+                  <strong className={!isGroup && !isUserphone ? "user-line-name" : undefined}>
+                    {isUserphone ? "Userphone" : isGroup ? activeChat.group?.name : activeChat.user?.name}
+                    {!isGroup && !isUserphone ? (
                       <StatusEmojiChip emoji={activeChat.user?.statusEmoji} />
                     ) : null}
                   </strong>
-                  {isAssistant ? (
-                    <small>Open assistant—SiglaCast, homework hints, trivia, Filipino/English, and more.</small>
-                  ) : isUserphone ? (
+                  {isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
                     <small>{activeChat.group?.members?.length || 0} members</small>
@@ -657,10 +642,10 @@ export default function MessagesPage({
                   ) : (
                     <small>{activeChat.user?.email}</small>
                   )}
-                  {!isGroup && !isUserphone && !isAssistant && activeChat.isFriend ? (
+                  {!isGroup && !isUserphone && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>
                   ) : null}
-                  {!isGroup && !isUserphone && !isAssistant ? (
+                  {!isGroup && !isUserphone ? (
                     activeChat.incomingRequestId ? (
                       <span className="thread-header-inline-actions">
                         <button
@@ -700,7 +685,7 @@ export default function MessagesPage({
                 >
                   ↻
                 </button>
-                {!isUserphone && !isAssistant ? (
+                {!isUserphone ? (
                   <div className="thread-menu-wrap" ref={menuRef}>
                     <button
                       type="button"
@@ -788,11 +773,7 @@ export default function MessagesPage({
                 </div>
               ) : null}
 
-              {isAssistant ? (
-                <div className="messages-assistant-slot">
-                  <AssistantChatCore chatWithGroq={assistantGroq} />
-                </div>
-              ) : isUserphone && userphonePhase !== "matched" ? (
+              {isUserphone && userphonePhase !== "matched" ? (
                 <div className="userphone-cta-wrap">
                   {userphonePhase === "idle" ? (
                     <>
@@ -860,11 +841,11 @@ export default function MessagesPage({
                 <>
                   <div className="thread-messages">
                     {(activeChat.messages || []).map((m) => (
-                      <MessageBubble
-                        key={m.id}
-                        message={m}
-                        showAuthor={isGroup && !m.fromMe}
-                        minimal={isUserphone}
+                    <MessageBubble
+                      key={m.id}
+                      message={m}
+                      showAuthor={isGroup && !m.fromMe}
+                      minimal={isUserphone && m.author !== "SiglaCast AI"}
                         onReact={onReactToMessage}
                         onReply={handleReply}
                         onUnsend={handleUnsend}
@@ -884,7 +865,7 @@ export default function MessagesPage({
                 </>
               )}
 
-              {replyTarget && !isUserphone && !isAssistant ? (
+              {replyTarget && !isUserphone ? (
                 <div className="reply-banner">
                   <div className="reply-banner-info">
                     <span className="reply-banner-label">Replying to {replyTarget.author}</span>
@@ -901,9 +882,16 @@ export default function MessagesPage({
                 </div>
               ) : null}
 
-              {!isAssistant && (!isUserphone || userphonePhase === "matched") ? (
+              {composeSiglaMode && showThreadComposer ? (
+                <div className="sigla-compose-hint muted small">
+                  ✨ SiglaCast AI replies <strong>in this chat thread</strong> as a participant (everyone sees the same
+                  bubble). Attachments are ignored while this is on — toggle off via ＋.
+                </div>
+              ) : null}
+
+              {showThreadComposer ? (
               <form className="thread-compose" onSubmit={handleSend}>
-                {!isUserphone ? (
+                {showThreadComposer && !composeSiglaMode && !isUserphone ? (
                 <input
                   ref={fileRef}
                   type="file"
@@ -911,14 +899,14 @@ export default function MessagesPage({
                   onChange={pickAttachment}
                 />
                 ) : null}
-                {!isUserphone ? (
+                {showThreadComposer ? (
                 <div className="compose-plus-wrap" ref={composePlusRef}>
                   <button
                     type="button"
                     className="btn btn-icon"
                     aria-expanded={composePlusOpen}
                     aria-haspopup="menu"
-                    title="Apps & quick actions"
+                    title={composeSiglaMode ? "Menu (Sigla mode is on)" : "Apps & quick actions"}
                     onClick={() => setComposePlusOpen((o) => !o)}
                   >
                     ＋
@@ -941,7 +929,7 @@ export default function MessagesPage({
                             as Anonymous.
                           </span>
                         </button>
-                      ) : (
+                      ) : !isUserphone ? (
                         <button
                           type="button"
                           role="menuitem"
@@ -957,27 +945,35 @@ export default function MessagesPage({
                             Anonymous 1-on-1 queue when someone else is on Userphone too. Opens the Userphone tab.
                           </span>
                         </button>
+                      ) : (
+                        <p className="muted small compose-plus-item" style={{ margin: "4px 0 10px", paddingRight: "8px" }}>
+                          Anonymous Userphone pairing is active in this chat — use 📞 toolbar for bridge actions.
+                        </p>
                       )}
                       <button
                         type="button"
                         role="menuitem"
-                        className="compose-plus-item"
+                        className={`compose-plus-item ${composeSiglaMode ? "compose-plus-item-active" : ""}`}
                         onClick={() => {
                           setComposePlusOpen(false);
-                          onPinAssistantApp?.();
-                          onOpenChat?.("assistant", "assistant");
+                          setComposeSiglaMode((v) => !v);
+                          setDraftFile(null);
+                          if (fileRef.current) fileRef.current.value = "";
                         }}
                       >
-                        <span className="compose-plus-item-title">✨ SiglaCast AI</span>
+                        <span className="compose-plus-item-title">
+                          ✨ Sigla replies here {composeSiglaMode ? "(on)" : "(off)"}
+                        </span>
                         <span className="compose-plus-item-desc">
-                          General AI chat (homework help, trivia, Filipino/English, SiglaCast tips—pins sidebar if missing).
+                          Your sends go to SiglaCast AI until you turn this off — answers appear like normal messages from ✨
+                          SiglaCast AI.
                         </span>
                       </button>
                     </div>
                   ) : null}
                 </div>
                 ) : null}
-                {!isUserphone ? (
+                {showThreadComposer && !composeSiglaMode && !isUserphone ? (
                 <button
                   type="button"
                   className="btn btn-icon"
@@ -988,30 +984,32 @@ export default function MessagesPage({
                 </button>
                 ) : null}
                 {!isUserphone && draftFile ? (
-                  <div className="draft-file-chip">
-                    <span>📁 {draftFile.name}</span>
-                    <button
-                      type="button"
-                      className="draft-file-clear"
-                      onClick={() => {
-                        setDraftFile(null);
-                        if (fileRef.current) fileRef.current.value = "";
-                      }}
-                      title="Remove"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                <div className="draft-file-chip">
+                  <span>📁 {draftFile.name}</span>
+                  <button
+                    type="button"
+                    className="draft-file-clear"
+                    onClick={() => {
+                      setDraftFile(null);
+                      if (fileRef.current) fileRef.current.value = "";
+                    }}
+                    title="Remove"
+                  >
+                    ✕
+                  </button>
+                </div>
                 ) : null}
                 <MentionInput
                   value={draft}
                   onChange={setDraft}
                   placeholder={
-                    isUserphone
-                      ? "Message anonymously…"
-                      : isGroup
-                        ? `Message ${activeChat.group?.name}… use @ to mention`
-                        : `Message ${activeChat.user?.name}… use @ to mention`
+                    composeSiglaMode
+                      ? `Ask SiglaCast AI (${isUserphone ? "this anonymous chat" : isGroup ? activeChat.group?.name || "group" : activeChat.user?.name || "DM"})…`
+                      : isUserphone
+                        ? "Message anonymously…"
+                        : isGroup
+                          ? `Message ${activeChat.group?.name}… use @ to mention`
+                          : `Message ${activeChat.user?.name}… use @ to mention`
                   }
                 />
                 <button
@@ -1020,7 +1018,7 @@ export default function MessagesPage({
                   disabled={sending}
                   aria-label="Send message"
                 >
-                  {sending ? "…" : "➤"}
+                  {sending ? "…" : composeSiglaMode ? "✨" : "➤"}
                 </button>
               </form>
               ) : null}
