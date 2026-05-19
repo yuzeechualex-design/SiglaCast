@@ -22,7 +22,8 @@ export function toPublicUser(row) {
     course: row.course || null,
     avatarUrl: row.avatar_url || null,
     statusEmoji: row.status_emoji || null,
-    statusNote: row.status_note || null
+    statusNote: row.status_note || null,
+    bio: row.bio || null
   };
 }
 

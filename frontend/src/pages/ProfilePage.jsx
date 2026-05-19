@@ -3,6 +3,7 @@ import { mediaUrl } from "../services/api.js";
 import AvatarEditModal from "../components/AvatarEditModal.jsx";
 
 const AVAILABILITY_IDS = ["online", "idle", "dnd", "invisible"];
+const BIO_MAX_LEN = 500;
 
 function normalizeAvailability(raw) {
   const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
@@ -45,6 +46,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
   const [statusEmoji, setStatusEmoji] = useState(() => user.statusEmoji || "");
   const [statusNote, setStatusNote] = useState(() => user.statusNote || "");
   const [availability, setAvailability] = useState(() => normalizeAvailability(user.availability));
+  const [bio, setBio] = useState(() => user.bio || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -53,10 +55,11 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
 
   useEffect(() => {
     setName(user.name);
+    setBio(user.bio || "");
     setStatusEmoji(user.statusEmoji || "");
     setStatusNote(user.statusNote || "");
     setAvailability(normalizeAvailability(user.availability));
-  }, [user.name, user.avatarUrl, user.statusEmoji, user.statusNote, user.availability]);
+  }, [user.name, user.avatarUrl, user.bio, user.statusEmoji, user.statusNote, user.availability]);
 
   async function handleSave(e) {
     e.preventDefault();
@@ -77,8 +80,11 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
 
     const prevEmoji = user.statusEmoji || "";
     const prevNote = user.statusNote || "";
+    const prevBio = user.bio || "";
+    const bioTrimmed = bio.trim();
     if (emojiTrimmed !== prevEmoji) payload.statusEmoji = emojiTrimmed;
     if (noteTrimmed !== prevNote) payload.statusNote = noteTrimmed;
+    if (bioTrimmed !== prevBio) payload.bio = bioTrimmed;
 
     if (normalizeAvailability(availability) !== normalizeAvailability(user.availability)) {
       payload.availability = normalizeAvailability(availability);
@@ -138,7 +144,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
     <section className="panel single">
       <div className="panel-head">
         <h2>👤 Profile</h2>
-        <p>Update your display name, availability, custom status, password, and profile picture.</p>
+        <p>Update your display name, bio, availability, custom status, password, and profile picture.</p>
       </div>
 
       <div className="profile-hero">
@@ -168,6 +174,20 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, setNo
       <form className="composer profile-form" onSubmit={handleSave}>
         <label className="field-label">Display name</label>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Your name" />
+
+        <label className="field-label">About me</label>
+        <p className="muted small profile-field-hint">
+          Shown when someone opens your profile from Community or Messages ({BIO_MAX_LEN} characters max).
+        </p>
+        <textarea
+          className="profile-bio-input"
+          rows={4}
+          value={bio}
+          onChange={(e) => setBio(e.target.value.slice(0, BIO_MAX_LEN))}
+          placeholder="Tell others a bit about yourself…"
+          maxLength={BIO_MAX_LEN}
+          aria-label="Bio"
+        />
 
         <label className="field-label">Availability</label>
         <p className="muted small profile-field-hint">

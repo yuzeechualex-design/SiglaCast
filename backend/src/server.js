@@ -1380,7 +1380,7 @@ app.get("/api/auth/me", authenticate, (req, res) => {
 
 app.patch("/api/profile", authenticate, async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability } = req.body || {};
+    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio } = req.body || {};
     const updates = {};
     const trimmedName = name !== undefined ? String(name).trim() : "";
     if (trimmedName) updates.name = trimmedName;
@@ -1394,6 +1394,10 @@ app.patch("/api/profile", authenticate, async (req, res) => {
     if (statusNote !== undefined) {
       const nt = String(statusNote).trim();
       updates.status_note = nt ? nt.slice(0, 128) : null;
+    }
+    if (bio !== undefined) {
+      const b = String(bio).trim();
+      updates.bio = b ? b.slice(0, 500) : null;
     }
     if (newPassword) {
       if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
@@ -1836,7 +1840,7 @@ app.delete("/api/announcements/:id", authenticate, requireAdmin, async (req, res
 app.get("/api/admin/users", authenticate, requireAdmin, async (_, res) => {
   const { data, error } = await supabase
     .from("users")
-    .select("id, role, name, email, course, avatar_url, created_at, availability")
+    .select("id, role, name, email, course, avatar_url, bio, created_at, availability")
     .order("created_at", { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
   res.json(
@@ -2069,7 +2073,7 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const cleaned = q.replace(/[%_\\]/g, "").trim();
   if (!cleaned) return res.json([]);
   const pattern = `%${cleaned}%`;
-  const selectCols = "id, name, email, role, course, avatar_url, availability";
+  const selectCols = "id, name, email, role, course, avatar_url, bio, availability";
   const [byName, byEmail, byCourse] = await Promise.all([
     supabase
       .from("users")

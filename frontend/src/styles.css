@@ -1876,6 +1876,27 @@ input.profile-status-emoji {
   margin: -4px 0 6px !important;
 }
 
+textarea.profile-bio-input {
+  width: 100%;
+  margin: 0 0 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-900);
+  font-family: inherit;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  resize: vertical;
+  min-height: 96px;
+  box-sizing: border-box;
+}
+
+textarea.profile-bio-input::placeholder {
+  color: var(--ink-600);
+  opacity: 0.75;
+}
+
 /* Profile — Discord-like availability picker */
 .profile-avail-fieldset {
   border: 0;
@@ -2834,6 +2855,28 @@ input.profile-status-emoji {
 
 .user-profile-custom-status {
   margin: 0 0 6px;
+  font-size: 0.92rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.user-profile-bio-block {
+  margin-top: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.user-profile-bio-heading {
+  margin: 0 0 6px;
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.user-profile-bio-text {
+  margin: 0;
   font-size: 0.92rem;
   line-height: 1.45;
   white-space: pre-wrap;

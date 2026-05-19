@@ -117,6 +117,7 @@ export default function UserProfileModal({
         avatarUrl: prefetch?.avatarUrl ?? prefetch?.authorAvatar,
         statusEmoji: prefetch?.statusEmoji,
         statusNote: prefetch?.statusNote,
+        bio: prefetch?.bio,
         presence: prefetch?.presence,
         isOnline: prefetch?.isOnline,
         isFriend: prefetch?.isFriend,
@@ -219,6 +220,12 @@ export default function UserProfileModal({
                     ) : null}
                   </p>
                   {merged.statusNote ? <p className="user-profile-custom-status">{merged.statusNote}</p> : null}
+                  {(merged.bio || "").trim() ? (
+                    <div className="user-profile-bio-block">
+                      <p className="user-profile-bio-heading muted small">About me</p>
+                      <p className="user-profile-bio-text">{merged.bio.trim()}</p>
+                    </div>
+                  ) : null}
                   {!isSelf && merged.email ? (
                     <p className="user-profile-email muted small">{merged.email}</p>
                   ) : null}
