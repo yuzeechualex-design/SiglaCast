@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import ModalPortal from "./ModalPortal.jsx";
 import { mediaUrl } from "../services/api.js";
+import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 
 function presenceLabel(entity) {
@@ -129,6 +130,8 @@ export default function UserProfileModal({
   const isSelf = currentUser?.id === userId;
   const avatarSrc = mediaUrl(merged.avatarUrl);
   const showPlaceholder = !merged.avatarUrl;
+  const coverHref = merged.coverUrl ? mediaUrl(merged.coverUrl) : null;
+  const coverIsGif = coverHref && publicUrlLooksLikeGif(coverHref);
 
   async function handleAddFriend() {
     if (!onAddFriend) return;
@@ -191,19 +194,21 @@ export default function UserProfileModal({
           <div className="user-profile-modal-layout">
             <div className="user-profile-modal-main">
               <div
-                className={`user-profile-banner${merged.coverUrl ? " user-profile-banner-has-cover" : ""}`}
-                style={
-                  merged.coverUrl
-                    ? {
-                        backgroundImage: `url(${mediaUrl(merged.coverUrl)})`,
+                className={`user-profile-banner${merged.coverUrl ? " user-profile-banner-has-cover" : ""}${coverHref && coverIsGif ? " user-profile-banner--gif" : ""}`}
+                {...(coverHref && !coverIsGif
+                  ? {
+                      style: {
+                        backgroundImage: `url(${coverHref})`,
                         backgroundSize: "cover",
                         backgroundPosition: "center center",
                         backgroundRepeat: "no-repeat"
                       }
-                    : undefined
-                }
+                    }
+                  : {})}
                 aria-hidden
-              />
+              >
+                {coverHref && coverIsGif ? <img src={coverHref} alt="" className="user-profile-banner-gif" /> : null}
+              </div>
 
               <div className="user-profile-avatar-block">
                 <div className="user-profile-avatar-wrap">

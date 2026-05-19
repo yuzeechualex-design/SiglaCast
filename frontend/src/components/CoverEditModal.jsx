@@ -71,9 +71,12 @@ function blobFromCanvas(canvas, quality = 0.9) {
 
 /**
  * Wide rectangular banner crop — drag / zoom / rotate, same workflow as avatar editor.
+ * Animated GIFs upload without re-encoding so motion is preserved (crop/zoom apply to still images only).
  */
 export default function CoverEditModal({ file, onClose, onApply, uploading = false }) {
   const [img, setImg] = useState(null);
+  const [gifPreviewUrl, setGifPreviewUrl] = useState("");
+  const isGif = file?.type === "image/gif";
   const [zoomMul, setZoomMul] = useState(1);
   const [rotQuarter, setRotQuarter] = useState(0);
   const rotationDeg = rotQuarter * 90;
@@ -103,11 +106,11 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
   useEffect(() => {
     setPanX(0);
     setPanY(0);
-  }, [rotationDeg]);
+  }, [rotationDeg, isGif]);
 
   useEffect(() => {
     const canvas = previewRef.current;
-    if (!canvas || !img?.naturalWidth) return;
+    if (!canvas || !img?.naturalWidth || isGif) return;
     canvas.width = VIEW_W;
     canvas.height = VIEW_H;
     const ctx = canvas.getContext("2d");
@@ -115,7 +118,7 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
     const c = clampPanRect(panX, panY, img.naturalWidth, img.naturalHeight, effScale, rotationDeg, VIEW_W, VIEW_H);
     ctx.clearRect(0, 0, VIEW_W, VIEW_H);
     drawCoverPreview(ctx, VIEW_W, VIEW_H, img, c.px, c.py, zoomMul, baseScale, rotationDeg, "rgba(20,26,42,0.92)");
-  }, [img, rotationDeg, panX, panY, zoomMul, baseScale]);
+  }, [img, rotationDeg, panX, panY, zoomMul, baseScale, isGif]);
 
   const applyClampedPan = useCallback(
     (nx, ny) => {
@@ -163,6 +166,16 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
     setRotQuarter((v) => (v + 1) % 4);
   }
 
+  async function handleApplyGif() {
+    if (!file || uploading) return;
+    try {
+      await onApply?.(file);
+      onClose?.();
+    } catch {
+      /* leave modal open */
+    }
+  }
+
   async function handleApply() {
     if (!img?.naturalWidth || uploading) return;
     const effScale = baseScale * zoomMul;
@@ -204,13 +217,36 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
       >
         <div className="modal-card cover-edit-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-head">
-            <h3>Edit cover</h3>
+            <h3>{isGif ? "GIF profile cover" : "Edit cover"}</h3>
             <button type="button" className="modal-close" onClick={() => !uploading && onClose?.()} aria-label="Close">
               ✕
             </button>
           </div>
           <div className="modal-body avatar-edit-body">
-            {!img?.naturalWidth ? (
+            {isGif ? (
+              !gifPreviewUrl ? (
+                <p className="muted">Loading preview…</p>
+              ) : (
+                <>
+                  <div className="avatar-edit-stage-wrap">
+                    <img className="cover-edit-gif-preview" src={gifPreviewUrl} alt="" />
+                  </div>
+                  <p className="muted small avatar-edit-hint gif-edit-hint">
+                    GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want crop, zoom, or rotate for the banner strip.
+                  </p>
+                  <div className="avatar-edit-footer avatar-edit-footer--gif-only">
+                    <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                        Cancel
+                      </button>
+                      <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
+                        {uploading ? "Uploading…" : "Upload GIF"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )
+            ) : !img?.naturalWidth ? (
               <p className="muted">Loading preview…</p>
             ) : (
               <>
@@ -269,22 +305,22 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
                     </button>
                   </div>
                 </div>
+
+                <div className="avatar-edit-footer">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={uploading || !img} onClick={handleReset}>
+                    Reset
+                  </button>
+                  <div className="avatar-edit-footer-actions">
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={uploading || !img} onClick={() => void handleApply()}>
+                      {uploading ? "Uploading…" : "Apply"}
+                    </button>
+                  </div>
+                </div>
               </>
             )}
-
-            <div className="avatar-edit-footer">
-              <button type="button" className="btn btn-ghost btn-sm" disabled={uploading || !img} onClick={handleReset}>
-                Reset
-              </button>
-              <div className="avatar-edit-footer-actions">
-                <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-primary btn-sm" disabled={uploading || !img} onClick={() => void handleApply()}>
-                  {uploading ? "Uploading…" : "Apply"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>

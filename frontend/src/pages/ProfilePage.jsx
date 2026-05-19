@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { mediaUrl } from "../services/api.js";
+import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import AvatarEditModal from "../components/AvatarEditModal.jsx";
 import CoverEditModal from "../components/CoverEditModal.jsx";
 
@@ -174,6 +175,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
 
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
   const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
+  const coverIsGif = coverSrc && publicUrlLooksLikeGif(coverSrc);
 
   return (
     <section className="panel single">
@@ -184,12 +186,30 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
 
       <div className="profile-hero">
         <div className="profile-cover-block">
-          <div
-            className={`profile-cover-preview${coverSrc ? " profile-cover-preview-has-image" : ""}`}
-            style={coverSrc ? { backgroundImage: `url(${coverSrc})` } : undefined}
-            role="img"
-            aria-label={coverSrc ? "Your profile cover preview" : "Default cover gradient"}
-          />
+          {coverSrc ? (
+            coverIsGif ? (
+              <div
+                className="profile-cover-preview profile-cover-preview-has-image profile-cover-preview--gif-wrap"
+                role="img"
+                aria-label="Your animated profile cover preview"
+              >
+                <img src={coverSrc} alt="" className="profile-cover-preview-gif" />
+              </div>
+            ) : (
+              <div
+                className="profile-cover-preview profile-cover-preview-has-image"
+                style={{ backgroundImage: `url(${coverSrc})` }}
+                role="img"
+                aria-label="Your profile cover preview"
+              />
+            )
+          ) : (
+            <div
+              className="profile-cover-preview"
+              role="img"
+              aria-label="Default cover gradient"
+            />
+          )}
           <div className="profile-cover-actions">
             <label className="btn btn-secondary btn-sm">
               Change cover
@@ -201,7 +221,9 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
               </button>
             ) : null}
           </div>
-          <p className="muted small profile-cover-hint">Wide banner shown behind your avatar when others view your profile.</p>
+          <p className="muted small profile-cover-hint">
+            Wide banner behind your avatar. Still images use the crop/zoom editor; GIFs stay animated (whole file uploads as-is — max about 25 MB).
+          </p>
         </div>
 
         <div className="profile-avatar-wrap">

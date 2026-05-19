@@ -71,9 +71,12 @@ function blobFromCanvas(canvas, quality = 0.92) {
 
 /**
  * Circular crop overlay (Discord-style): drag to frame, slider zooms, rotate 90° steps.
+ * Animated GIFs upload without re-encoding so motion is preserved (crop/zoom only apply to still images).
  */
 export default function AvatarEditModal({ file, onClose, onApply, uploading = false }) {
   const [img, setImg] = useState(null);
+  const [gifPreviewUrl, setGifPreviewUrl] = useState("");
+  const isGif = file?.type === "image/gif";
   const [zoomMul, setZoomMul] = useState(1);
   const [rotQuarter, setRotQuarter] = useState(0);
   const rotationDeg = rotQuarter * 90;
@@ -89,6 +92,16 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
   }, [img, rotationDeg]);
 
   useEffect(() => {
+    if (isGif) {
+      const u = URL.createObjectURL(file);
+      setGifPreviewUrl(u);
+      setImg(null);
+      return () => {
+        URL.revokeObjectURL(u);
+        setGifPreviewUrl("");
+      };
+    }
+    setGifPreviewUrl("");
     const u = URL.createObjectURL(file);
     const image = new Image();
     image.decoding = "async";
@@ -98,7 +111,7 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
       URL.revokeObjectURL(u);
       setImg(null);
     };
-  }, [file]);
+  }, [file, isGif]);
 
   useEffect(() => {
     setPanX(0);
@@ -165,6 +178,16 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
     setRotQuarter((v) => (v + 1) % 4);
   }
 
+  async function handleApplyGif() {
+    if (!file || uploading) return;
+    try {
+      await onApply?.(file);
+      onClose?.();
+    } catch {
+      /* upload failed — parent may show notice; keep modal open */
+    }
+  }
+
   async function handleApply() {
     if (!img?.naturalWidth || uploading) return;
     const effScale = baseScale * zoomMul;
@@ -210,13 +233,40 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
       >
         <div className="modal-card avatar-edit-modal" onClick={(e) => e.stopPropagation()}>
           <div className="modal-head">
-            <h3>Edit image</h3>
+            <h3>{isGif ? "GIF profile photo" : "Edit image"}</h3>
             <button type="button" className="modal-close" onClick={() => !uploading && onClose?.()} aria-label="Close">
               ✕
             </button>
           </div>
           <div className="modal-body avatar-edit-body">
-            {!img?.naturalWidth ? (
+            {isGif ? (
+              !gifPreviewUrl ? (
+                <p className="muted">Loading preview…</p>
+              ) : (
+                <>
+                  <div className="avatar-edit-stage-wrap">
+                    <img
+                      className="avatar-edit-gif-preview"
+                      src={gifPreviewUrl}
+                      alt=""
+                    />
+                  </div>
+                  <p className="muted small avatar-edit-hint gif-edit-hint">
+                    GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want to crop or zoom inside the circle.
+                  </p>
+                  <div className="avatar-edit-footer avatar-edit-footer--gif-only">
+                    <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
+                      <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                        Cancel
+                      </button>
+                      <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
+                        {uploading ? "Uploading…" : "Upload GIF"}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )
+            ) : !img?.naturalWidth ? (
               <p className="muted">Loading preview…</p>
             ) : (
               <>
@@ -273,22 +323,22 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
                     </button>
                   </div>
                 </div>
+
+                <div className="avatar-edit-footer">
+                  <button type="button" className="btn btn-ghost btn-sm" disabled={uploading || !img} onClick={handleReset}>
+                    Reset
+                  </button>
+                  <div className="avatar-edit-footer-actions">
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={uploading || !img} onClick={() => void handleApply()}>
+                      {uploading ? "Uploading…" : "Apply"}
+                    </button>
+                  </div>
+                </div>
               </>
             )}
-
-            <div className="avatar-edit-footer">
-              <button type="button" className="btn btn-ghost btn-sm" disabled={uploading || !img} onClick={handleReset}>
-                Reset
-              </button>
-              <div className="avatar-edit-footer-actions">
-                <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
-                  Cancel
-                </button>
-                <button type="button" className="btn btn-primary btn-sm" disabled={uploading || !img} onClick={() => void handleApply()}>
-                  {uploading ? "Uploading…" : "Apply"}
-                </button>
-              </div>
-            </div>
           </div>
         </div>
       </div>
