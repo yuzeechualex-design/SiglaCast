@@ -870,6 +870,87 @@ label.btn-secondary:hover {
   margin-top: 8px;
 }
 
+/* Hide composer while fullscreen thread is open (narrow / ?thread=); JS toggles class. */
+.community-composer--hidden-feed {
+  display: none;
+}
+
+/* ------- Community mobile fullscreen thread (?thread=) — max-width syncs COMMUNITY_MOBILE_MAX_PX in CommunityPage.jsx ------- */
+
+body.community-thread-overlay-open {
+  overflow: hidden;
+}
+
+.post-card.post-card-tappable {
+  cursor: pointer;
+  -webkit-tap-highlight-color: rgba(31, 94, 199, 0.12);
+}
+
+@media (min-width: 721px) {
+  .post-card.post-card-tappable {
+    cursor: default;
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+.community-thread-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+  display: flex;
+  flex-direction: column;
+  background: var(--body-bg-4, var(--surface));
+  box-shadow: 0 -4px 24px rgba(13, 71, 161, 0.08);
+}
+
+.community-thread-toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  padding-top: max(10px, env(safe-area-inset-top, 0px));
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+
+.community-thread-back {
+  flex-shrink: 0;
+}
+
+.community-thread-title {
+  flex: 1;
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.28;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.community-thread-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px;
+  padding-bottom: max(18px, env(safe-area-inset-bottom, 0px));
+}
+
+.community-thread-article {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.community-thread-missing {
+  max-width: 520px;
+  margin: 2rem auto;
+  text-align: center;
+  padding: 0 16px;
+}
+
 .image-preview-wrap {
   margin-top: 8px;
 }
@@ -2910,6 +2991,19 @@ input.profile-status-emoji {
 
 .see-more-btn:hover {
   text-decoration: underline;
+}
+
+.post-body-wrap {
+  margin: 8px 0;
+}
+
+.post-body-wrap .post-body {
+  margin: 0;
+}
+
+.post-body-wrap .see-more-btn {
+  margin-top: 6px;
+  display: inline-block;
 }
 
 .reaction-host {

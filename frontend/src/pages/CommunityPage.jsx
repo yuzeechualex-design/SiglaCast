@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
+
+/** Narrow layout: fullscreen post threads + tap targets (keep in sync with CSS). */
+const COMMUNITY_MOBILE_MAX_PX = 720;
 
 const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
@@ -32,12 +35,82 @@ export default function CommunityPage({
   onDeleteComment
 }) {
   const isAdmin = currentUser?.role === "admin";
-  const [params] = useSearchParams();
+  const [params, setSearchParams] = useSearchParams();
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const fileInputRef = useRef(null);
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
+  const [isCommunityNarrow, setIsCommunityNarrow] = useState(
+    typeof window !== "undefined" ? window.matchMedia(`(max-width:${COMMUNITY_MOBILE_MAX_PX}px)`).matches : false
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+    const mq = window.matchMedia(`(max-width: ${COMMUNITY_MOBILE_MAX_PX}px)`);
+    const sync = () => setIsCommunityNarrow(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const mobileThreadParam = params.get("thread");
+
+  /** Click/tap ignores interactive controls inside the feed card when opening fullscreen thread on mobile. */
+  const tapIgnoresInteractive = useCallback((el) => {
+    return Boolean(
+      el.closest?.(
+        "button, a, input, textarea, select, label, .mention-input-wrap, [contenteditable=\"true\"], .modal-backdrop"
+      )
+    );
+  }, []);
+
+  const openMobileThread = useCallback(
+    (postId) => {
+      setSearchParams(
+        (prev) => {
+          const n = new URLSearchParams(prev);
+          n.set("thread", postId);
+          return n;
+        },
+        { replace: false }
+      );
+    },
+    [setSearchParams]
+  );
+
+  const closeMobileThread = useCallback(() => {
+    setSearchParams(
+      (prev) => {
+        const pid = prev.get("thread");
+        const next = new URLSearchParams(prev);
+        next.delete("thread");
+        requestAnimationFrame(() => {
+          if (pid && document.getElementById(`post-${pid}`)) {
+            document.getElementById(`post-${pid}`)?.scrollIntoView({ block: "start", behavior: "auto" });
+          }
+        });
+        return next;
+      },
+      { replace: true }
+    );
+  }, [setSearchParams]);
+
+  useEffect(() => {
+    const open = !!(isCommunityNarrow && mobileThreadParam);
+    if (!open) document.body.classList.remove("community-thread-overlay-open");
+    else document.body.classList.add("community-thread-overlay-open");
+    return () => document.body.classList.remove("community-thread-overlay-open");
+  }, [isCommunityNarrow, mobileThreadParam]);
+
+  useEffect(() => {
+    if (!isCommunityNarrow || !mobileThreadParam) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") closeMobileThread();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isCommunityNarrow, mobileThreadParam, closeMobileThread]);
 
   function pickImage() {
     fileInputRef.current?.click();
@@ -67,6 +140,8 @@ export default function CommunityPage({
   useEffect(() => {
     if (!deeplinkQs) return undefined;
     const sp = new URLSearchParams(deeplinkQs);
+    /** Fullscreen mobile thread replaces feed focus — skip conflicting scroll snaps. */
+    if (sp.get("thread") && isCommunityNarrow) return undefined;
     const postId = sp.get("post");
     if (!postId) return undefined;
 
@@ -90,7 +165,15 @@ export default function CommunityPage({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [deeplinkQs, posts]);
+  }, [deeplinkQs, posts, isCommunityNarrow]);
+
+  const overlayPost = mobileThreadParam ? posts.find((p) => p.id === mobileThreadParam) : null;
+
+  function handleFeedPostTap(e, postId) {
+    if (!isCommunityNarrow) return;
+    if (tapIgnoresInteractive(e.target)) return;
+    openMobileThread(postId);
+  }
 
   return (
     <section className="panel single">
@@ -98,7 +181,11 @@ export default function CommunityPage({
         <h2>💬 Community Feed</h2>
         <p>Share updates, photos, and reactions with campus users.</p>
       </div>
-      <div className="composer community-composer">
+      <div
+        className={`composer community-composer${
+          isCommunityNarrow && mobileThreadParam ? " community-composer--hidden-feed" : ""
+        }`}
+      >
         <MentionInput
           as="textarea"
           rows={3}
@@ -120,54 +207,34 @@ export default function CommunityPage({
       </div>
 
       {posts.map((post) => {
-        const canDelete = isAdmin || post.authorId === currentUser?.id;
+        /** Thread is duplicated in fullscreen overlay — keep one source of UI in the viewport. */
+        if (isCommunityNarrow && mobileThreadParam && post.id === mobileThreadParam) return null;
+
+        const canModerateDelete = isAdmin || post.authorId === currentUser?.id;
         return (
-          <article key={post.id} id={`post-${post.id}`} className="tile post-card">
-            <div className="post-header">
-              {post.authorAvatar ? (
-                <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-              ) : (
-                <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
-              )}
-              <div className="post-header-meta">
-                <strong className="author">{post.author}</strong>
-                <div className="post-meta">Campus post</div>
-              </div>
-              {canDelete && onDeletePost ? (
-                <button
-                  type="button"
-                  className="btn btn-danger btn-sm post-delete-btn"
-                  onClick={() => onDeletePost(post)}
-                  title="Delete post"
-                >
-                  🗑️
-                </button>
-              ) : null}
-            </div>
-
-            {post.content ? <PostText text={post.content} /> : null}
-            {post.imageUrl ? (
-              <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" />
-            ) : null}
-
-            <ReactionsRow
+          <article
+            key={post.id}
+            id={`post-${post.id}`}
+            className={`tile post-card${isCommunityNarrow ? " post-card-tappable" : ""}`}
+            onClick={(e) => handleFeedPostTap(e, post.id)}
+          >
+            <PostCardBody
               post={post}
+              canModerateDelete={canModerateDelete && !!onDeletePost}
+              forceExpandedBody={false}
+              currentUser={currentUser}
+              onDeletePost={() => onDeletePost?.(post)}
               onReact={onReact}
-              onShowReactors={() =>
+              onComment={onComment}
+              onReactComment={onReactComment}
+              onDeleteComment={onDeleteComment}
+              openPostReactors={() =>
                 setRxModal({
                   open: true,
                   title: "Post reactions",
                   path: `/community/posts/${post.id}/reactors`
                 })}
-            />
-
-            <CommentsBlock
-              post={post}
-              currentUser={currentUser}
-              onComment={onComment}
-              onReactComment={onReactComment}
-              onDeleteComment={onDeleteComment}
-              onShowCommentReactors={(commentId) =>
+              openCommentReactors={(commentId) =>
                 setRxModal({
                   open: true,
                   title: "Comment reactions",
@@ -177,6 +244,51 @@ export default function CommunityPage({
           </article>
         );
       })}
+      {isCommunityNarrow && mobileThreadParam ? (
+        <div className="community-thread-overlay" role="dialog" aria-modal="true" aria-labelledby="community-thread-heading">
+          <header className="community-thread-toolbar">
+            <button type="button" className="btn btn-ghost btn-sm community-thread-back" onClick={closeMobileThread}>
+              ← Back
+            </button>
+            <h2 id="community-thread-heading" className="community-thread-title">
+              {overlayPost?.author ? `Post · ${overlayPost.author}` : "Post"}
+            </h2>
+          </header>
+          <div className="community-thread-scroll">
+            {overlayPost ? (
+              <article className="tile post-card community-thread-article" id={`thread-post-${overlayPost.id}`}>
+                <PostCardBody
+                  post={overlayPost}
+                  canModerateDelete={(isAdmin || overlayPost.authorId === currentUser?.id) && !!onDeletePost}
+                  forceExpandedBody
+                  currentUser={currentUser}
+                  onDeletePost={() => onDeletePost?.(overlayPost)}
+                  onReact={onReact}
+                  onComment={onComment}
+                  onReactComment={onReactComment}
+                  onDeleteComment={onDeleteComment}
+                  openPostReactors={() =>
+                    setRxModal({
+                      open: true,
+                      title: "Post reactions",
+                      path: `/community/posts/${overlayPost.id}/reactors`
+                    })}
+                  openCommentReactors={(commentId) =>
+                    setRxModal({
+                      open: true,
+                      title: "Comment reactions",
+                      path: `/community/comments/${commentId}/reactors`
+                    })}
+                />
+              </article>
+            ) : (
+              <p className="muted community-thread-missing">
+                Could not load this post. Tap <strong>← Back</strong> and pull to refresh the feed if it was removed.
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
       {rxModal.open ? (
         <ReactionActorsModal
           title={rxModal.title}
@@ -186,6 +298,66 @@ export default function CommunityPage({
         />
       ) : null}
     </section>
+  );
+}
+
+/** Shared markup for feed cards and fullscreen mobile thread overlay (see `thread` URL param). */
+function PostCardBody({
+  post,
+  canModerateDelete,
+  forceExpandedBody,
+  currentUser,
+  onDeletePost,
+  onReact,
+  onComment,
+  onReactComment,
+  onDeleteComment,
+  openPostReactors,
+  openCommentReactors
+}) {
+  return (
+    <>
+      <div className="post-header">
+        {post.authorAvatar ? (
+          <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+        ) : (
+          <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+        )}
+        <div className="post-header-meta">
+          <strong className="author">{post.author}</strong>
+          <div className="post-meta">Campus post</div>
+        </div>
+        {canModerateDelete ? (
+          <button
+            type="button"
+            className="btn btn-danger btn-sm post-delete-btn"
+            onClick={(e) => {
+              e.stopPropagation();
+              onDeletePost?.();
+            }}
+            title="Delete post"
+          >
+            🗑️
+          </button>
+        ) : null}
+      </div>
+
+      {post.content ? <PostText text={post.content} forceExpanded={forceExpandedBody} /> : null}
+      {post.imageUrl ? (
+        <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" decoding="async" loading="lazy" />
+      ) : null}
+
+      <ReactionsRow post={post} onReact={onReact} onShowReactors={openPostReactors} />
+
+      <CommentsBlock
+        post={post}
+        currentUser={currentUser}
+        onComment={onComment}
+        onReactComment={onReactComment}
+        onDeleteComment={onDeleteComment}
+        onShowCommentReactors={openCommentReactors}
+      />
+    </>
   );
 }
 
@@ -446,28 +618,36 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
   );
 }
 
-// Expandable post body. Posts longer than TRUNCATE_LIMIT chars are clamped
-// with a "See more…" toggle. Toggling re-expands without re-fetching.
-function PostText({ text }) {
-  const [expanded, setExpanded] = useState(false);
+// Expandable post body — clamp wraps text only so "See more…" stays visible (-webkit-line-clamp was hiding it).
+function PostText({ text, forceExpanded }) {
+  const [expanded, setExpanded] = useState(!!forceExpanded);
+  useEffect(() => {
+    if (forceExpanded) setExpanded(true);
+  }, [forceExpanded]);
+
   const tooLong = text.length > TRUNCATE_LIMIT;
-  const displayed = expanded || !tooLong ? text : text.slice(0, TRUNCATE_LIMIT).trimEnd() + "…";
+  const showFull = expanded || forceExpanded || !tooLong;
+  const truncated = showFull ? text : text.slice(0, TRUNCATE_LIMIT).trimEnd() + "…";
+  const clamped = !showFull && tooLong;
+
   return (
-    <p className={`post-body ${expanded || !tooLong ? "" : "post-body-clamped"}`}>
-      <MentionText text={displayed} />
-      {tooLong ? (
-        <>
-          {" "}
-          <button
-            type="button"
-            className="see-more-btn"
-            onClick={() => setExpanded((v) => !v)}
-          >
-            {expanded ? "See less" : "See more…"}
-          </button>
-        </>
+    <div className="post-body-wrap">
+      <div className={`post-body ${clamped ? "post-body-clamped" : ""}`}>
+        <MentionText text={truncated} />
+      </div>
+      {tooLong && !forceExpanded ? (
+        <button
+          type="button"
+          className="see-more-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            setExpanded((v) => !v);
+          }}
+        >
+          {expanded ? "See less" : "See more…"}
+        </button>
       ) : null}
-    </p>
+    </div>
   );
 }
 
