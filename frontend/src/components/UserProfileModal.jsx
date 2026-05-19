@@ -212,11 +212,13 @@ export default function UserProfileModal({
 
               <div className="user-profile-avatar-block">
                 <div className="user-profile-avatar-wrap">
-                  {showPlaceholder ? (
-                    <div className="user-profile-avatar placeholder">{merged.name?.charAt(0) || "?"}</div>
-                  ) : (
-                    <img className="user-profile-avatar" src={avatarSrc} alt="" />
-                  )}
+                  <div className="user-profile-avatar-frame">
+                    {showPlaceholder ? (
+                      <div className="user-profile-avatar placeholder">{merged.name?.charAt(0) || "?"}</div>
+                    ) : (
+                      <img className="user-profile-avatar" src={avatarSrc} alt="" decoding="async" />
+                    )}
+                  </div>
                   <span
                     className={presenceDotClass(merged)}
                     title={presenceLabel(merged)}

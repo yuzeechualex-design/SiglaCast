@@ -2937,20 +2937,38 @@ textarea.profile-bio-input::placeholder {
   flex-shrink: 0;
 }
 
-.user-profile-avatar {
+/* Ring + shadow live on frame; inner img fills — fixes GIF/decoding seams that "bleed" past border-radius on <img>. */
+.user-profile-avatar-frame {
   width: 92px;
   height: 92px;
   border-radius: 50%;
-  object-fit: cover;
-  border: 4px solid var(--card, #fff);
+  overflow: hidden;
+  border: 4px solid var(--card, #ffffff);
   box-shadow: var(--shadow-soft);
+  background: var(--surface);
+  flex-shrink: 0;
+}
+
+.user-profile-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  object-fit: cover;
+  border: none;
+  box-shadow: none;
   display: block;
   background: var(--surface);
+  /* Crisp circular clip vs animated GIF repaints */
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  transform: translateZ(0);
 }
 
 .user-profile-avatar.placeholder {
   display: grid;
   place-items: center;
+  width: 100%;
+  height: 100%;
   font-size: 2rem;
   font-weight: 800;
   color: var(--blue-800);
