@@ -2328,7 +2328,7 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
       .eq("to_user_id", otherId)
       .maybeSingle()
   ]);
-  const isFriend = await areFriends(me, otherId);
+  const isFriend = otherId === SIGLACAST_AI_USER_ID ? true : await areFriends(me, otherId);
   res.json({
     user: withOnline(toPublicUser(other), onlineSet),
     isFriend,
@@ -2353,6 +2353,9 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
     if (!text && !req.file) return res.status(400).json({ error: "Message text or attachment is required" });
     const other = await fetchUserById(otherId);
     if (!other) return res.status(404).json({ error: "User not found" });
+    if (otherId === SIGLACAST_AI_USER_ID && req.file) {
+      return res.status(400).json({ error: "SiglaCast AI chat is text-only (no attachments)." });
+    }
 
     let attachment = null;
     if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
@@ -2394,14 +2397,40 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("message.sent", { id, fromUserId: me, toUserId: otherId });
-    await bumpAggregatedNotification({
-      userId: otherId,
-      sourceKey: `dm:${me}`,
-      kind: "dm",
-      textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`,
-      linkPath: `/messages?dm=${encodeURIComponent(me)}`
-    });
-    if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me, `/messages?dm=${encodeURIComponent(me)}`);
+    if (otherId !== SIGLACAST_AI_USER_ID) {
+      await bumpAggregatedNotification({
+        userId: otherId,
+        sourceKey: `dm:${me}`,
+        kind: "dm",
+        textForCount: (n) => `💬 (${n}) new message${n === 1 ? "" : "s"} · open Messages`,
+        linkPath: `/messages?dm=${encodeURIComponent(me)}`
+      });
+      if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me, `/messages?dm=${encodeURIComponent(me)}`);
+    }
+
+    if (otherId === SIGLACAST_AI_USER_ID && text) {
+      const rawThread = await fetchDmMessagesRaw(me, SIGLACAST_AI_USER_ID);
+      const decThread = await decorateChatMessages(rawThread, me);
+      const transcript = transcriptTurnsFromDecorated(decThread);
+      const g = await groqCompletion(buildSiglaContextualPrompt(req.user), transcript);
+      if (g.error) return res.status(502).json({ error: g.error });
+
+      const aiMsgId = `msg${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      const { error: aiErr } = await supabase.from("messages").insert({
+        id: aiMsgId,
+        from_user_id: SIGLACAST_AI_USER_ID,
+        to_user_id: me,
+        text: g.reply,
+        read: false,
+        reply_to_id: null,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        bridge_mirror: false
+      });
+      if (aiErr) return res.status(400).json({ error: aiErr.message });
+    }
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });

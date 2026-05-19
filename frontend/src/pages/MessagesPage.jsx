@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
+import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
@@ -63,7 +64,6 @@ export default function MessagesPage({
   setUserPhoneAutoReconnect,
   onSendSiglaInActiveThread = async () => {}
 }) {
-  const navigate = useNavigate();
   const [draft, setDraft] = useState("");
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
@@ -121,6 +121,7 @@ export default function MessagesPage({
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
   /** DM/group always; solo Userphone only after a match so we can mirror anonymous + AI replies. */
   const showThreadComposer = !!activeChat && (!isUserphone || userphonePhase === "matched");
+  const isSiglaDm = activeChat?.kind === "dm" && activeChat?.user?.id === SIGLACAST_AI_USER_ID;
 
   /** Must match backend USERPHONE_WAIT_MS / 1000 in server.js */
   const USERPHONE_QUEUE_SEC = 10;
@@ -406,7 +407,7 @@ export default function MessagesPage({
                         <li className="chat-app-row">
                           <div className="chat-app-meta">
                             <strong>SiglaCast AI</strong>
-                            <span className="muted small">Private assistant chat (standalone)</span>
+                            <span className="muted small">AI replies in your Messages thread</span>
                           </div>
                           <button
                             type="button"
@@ -414,7 +415,7 @@ export default function MessagesPage({
                             onClick={() => {
                               setPlusMenuOpen(false);
                               setPlusMenuPane("main");
-                              navigate("/assistant");
+                              void onOpenChat?.("dm", SIGLACAST_AI_USER_ID);
                             }}
                           >
                             Open
@@ -909,7 +910,7 @@ export default function MessagesPage({
 
               {showThreadComposer ? (
               <form className="thread-compose" onSubmit={handleSend}>
-                {showThreadComposer && !composeSiglaMode && !isUserphone ? (
+                {showThreadComposer && !composeSiglaMode && !isUserphone && !isSiglaDm ? (
                 <input
                   ref={fileRef}
                   type="file"
@@ -968,30 +969,36 @@ export default function MessagesPage({
                           Anonymous Userphone pairing is active in this chat — use 📞 toolbar for bridge actions.
                         </p>
                       )}
-                      <button
-                        type="button"
-                        role="menuitem"
-                        className={`compose-plus-item ${composeSiglaMode ? "compose-plus-item-active" : ""}`}
-                        onClick={() => {
-                          setComposePlusOpen(false);
-                          setComposeSiglaMode((v) => !v);
-                          setDraftFile(null);
-                          if (fileRef.current) fileRef.current.value = "";
-                        }}
-                      >
-                        <span className="compose-plus-item-title">
-                          ✨ Sigla replies here {composeSiglaMode ? "(on)" : "(off)"}
-                        </span>
-                        <span className="compose-plus-item-desc">
-                          Your sends go to SiglaCast AI until you turn this off — answers appear like normal messages from ✨
-                          SiglaCast AI.
-                        </span>
-                      </button>
+                      {!isSiglaDm ? (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className={`compose-plus-item ${composeSiglaMode ? "compose-plus-item-active" : ""}`}
+                          onClick={() => {
+                            setComposePlusOpen(false);
+                            setComposeSiglaMode((v) => !v);
+                            setDraftFile(null);
+                            if (fileRef.current) fileRef.current.value = "";
+                          }}
+                        >
+                          <span className="compose-plus-item-title">
+                            ✨ Sigla replies here {composeSiglaMode ? "(on)" : "(off)"}
+                          </span>
+                          <span className="compose-plus-item-desc">
+                            Your sends go to SiglaCast AI until you turn this off — answers appear like normal messages from ✨
+                            SiglaCast AI.
+                          </span>
+                        </button>
+                      ) : (
+                        <p className="muted small compose-plus-item" style={{ margin: "4px 0 10px", paddingRight: "8px" }}>
+                          You&apos;re chatting with SiglaCast AI — send messages normally for AI replies.
+                        </p>
+                      )}
                     </div>
                   ) : null}
                 </div>
                 ) : null}
-                {showThreadComposer && !composeSiglaMode && !isUserphone ? (
+                {showThreadComposer && !composeSiglaMode && !isUserphone && !isSiglaDm ? (
                 <button
                   type="button"
                   className="btn btn-icon"
@@ -1001,7 +1008,7 @@ export default function MessagesPage({
                   📎
                 </button>
                 ) : null}
-                {!isUserphone && draftFile ? (
+                {!isUserphone && !isSiglaDm && draftFile ? (
                 <div className="draft-file-chip">
                   <span>📁 {draftFile.name}</span>
                   <button
@@ -1023,11 +1030,13 @@ export default function MessagesPage({
                   placeholder={
                     composeSiglaMode
                       ? `Ask SiglaCast AI (${isUserphone ? "this anonymous chat" : isGroup ? activeChat.group?.name || "group" : activeChat.user?.name || "DM"})…`
-                      : isUserphone
-                        ? "Message anonymously…"
-                        : isGroup
-                          ? `Message ${activeChat.group?.name}… use @ to mention`
-                          : `Message ${activeChat.user?.name}… use @ to mention`
+                      : isSiglaDm
+                        ? "Ask SiglaCast AI anything…"
+                        : isUserphone
+                          ? "Message anonymously…"
+                          : isGroup
+                            ? `Message ${activeChat.group?.name}… use @ to mention`
+                            : `Message ${activeChat.user?.name}… use @ to mention`
                   }
                 />
                 <button
