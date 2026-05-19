@@ -1536,6 +1536,96 @@ input.profile-status-emoji {
   margin: -4px 0 6px !important;
 }
 
+/* Profile — Discord-like availability picker */
+.profile-avail-fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0 0 16px;
+}
+.profile-avail-wrap {
+  margin: 0;
+}
+.profile-avail-divider {
+  height: 1px;
+  background: var(--hairline);
+  margin: 4px 0 6px;
+  opacity: 0.85;
+}
+.profile-avail-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.profile-avail-row:hover {
+  background: var(--elev-700, rgba(0, 0, 0, 0.04));
+}
+.profile-avail-row-selected {
+  border-color: var(--accent, #fbc02d);
+  background: rgba(251, 192, 45, 0.08);
+}
+.profile-avail-row input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.profile-avail-dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  margin-top: 4px;
+  box-sizing: border-box;
+}
+.profile-avail-dot-online {
+  background: #3ba55d;
+}
+.profile-avail-dot-idle {
+  background: transparent;
+  border: 3px solid #faa61a;
+  box-sizing: border-box;
+}
+.profile-avail-dot-dnd {
+  background: #ed4245;
+  border: none;
+}
+.profile-avail-dot-invisible {
+  background: transparent;
+  border: 2px solid #949ba4;
+}
+.profile-avail-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.profile-avail-title {
+  font-weight: 600;
+  font-size: 0.94rem;
+  line-height: 1.3;
+}
+.profile-avail-sub {
+  margin: 0;
+  display: block;
+  line-height: 1.35;
+}
+.profile-avail-chevron {
+  font-size: 1rem;
+  line-height: 1.8;
+  flex-shrink: 0;
+}
+.profile-avail-spacer {
+  flex-shrink: 0;
+  width: 12px;
+}
+
 .thread-header-info small {
   color: var(--ink-500);
 }
@@ -1940,6 +2030,19 @@ input.profile-status-emoji {
 
 .presence-dot.presence-online {
   background: #3ba55d;
+}
+
+.presence-dot.presence-idle {
+  background: #faa61a;
+}
+
+.presence-dot.presence-dnd {
+  background: #ed4245;
+}
+
+.presence-dot.presence-invisible {
+  background: transparent;
+  border-color: #949ba4;
 }
 
 .presence-dot.presence-offline {

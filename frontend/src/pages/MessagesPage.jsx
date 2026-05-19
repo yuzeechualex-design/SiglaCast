@@ -20,6 +20,39 @@ const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
   return acc;
 }, {});
 
+function presenceDotAttrs(entity) {
+  const rawPresence =
+    entity && typeof entity.presence === "string" ? entity.presence.trim().toLowerCase() : null;
+  const normalized =
+    rawPresence === "idle" ||
+    rawPresence === "dnd" ||
+    rawPresence === "invisible" ||
+    rawPresence === "online" ||
+    rawPresence === "offline"
+      ? rawPresence
+      : entity?.isOnline === true
+        ? "online"
+        : "offline";
+  /** @type {Record<string, string>} */
+  const clsSuffix = {
+    online: "presence-online",
+    idle: "presence-idle",
+    dnd: "presence-dnd",
+    invisible: "presence-invisible",
+    offline: "presence-offline"
+  };
+  /** @type {Record<string, string>} */
+  const titles = {
+    online: "Online",
+    idle: "Idle",
+    dnd: "Do not disturb",
+    invisible: "Invisible — you appear offline to others",
+    offline: "Offline"
+  };
+  const suf = clsSuffix[normalized] || clsSuffix.offline;
+  return { className: `presence-dot ${suf}`, title: titles[normalized] || titles.offline };
+}
+
 function StatusEmojiChip({ emoji }) {
   if (!emoji) return null;
   return <span className="status-emoji-pill">{emoji}</span>;
@@ -254,15 +287,11 @@ export default function MessagesPage({
       <div className={`${cls} placeholder`}>{entity?.name?.charAt(0) || "?"}</div>
     );
     if (!showPresence) return inner;
-    const online = entity?.isOnline === true;
+    const pres = presenceDotAttrs(entity);
     return (
       <span className="avatar-with-presence">
         {inner}
-        <span
-          className={`presence-dot ${online ? "presence-online" : "presence-offline"}`}
-          title={online ? "Online" : "Offline"}
-          aria-hidden
-        />
+        <span className={pres.className} title={pres.title} aria-hidden />
       </span>
     );
   }
@@ -1737,6 +1766,7 @@ function GroupSettingsModal({
             {(group?.members || []).map((m) => {
               const isMe = m.id === currentUser?.id;
               const isMemberAdmin = m.role === "admin";
+              const memPres = presenceDotAttrs(m);
               return (
                 <li key={m.id} className="member-row">
                   <span className="avatar-with-presence">
@@ -1745,11 +1775,7 @@ function GroupSettingsModal({
                     ) : (
                       <div className="msg-avatar sm placeholder">{m.name?.charAt(0) || "?"}</div>
                     )}
-                    <span
-                      className={`presence-dot ${m.isOnline === true ? "presence-online" : "presence-offline"}`}
-                      title={m.isOnline === true ? "Online" : "Offline"}
-                      aria-hidden
-                    />
+                    <span className={memPres.className} title={memPres.title} aria-hidden />
                   </span>
                   <div className="member-info">
                     <strong>

@@ -435,6 +435,7 @@ export default function App() {
       seenNotificationIds.current.add(n.id);
       const kind = n.kind || "general";
       if (!PUSH_KINDS.has(kind)) continue;
+      if (user?.availability === "dnd") continue;
       try {
         const body =
           typeof n.badgeCount === "number" && n.badgeCount > 1
