@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export const ASSISTANT_WELCOME =
-  'Hi—I am Sigla Assistant. Ask about using SiglaCast (events voting, announcements, Community, Messages, profile). Answers are informational only—not official DosU policy. Say "Ingles" if you prefer English.';
+  "Hi—I’m Sigla Assistant. Ask me anything: SiglaCast how-tos (voting, announcements, chats), homework explanations, Filipino/English, study tips, drafts, trivia, beginner coding—you name it. I’m not an official DosU channel for policy/emergencies, but otherwise I’m here to help. Say \"Ingles\" if you prefer English.";
 
 /** Embedded in Messages thread or full page — shared UI + state. */
 export function AssistantChatCore({ chatWithGroq }) {
@@ -92,7 +92,7 @@ export function AssistantChatCore({ chatWithGroq }) {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask about navigating SiglaCast, voting, announcements…"
+          placeholder="Ask anything… SiglaCast, homework, study help, Filipino/English, etc."
           rows={3}
           disabled={busy}
         />
@@ -114,7 +114,7 @@ export default function AssistantPage({ chatWithGroq }) {
     <section className="panel single assistant-panel">
       <div className="panel-head">
         <h2>✨ Sigla Assistant</h2>
-        <p>Groq-powered campus helper (students & admins)—answers are unofficial guidance only.</p>
+        <p>Groq-powered general assistant (students & admins)—campus features, academics, drafts, trivia, plus whatever you&apos;d normally ask any AI helper.</p>
       </div>
       <AssistantChatCore chatWithGroq={chatWithGroq} />
     </section>

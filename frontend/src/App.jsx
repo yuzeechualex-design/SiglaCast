@@ -301,7 +301,7 @@ export default function App() {
           user: { id: "assistant", name: "SiglaCast AI", email: "", course: "", avatarUrl: null },
           isFriend: false,
           lastMessage: {
-            text: "Tap Add in ＋ → Add an app, or open from the compose ＋ menu",
+            text: "Homework hints, trivia, Filipino/English, SiglaCast help—say hi",
             createdAt: new Date(0).toISOString(),
             fromMe: false
           },

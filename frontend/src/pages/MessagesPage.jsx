@@ -379,7 +379,7 @@ export default function MessagesPage({
                         <li className="chat-app-row">
                           <div className="chat-app-meta">
                             <strong>SiglaCast AI</strong>
-                            <span className="muted small">Groq-powered Sigla Assistant</span>
+                            <span className="muted small">General-purpose AI assistant</span>
                           </div>
                           <button
                             type="button"
@@ -644,7 +644,7 @@ export default function MessagesPage({
                     ) : null}
                   </strong>
                   {isAssistant ? (
-                    <small>Groq-powered campus helper · answers are informal guidance only.</small>
+                    <small>Open assistant—SiglaCast, homework hints, trivia, Filipino/English, and more.</small>
                   ) : isUserphone ? (
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
@@ -970,7 +970,7 @@ export default function MessagesPage({
                       >
                         <span className="compose-plus-item-title">✨ SiglaCast AI</span>
                         <span className="compose-plus-item-desc">
-                          Chat with Sigla Assistant here. Pins to your sidebar if it is not listed yet.
+                          General AI chat (homework help, trivia, Filipino/English, SiglaCast tips—pins sidebar if missing).
                         </span>
                       </button>
                     </div>
