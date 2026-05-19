@@ -75,8 +75,20 @@ function blobFromCanvas(canvas, quality = 0.9) {
  */
 export default function CoverEditModal({ file, onClose, onApply, uploading = false }) {
   const [img, setImg] = useState(null);
-  const [gifPreviewUrl, setGifPreviewUrl] = useState("");
   const isGif = file?.type === "image/gif";
+
+  /** Sync blob URL — avoids an extra React commit before the GIF <img> can render (GIF branch never depended on raster decode). */
+  const gifBlobUrl = useMemo(() => {
+    if (!file || !isGif) return "";
+    return URL.createObjectURL(file);
+  }, [file, isGif]);
+
+  useEffect(() => {
+    return () => {
+      if (gifBlobUrl) URL.revokeObjectURL(gifBlobUrl);
+    };
+  }, [gifBlobUrl]);
+
   const [zoomMul, setZoomMul] = useState(1);
   const [rotQuarter, setRotQuarter] = useState(0);
   const rotationDeg = rotQuarter * 90;
@@ -92,6 +104,10 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
   }, [img, rotationDeg]);
 
   useEffect(() => {
+    if (isGif) {
+      setImg(null);
+      return undefined;
+    }
     const u = URL.createObjectURL(file);
     const image = new Image();
     image.decoding = "async";
@@ -101,7 +117,7 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
       URL.revokeObjectURL(u);
       setImg(null);
     };
-  }, [file]);
+  }, [file, isGif]);
 
   useEffect(() => {
     setPanX(0);
@@ -224,28 +240,24 @@ export default function CoverEditModal({ file, onClose, onApply, uploading = fal
           </div>
           <div className="modal-body avatar-edit-body">
             {isGif ? (
-              !gifPreviewUrl ? (
-                <p className="muted">Loading preview…</p>
-              ) : (
-                <>
-                  <div className="avatar-edit-stage-wrap">
-                    <img className="cover-edit-gif-preview" src={gifPreviewUrl} alt="" />
+              <>
+                <div className="avatar-edit-stage-wrap">
+                  <img className="cover-edit-gif-preview" src={gifBlobUrl || undefined} alt="" decoding="async" />
+                </div>
+                <p className="muted small avatar-edit-hint gif-edit-hint">
+                  GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want crop, zoom, or rotate for the banner strip.
+                </p>
+                <div className="avatar-edit-footer avatar-edit-footer--gif-only">
+                  <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
+                      {uploading ? "Uploading…" : "Upload GIF"}
+                    </button>
                   </div>
-                  <p className="muted small avatar-edit-hint gif-edit-hint">
-                    GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want crop, zoom, or rotate for the banner strip.
-                  </p>
-                  <div className="avatar-edit-footer avatar-edit-footer--gif-only">
-                    <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
-                      <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
-                        Cancel
-                      </button>
-                      <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
-                        {uploading ? "Uploading…" : "Upload GIF"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )
+                </div>
+              </>
             ) : !img?.naturalWidth ? (
               <p className="muted">Loading preview…</p>
             ) : (

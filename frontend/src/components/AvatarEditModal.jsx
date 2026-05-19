@@ -75,8 +75,8 @@ function blobFromCanvas(canvas, quality = 0.92) {
  */
 export default function AvatarEditModal({ file, onClose, onApply, uploading = false }) {
   const [img, setImg] = useState(null);
-  const [gifPreviewUrl, setGifPreviewUrl] = useState("");
   const isGif = file?.type === "image/gif";
+
   const [zoomMul, setZoomMul] = useState(1);
   const [rotQuarter, setRotQuarter] = useState(0);
   const rotationDeg = rotQuarter * 90;
@@ -86,6 +86,17 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
   const previewRef = useRef(null);
   const dragRef = useRef(null);
 
+  const gifBlobUrl = useMemo(() => {
+    if (!file || !isGif) return "";
+    return URL.createObjectURL(file);
+  }, [file, isGif]);
+
+  useEffect(() => {
+    return () => {
+      if (gifBlobUrl) URL.revokeObjectURL(gifBlobUrl);
+    };
+  }, [gifBlobUrl]);
+
   const baseScale = useMemo(() => {
     if (!img) return 1;
     return coverBaseScale(img.naturalWidth, img.naturalHeight, rotationDeg, VIEW_SIZE);
@@ -93,15 +104,9 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
 
   useEffect(() => {
     if (isGif) {
-      const u = URL.createObjectURL(file);
-      setGifPreviewUrl(u);
       setImg(null);
-      return () => {
-        URL.revokeObjectURL(u);
-        setGifPreviewUrl("");
-      };
+      return undefined;
     }
-    setGifPreviewUrl("");
     const u = URL.createObjectURL(file);
     const image = new Image();
     image.decoding = "async";
@@ -240,32 +245,29 @@ export default function AvatarEditModal({ file, onClose, onApply, uploading = fa
           </div>
           <div className="modal-body avatar-edit-body">
             {isGif ? (
-              !gifPreviewUrl ? (
-                <p className="muted">Loading preview…</p>
-              ) : (
-                <>
-                  <div className="avatar-edit-stage-wrap">
-                    <img
-                      className="avatar-edit-gif-preview"
-                      src={gifPreviewUrl}
-                      alt=""
-                    />
+              <>
+                <div className="avatar-edit-stage-wrap">
+                  <img
+                    className="avatar-edit-gif-preview"
+                    src={gifBlobUrl || undefined}
+                    alt=""
+                    decoding="async"
+                  />
+                </div>
+                <p className="muted small avatar-edit-hint gif-edit-hint">
+                  GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want to crop or zoom inside the circle.
+                </p>
+                <div className="avatar-edit-footer avatar-edit-footer--gif-only">
+                  <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
+                    <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
+                      Cancel
+                    </button>
+                    <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
+                      {uploading ? "Uploading…" : "Upload GIF"}
+                    </button>
                   </div>
-                  <p className="muted small avatar-edit-hint gif-edit-hint">
-                    GIF uploads keep animation — your whole file is sent as-is. Use JPG / PNG / WebP if you want to crop or zoom inside the circle.
-                  </p>
-                  <div className="avatar-edit-footer avatar-edit-footer--gif-only">
-                    <div className="avatar-edit-footer-actions avatar-edit-footer-actions--gif">
-                      <button type="button" className="btn btn-secondary btn-sm" disabled={uploading} onClick={() => onClose?.()}>
-                        Cancel
-                      </button>
-                      <button type="button" className="btn btn-primary btn-sm" disabled={uploading} onClick={() => void handleApplyGif()}>
-                        {uploading ? "Uploading…" : "Upload GIF"}
-                      </button>
-                    </div>
-                  </div>
-                </>
-              )
+                </div>
+              </>
             ) : !img?.naturalWidth ? (
               <p className="muted">Loading preview…</p>
             ) : (
