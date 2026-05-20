@@ -405,7 +405,12 @@ export default function MessagesPage({
               mobileThreadFullscreen ? " messages-mobile-stories--hidden-fullscreen" : ""
             }`}
           >
-            <CommunityStoriesRail token={token} currentUser={currentUser} variant="horizontal" />
+            <CommunityStoriesRail
+              token={token}
+              currentUser={currentUser}
+              variant="horizontal"
+              onOpenUserProfile={onOpenUserProfile}
+            />
           </div>
         ) : null}
         <aside className="messages-sidebar">
@@ -1274,7 +1279,12 @@ export default function MessagesPage({
 
         {!isNarrowViewport && token ? (
           <aside className="messages-stories-sidebar" aria-label="Stories">
-            <CommunityStoriesRail token={token} currentUser={currentUser} variant="vertical" />
+            <CommunityStoriesRail
+              token={token}
+              currentUser={currentUser}
+              variant="vertical"
+              onOpenUserProfile={onOpenUserProfile}
+            />
           </aside>
         ) : null}
       </div>

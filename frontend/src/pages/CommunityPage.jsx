@@ -205,7 +205,7 @@ export default function CommunityPage({
             : "community-stories-shell"
         }
       >
-        <CommunityStoriesRail token={token} currentUser={currentUser} />
+        <CommunityStoriesRail token={token} currentUser={currentUser} onOpenUserProfile={onOpenUserProfile} />
       </div>
       <div
         className={`composer community-composer${

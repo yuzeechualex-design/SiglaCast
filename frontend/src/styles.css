@@ -1345,6 +1345,11 @@ label.btn.btn-icon {
   opacity: 0.75;
 }
 
+.story-viewer-author-pfp-hit:focus-visible {
+  outline: 2px solid rgba(250, 204, 21, 0.95);
+  outline-offset: 3px;
+}
+
 .story-viewer-progress {
   display: flex;
   gap: 4px;

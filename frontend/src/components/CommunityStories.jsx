@@ -29,7 +29,8 @@ export default function CommunityStoriesRail({
   token,
   currentUser,
   variant = "horizontal",
-  className = ""
+  className = "",
+  onOpenUserProfile
 }) {
   const [rings, setRings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -172,6 +173,7 @@ export default function CommunityStoriesRail({
             loadStories();
           }}
           onReloadStories={loadStories}
+          onOpenUserProfile={onOpenUserProfile}
         />
       ) : null}
     </div>
@@ -269,7 +271,8 @@ function StoryViewerModal({
   storyIndex: initialSi,
   onClose,
   onFinished,
-  onReloadStories
+  onReloadStories,
+  onOpenUserProfile
 }) {
   const [{ ri, si }, setPos] = useState({ ri: initialRi, si: initialSi });
   const [playing, setPlaying] = useState(true);
@@ -442,6 +445,19 @@ function StoryViewerModal({
   const imgSrc = story.imageUrl ? mediaUrl(story.imageUrl) : null;
   const isOwner = authorId === currentUser?.id;
 
+  function openAuthorProfile() {
+    const uid = ring.user?.id;
+    if (!uid || !onOpenUserProfile) return;
+    onClose?.();
+    onOpenUserProfile(uid, {
+      name: ring.user.name,
+      avatarUrl: ring.user.avatarUrl,
+      authorAvatar: ring.user.avatarUrl,
+      presence: ring.user.presence,
+      isOnline: ring.user.isOnline
+    });
+  }
+
   return (
     <ModalPortal>
       <div
@@ -458,7 +474,21 @@ function StoryViewerModal({
         >
           <header className="story-viewer-modal-head">
             <div className="story-viewer-author">
-              {ring.user.avatarUrl ? (
+              {onOpenUserProfile ? (
+                <button
+                  type="button"
+                  className="avatar-profile-hit story-viewer-author-pfp-hit"
+                  onClick={openAuthorProfile}
+                  aria-label={`View ${ring.user.name || "profile"}`}
+                  title="View profile"
+                >
+                  {ring.user.avatarUrl ? (
+                    <img className="story-viewer-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" />
+                  ) : (
+                    <span className="story-viewer-avatar-ph">{ring.user.name?.charAt(0)}</span>
+                  )}
+                </button>
+              ) : ring.user.avatarUrl ? (
                 <img className="story-viewer-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" />
               ) : (
                 <span className="story-viewer-avatar-ph">{ring.user.name?.charAt(0)}</span>
