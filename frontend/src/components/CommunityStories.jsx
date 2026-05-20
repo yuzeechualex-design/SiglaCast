@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { mediaUrl, request, requestForm } from "../services/api.js";
 import ModalPortal from "./ModalPortal.jsx";
 import ReactionActorsModal from "./ReactionActorsModal.jsx";
@@ -83,8 +83,12 @@ export default function CommunityStoriesRail({
 
   const isVertical = variant === "vertical";
 
+  const hasStoryNotes = useMemo(() => rings.some((ring) => Boolean(listeningStatusLine(ring.user))), [rings]);
+
   return (
-    <div className={`community-stories-rail ${isVertical ? "community-stories-rail--vertical" : ""} ${className}`.trim()}>
+    <div
+      className={`community-stories-rail ${isVertical ? "community-stories-rail--vertical" : ""}${hasStoryNotes ? " community-stories-rail--has-notes" : ""} ${className}`.trim()}
+    >
       <div className="community-stories-head">
         <h3 className="community-stories-title">Stories</h3>
         {loading ? <span className="muted small stories-loading-label">Updating…</span> : null}
