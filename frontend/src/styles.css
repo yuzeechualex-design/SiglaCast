@@ -970,13 +970,15 @@ label.btn-secondary:hover {
 
 .community-stories-rail--vertical .community-stories-head {
   flex-shrink: 0;
+  padding-inline: 4px;
+  padding-top: 2px;
 }
 
 .community-stories-scroll-wrap--vertical {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  align-items: stretch;
+  align-items: center;
   gap: 8px;
 }
 
@@ -989,6 +991,8 @@ label.btn-secondary:hover {
   flex: 1;
   min-height: 100px;
   padding: 4px 0 10px;
+  width: 100%;
+  max-width: 84px;
 }
 
 .community-stories-strip--vertical::-webkit-scrollbar {
@@ -996,7 +1000,8 @@ label.btn-secondary:hover {
 }
 
 .community-stories-scroll-btn--vertical {
-  width: 100%;
+  width: 76px;
+  max-width: 100%;
   height: 32px;
   border-radius: 10px;
   font-size: 0.95rem;
@@ -2192,7 +2197,7 @@ body.community-thread-overlay-open {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 8px 6px 10px;
+  padding: 12px 10px 14px;
   background: #fff;
 }
 
@@ -2207,7 +2212,7 @@ body.community-thread-overlay-open {
 
 @media (min-width: 901px) {
   .messages-layout {
-    grid-template-columns: minmax(260px, 300px) minmax(420px, 1fr) minmax(172px, 210px);
+    grid-template-columns: minmax(260px, 300px) minmax(420px, 1fr) minmax(104px, 124px);
     gap: 14px;
     max-width: none;
     width: 100%;
