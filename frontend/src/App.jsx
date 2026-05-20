@@ -15,6 +15,7 @@ import AssistantPage from "./pages/AssistantPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
+import { ImageLightboxProvider } from "./components/ImageLightboxContext.jsx";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 
@@ -706,7 +707,7 @@ export default function App() {
   }
 
   async function reactToPost(postId, reaction) {
-    // reaction can be one of: "like", "love", "haha", "wow", "sad", "angry", null (clear)
+    // reaction can be one of: "like", "love", "haha", "wow", "sad", "cry", "angry", null (clear)
     const res = await api(`/community/posts/${postId}/react`, {
       method: "POST",
       body: { reaction: reaction === undefined ? "like" : reaction }
@@ -1409,6 +1410,7 @@ export default function App() {
         notifications: navBadges.notifications
       }}
     >
+      <ImageLightboxProvider>
       <Routes>
         <Route
           path="/"
@@ -1565,6 +1567,7 @@ export default function App() {
         onAcceptFriendRequest={acceptFriendRequest}
         onRejectFriendRequest={rejectFriendRequest}
       />
+      </ImageLightboxProvider>
     </AppShell>
   );
 }

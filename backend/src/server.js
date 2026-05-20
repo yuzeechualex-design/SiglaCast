@@ -298,7 +298,7 @@ async function serializeEventDetail(event, viewerId) {
         : `${event.maxVotesPerUser} vote${event.maxVotesPerUser === 1 ? "" : "s"} per person`
   };
 }
-const ALLOWED_REACTIONS = ["like", "love", "haha", "wow", "sad", "angry"];
+const ALLOWED_REACTIONS = ["like", "love", "haha", "wow", "sad", "cry", "angry"];
 
 async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }] = await Promise.all([
@@ -1665,7 +1665,7 @@ app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
 
   // Notify the post author when someone newly reacts (not themselves, not toggle-off, not change)
   if (action === "added" && post.author_id && post.author_id !== req.user.id) {
-    const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+    const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", cry: "😭", angry: "😡" };
     await supabase.from("notifications").insert({
       id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 6)}`,
       user_id: post.author_id,
@@ -1788,7 +1788,7 @@ app.post("/api/community/comments/:id/react", authenticate, async (req, res) => 
   }
 
   const { data: post } = await supabase.from("posts").select("*").eq("id", comment.post_id).maybeSingle();
-  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", cry: "😭", angry: "😡" };
 
   if (action === "added" && comment.author_id && comment.author_id !== me) {
     await supabase.from("notifications").insert({
@@ -3383,7 +3383,7 @@ app.post("/api/messages/:id/react", authenticate, async (req, res) => {
     action = "added";
   }
 
-  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", angry: "😡" };
+  const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", cry: "😭", angry: "😡" };
   if (action === "added" && message.from_user_id && message.from_user_id !== me) {
     await insertNotification({
       userId: message.from_user_id,

@@ -1017,6 +1017,27 @@ body.community-thread-overlay-open {
   border: 1px solid var(--line);
 }
 
+.post-image-lightbox-trigger {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 8px 0 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 12px;
+  text-align: left;
+}
+
+.post-image-lightbox-trigger:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+}
+
+.post-image-lightbox-trigger .post-image {
+  margin-top: 0;
+}
+
 .post-actions {
   margin-top: 10px;
   display: flex;
@@ -2631,6 +2652,21 @@ textarea.profile-bio-input::placeholder {
   margin-bottom: 4px;
 }
 
+.bubble-image-lightbox-trigger {
+  display: block;
+  margin-bottom: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 10px;
+}
+
+.bubble-image-lightbox-trigger:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+}
+
 .bubble-image {
   max-width: 240px;
   max-height: 320px;
@@ -3317,11 +3353,19 @@ button.comment-profile-avatar-btn:focus-visible {
   gap: 8px;
 }
 
-.image-gallery a {
+.image-gallery a,
+.image-gallery .image-gallery-thumb {
   display: block;
   aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 10px;
+}
+
+.image-gallery .image-gallery-thumb {
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
 }
 
 .image-gallery img {
@@ -3331,8 +3375,119 @@ button.comment-profile-avatar-btn:focus-visible {
   transition: transform 0.25s ease;
 }
 
-.image-gallery a:hover img {
+.image-gallery a:hover img,
+.image-gallery .image-gallery-thumb:hover img {
   transform: scale(1.06);
+}
+
+/* ---------- Full-screen image lightbox ---------- */
+.image-lightbox-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 350;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(0, 0, 0, 0.88);
+  cursor: zoom-out;
+  animation: modal-fade 150ms ease both;
+}
+
+.image-lightbox-img {
+  max-width: 100%;
+  max-height: min(92vh, 92dvh);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: default;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45);
+}
+
+.image-lightbox-close {
+  position: fixed;
+  top: max(12px, env(safe-area-inset-top));
+  right: max(12px, env(safe-area-inset-right));
+  z-index: 360;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.image-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* ---------- Emoji picker (composer) ---------- */
+.emoji-picker-panel {
+  background: var(--surface, #fff);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 14px 48px rgba(13, 71, 161, 0.22);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(248px, 52vh);
+}
+
+.emoji-picker-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+  background: var(--card, rgba(248, 250, 252, 0.95));
+}
+
+.emoji-picker-tab {
+  flex: 1;
+  padding: 8px 6px;
+  border: none;
+  background: transparent;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-600, #475569);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.emoji-picker-tab.active {
+  color: var(--blue-700, #1d4ed8);
+  box-shadow: inset 0 -2px 0 var(--blue-600, #2563eb);
+}
+
+.emoji-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  padding: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.emoji-picker-cell {
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  font-size: 1.35rem;
+  line-height: 1.2;
+  padding: 6px 4px;
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.emoji-picker-cell:hover {
+  background: rgba(37, 99, 235, 0.1);
 }
 
 .file-list {
@@ -4184,12 +4339,31 @@ button.comment-profile-avatar-btn:focus-visible {
   margin-top: 6px;
 }
 
+.comment-image-lightbox-trigger {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: zoom-in;
+  border-radius: 10px;
+}
+
+.comment-image-lightbox-trigger:focus-visible {
+  outline: 2px solid var(--blue-600);
+  outline-offset: 2px;
+}
+
 .comment-image {
   max-width: 220px;
   max-height: 220px;
   border-radius: 10px;
   display: block;
   border: 1px solid var(--line);
+}
+
+.comment-image-lightbox-trigger .comment-image {
+  margin-top: 0;
 }
 
 .comment-delete-link {

@@ -5,6 +5,8 @@ import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
+import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
+import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 
 /** Narrow layout: fullscreen post threads + tap targets (keep in sync with CSS). */
 const COMMUNITY_MOBILE_MAX_PX = 720;
@@ -15,6 +17,7 @@ const REACTIONS = [
   { type: "haha", emoji: "😂", label: "Haha", color: "#f59e0b" },
   { type: "wow",  emoji: "😮", label: "Wow",  color: "#f59e0b" },
   { type: "sad",  emoji: "😢", label: "Sad",  color: "#0ea5e9" },
+  { type: "cry", emoji: "😭", label: "Crying", color: "#6366f6" },
   { type: "angry", emoji: "😡", label: "Angry", color: "#dc2626" }
 ];
 
@@ -214,6 +217,7 @@ export default function CommunityPage({
         <div className="composer-toolbar">
           <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={onFileChange} />
           <button type="button" className="btn btn-icon" title="Add image" onClick={pickImage}>＋</button>
+          <EmojiPickerButton onPick={(emoji) => setContent((c) => c + emoji)} />
           <button type="button" className="btn btn-primary" onClick={handlePublish}>📤 Publish</button>
         </div>
       </div>
@@ -338,6 +342,7 @@ function PostCardBody({
   openCommentReactors,
   onOpenUserProfile
 }) {
+  const { openLightbox } = useImageLightbox();
   return (
     <>
       <div className="post-header">
@@ -378,7 +383,17 @@ function PostCardBody({
 
       {post.content ? <PostText text={post.content} forceExpanded={forceExpandedBody} /> : null}
       {post.imageUrl ? (
-        <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" decoding="async" loading="lazy" />
+        <button
+          type="button"
+          className="post-image-lightbox-trigger"
+          onClick={(e) => {
+            e.stopPropagation();
+            openLightbox(mediaUrl(post.imageUrl));
+          }}
+          aria-label="View full image"
+        >
+          <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" decoding="async" loading="lazy" />
+        </button>
       ) : null}
 
       <ReactionsRow post={post} onReact={onReact} onShowReactors={openPostReactors} />
@@ -548,6 +563,7 @@ function CommentRow({
   onOpenUserProfile
 }) {
   const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
+  const { openLightbox } = useImageLightbox();
   function handleDelete() {
     if (!onDeleteComment) return;
     if (window.confirm("Delete this comment? Any replies will also be removed.")) {
@@ -584,14 +600,17 @@ function CommentRow({
           ) : null}{" "}
           {comment.text ? <MentionText text={comment.text} /> : null}
           {comment.imageUrl ? (
-            <a
-              href={mediaUrl(comment.imageUrl)}
-              target="_blank"
-              rel="noreferrer"
-              className="comment-image-link"
+            <button
+              type="button"
+              className="comment-image-lightbox-trigger"
+              onClick={(e) => {
+                e.stopPropagation();
+                openLightbox(mediaUrl(comment.imageUrl));
+              }}
+              aria-label="View full image"
             >
               <img className="comment-image" src={mediaUrl(comment.imageUrl)} alt="" />
-            </a>
+            </button>
           ) : null}
         </div>
         <div className="comment-meta">
@@ -652,6 +671,7 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
           onChange={(e) => setPhoto(e.target.files?.[0] || null)}
         />
       </label>
+      <EmojiPickerButton onPick={(emoji) => setText((t) => t + emoji)} />
       {photoUrl ? (
         <div className="comment-photo-preview">
           <img src={photoUrl} alt="preview" />
@@ -705,7 +725,7 @@ function PostText({ text, forceExpanded }) {
 }
 
 // Facebook-style reactions bar. Hovering the trigger reveals a floating picker
-// with six animated emoji buttons. Click picks; clicking the active emoji
+// with animated emoji buttons. Click picks; clicking the active emoji
 // removes it; clicking a different emoji switches the reaction.
 function ReactionsRow({ post, onReact, onShowReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -838,6 +858,7 @@ function CommentBox({ postId, onComment, currentUser }) {
           onChange={(e) => setPhoto(e.target.files?.[0] || null)}
         />
       </label>
+      <EmojiPickerButton onPick={(emoji) => setText((t) => t + emoji)} />
       {photoUrl ? (
         <div className="comment-photo-preview">
           <img src={photoUrl} alt="preview" />

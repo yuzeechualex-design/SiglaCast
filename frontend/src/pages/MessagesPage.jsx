@@ -6,6 +6,8 @@ import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import ModalPortal from "../components/ModalPortal.jsx";
+import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
+import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -13,6 +15,7 @@ const CHAT_REACTIONS = [
   { type: "haha", emoji: "😂", label: "Haha" },
   { type: "wow",  emoji: "😮", label: "Wow"  },
   { type: "sad",  emoji: "😢", label: "Sad"  },
+  { type: "cry", emoji: "😭", label: "Crying" },
   { type: "angry", emoji: "😡", label: "Angry" }
 ];
 const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
@@ -1227,6 +1230,7 @@ export default function MessagesPage({
                   </button>
                 </div>
                 ) : null}
+                <EmojiPickerButton onPick={(emoji) => setDraft((d) => d + emoji)} />
                 <MentionInput
                   value={draft}
                   onChange={setDraft}
@@ -1317,11 +1321,18 @@ export default function MessagesPage({
 }
 
 function MessageAttachment({ att }) {
+  const { openLightbox } = useImageLightbox();
   if (att.isImage) {
+    const src = mediaUrl(att.url);
     return (
-      <a href={att.url} target="_blank" rel="noreferrer" className="bubble-image-link">
-        <img className="bubble-image" src={mediaUrl(att.url)} alt={att.name || "image"} />
-      </a>
+      <button
+        type="button"
+        className="bubble-image-lightbox-trigger"
+        onClick={() => openLightbox(src)}
+        aria-label={att.name ? `View image: ${att.name}` : "View full image"}
+      >
+        <img className="bubble-image" src={src} alt={att.name || "image"} />
+      </button>
     );
   }
   return (
@@ -2075,6 +2086,7 @@ function GroupSettingsModal({
 // ---------------- Attachments Modal ----------------
 
 function AttachmentsModal({ loader, onClose }) {
+  const { openLightbox } = useImageLightbox();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState("images");
@@ -2137,15 +2149,15 @@ function AttachmentsModal({ loader, onClose }) {
             ) : (
               <div className="image-gallery">
                 {images.map((m) => (
-                  <a
+                  <button
                     key={m.id}
-                    href={m.attachment.url}
-                    target="_blank"
-                    rel="noreferrer"
+                    type="button"
+                    className="image-gallery-thumb"
                     title={`${m.author || ""} · ${new Date(m.createdAt).toLocaleString()}`}
+                    onClick={() => openLightbox(mediaUrl(m.attachment.url))}
                   >
                     <img src={mediaUrl(m.attachment.url)} alt={m.attachment.name || ""} />
-                  </a>
+                  </button>
                 ))}
               </div>
             )
