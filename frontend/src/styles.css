@@ -1124,6 +1124,8 @@ label.btn-secondary:hover {
   color: #f8fafc;
   display: flex;
   flex-direction: column;
+  /* Anchor absolutely positioned nav controls */
+  isolation: isolate;
 }
 
 .story-viewer-close {
@@ -1187,25 +1189,49 @@ label.btn-secondary:hover {
   background: #fff;
 }
 
-.story-viewer-hit {
+.story-viewer-nav-btn {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 34%;
-  border: none;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 25;
+  width: 46px;
+  height: 46px;
   padding: 0;
   margin: 0;
-  background: transparent;
+  border: none;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.55);
+  color: #fff;
+  font-size: 1.85rem;
+  font-weight: 700;
+  line-height: 1;
   cursor: pointer;
-  z-index: 5;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+  -webkit-tap-highlight-color: transparent;
+  appearance: none;
 }
 
-.story-viewer-hit--prev {
-  left: 0;
+.story-viewer-nav-btn:hover {
+  background: rgba(15, 23, 42, 0.72);
 }
 
-.story-viewer-hit--next {
-  right: 0;
+.story-viewer-nav-btn:focus {
+  outline: none;
+}
+
+.story-viewer-nav-btn:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.85);
+  outline-offset: 2px;
+}
+
+.story-viewer-nav-btn--prev {
+  left: max(10px, env(safe-area-inset-left));
+}
+
+.story-viewer-nav-btn--next {
+  right: max(10px, env(safe-area-inset-right));
 }
 
 .story-viewer-body {

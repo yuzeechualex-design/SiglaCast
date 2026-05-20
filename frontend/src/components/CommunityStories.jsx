@@ -343,8 +343,22 @@ function StoryViewerModal({
           ))}
         </div>
 
-        <button type="button" className="story-viewer-hit story-viewer-hit--prev" aria-label="Previous" onClick={() => go(-1)} />
-        <button type="button" className="story-viewer-hit story-viewer-hit--next" aria-label="Next" onClick={() => go(1)} />
+        <button
+          type="button"
+          className="story-viewer-nav-btn story-viewer-nav-btn--prev"
+          aria-label="Previous story"
+          onClick={() => go(-1)}
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="story-viewer-nav-btn story-viewer-nav-btn--next"
+          aria-label="Next story"
+          onClick={() => go(1)}
+        >
+          ›
+        </button>
 
         <div className="story-viewer-body">
           {imgSrc ? (
