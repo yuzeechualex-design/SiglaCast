@@ -2175,6 +2175,27 @@ app.post("/api/notifications/read-all", authenticate, async (req, res) => {
   res.json({ success: true });
 });
 
+/** Delete every notification for the current user (bell list clear). */
+app.delete("/api/notifications", authenticate, async (req, res) => {
+  const { error } = await supabase.from("notifications").delete().eq("user_id", req.user.id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+app.delete("/api/notifications/:notificationId", authenticate, async (req, res) => {
+  const notificationId = req.params.notificationId;
+  const { data: row } = await supabase
+    .from("notifications")
+    .select("id")
+    .eq("id", notificationId)
+    .eq("user_id", req.user.id)
+    .maybeSingle();
+  if (!row) return res.status(404).json({ error: "Notification not found" });
+  const { error } = await supabase.from("notifications").delete().eq("id", notificationId);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // Random anonymous "Userphone" chat (same app users, masked as Anonymous)
 app.get("/api/userphone/state", authenticate, async (req, res) => {
   res.json(await buildUserphoneState(req.user.id));

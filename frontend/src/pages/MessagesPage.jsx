@@ -1079,6 +1079,7 @@ export default function MessagesPage({
                       message={m}
                       showAuthor={isGroup && !m.fromMe}
                       minimal={isUserphone && m.author !== "SiglaCast AI"}
+                      swipeReplyEnabled={isNarrowViewport && !isUserphone}
                       activeChat={activeChat}
                       isUserphone={isUserphone}
                       onReact={onReactToMessage}
@@ -1412,6 +1413,7 @@ function MessageBubble({
   message: m,
   showAuthor,
   minimal = false,
+  swipeReplyEnabled = false,
   activeChat,
   isUserphone = false,
   onReact,
@@ -1424,7 +1426,21 @@ function MessageBubble({
   const closeTimer = useRef(null);
   const longPressTimer = useRef(null);
   const bubbleWrapRef = useRef(null);
+  const bubbleTouchRef = useRef(null);
+  const pickerOpenRef = useRef(false);
+  const onReplyRef = useRef(onReply);
+  const swipeStartXR = useRef(0);
+  const swipeStartYR = useRef(0);
+  const swipeTrackingRef = useRef(false);
+  const swipeArmedRef = useRef(false);
+  const swipeDxRef = useRef(0);
+  const [swipeDx, setSwipeDx] = useState(0);
+  const [swipeHintOpacity, setSwipeHintOpacity] = useState(0);
+  const [swipeDragging, setSwipeDragging] = useState(false);
   const unsent = !!m.isUnsent;
+
+  pickerOpenRef.current = pickerOpen;
+  onReplyRef.current = onReply;
 
   useEffect(() => () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
@@ -1446,6 +1462,85 @@ function MessageBubble({
       document.removeEventListener("mousedown", tapOut, true);
     };
   }, [pickerOpen, unsent, minimal]);
+
+  useEffect(() => {
+    const el = bubbleTouchRef.current;
+    if (!el || !swipeReplyEnabled || minimal || unsent) return;
+
+    const TH = 56;
+    const MAX = 76;
+
+    function clampDx(rawDx) {
+      if (m.fromMe) {
+        if (rawDx >= 0) return 0;
+        return Math.max(rawDx, -MAX);
+      }
+      if (rawDx <= 0) return 0;
+      return Math.min(rawDx, MAX);
+    }
+
+    function apply(rawDx) {
+      const c = clampDx(rawDx);
+      swipeDxRef.current = c;
+      setSwipeDx(c);
+      setSwipeHintOpacity(c === 0 ? 0 : Math.min(0.92, Math.abs(c) / TH));
+    }
+
+    function move(ev) {
+      if (!swipeTrackingRef.current || pickerOpenRef.current) return;
+      if (ev.touches.length !== 1) return;
+      const dx = ev.touches[0].clientX - swipeStartXR.current;
+      const dy = ev.touches[0].clientY - swipeStartYR.current;
+
+      if (!swipeArmedRef.current) {
+        if (Math.abs(dx) < 12 && Math.abs(dy) < 12) return;
+        if (Math.abs(dy) >= Math.abs(dx)) {
+          swipeTrackingRef.current = false;
+          apply(0);
+          setSwipeHintOpacity(0);
+          return;
+        }
+        swipeArmedRef.current = true;
+        setSwipeDragging(true);
+        if (longPressTimer.current) {
+          clearTimeout(longPressTimer.current);
+          longPressTimer.current = null;
+        }
+      }
+
+      apply(dx);
+      if (swipeArmedRef.current && Math.abs(dx) > 14) {
+        ev.preventDefault();
+      }
+    }
+
+    function endSwipeGesture() {
+      if (!swipeTrackingRef.current) return;
+      const dx = swipeDxRef.current;
+      swipeTrackingRef.current = false;
+      swipeArmedRef.current = false;
+      setSwipeDragging(false);
+
+      const fire = (m.fromMe && dx <= -TH) || (!m.fromMe && dx >= TH);
+
+      swipeDxRef.current = 0;
+      apply(0);
+
+      if (fire) {
+        setPickerOpen(false);
+        onReplyRef.current?.(m);
+      }
+    }
+
+    el.addEventListener("touchmove", move, { passive: false });
+    el.addEventListener("touchend", endSwipeGesture);
+    el.addEventListener("touchcancel", endSwipeGesture);
+    return () => {
+      el.removeEventListener("touchmove", move);
+      el.removeEventListener("touchend", endSwipeGesture);
+      el.removeEventListener("touchcancel", endSwipeGesture);
+    };
+  }, [swipeReplyEnabled, minimal, unsent, m.fromMe, m.id]);
 
   const breakdown = m.reactionBreakdown || {};
   const topReactions = CHAT_REACTIONS
@@ -1469,7 +1564,17 @@ function MessageBubble({
 
   // Touch: long-press to open the reaction picker. preventDefault on the
   // native contextmenu so "Copy / Select" doesn't appear underneath.
-  function handleTouchStart() {
+  function handleTouchStart(e) {
+    if (!unsent && !minimal && swipeReplyEnabled && !pickerOpen && e.touches?.length === 1) {
+      swipeTrackingRef.current = true;
+      swipeArmedRef.current = false;
+      swipeStartXR.current = e.touches[0].clientX;
+      swipeStartYR.current = e.touches[0].clientY;
+      swipeDxRef.current = 0;
+      setSwipeDx(0);
+      setSwipeHintOpacity(0);
+      setSwipeDragging(false);
+    }
     if (unsent || minimal) return;
     if (longPressTimer.current) clearTimeout(longPressTimer.current);
     longPressTimer.current = setTimeout(() => setPickerOpen(true), 400);
@@ -1534,8 +1639,22 @@ function MessageBubble({
         onMouseEnter={!unsent && !minimal ? openPicker : undefined}
         onMouseLeave={!unsent && !minimal ? deferClose : undefined}
       >
-        <div className="bubble-with-actions" ref={bubbleWrapRef}>
+        {swipeReplyEnabled && !minimal && !unsent ? (
           <div
+            className={`bubble-swipe-hint bubble-swipe-hint--${m.fromMe ? "me" : "them"}`}
+            style={{ opacity: swipeHintOpacity }}
+            aria-hidden
+          >
+            <span className="bubble-swipe-hint-icon">↩</span>
+          </div>
+        ) : null}
+        <div
+          className={`bubble-with-actions ${swipeDragging ? "is-swipe-dragging" : ""}`}
+          ref={bubbleWrapRef}
+          style={{ transform: `translateX(${swipeDx}px)` }}
+        >
+          <div
+            ref={bubbleTouchRef}
             className={`bubble ${m.fromMe ? "bubble-me" : "bubble-them"} ${unsent ? "bubble-unsent" : ""}`}
             onContextMenu={suppressContext}
             onTouchStart={handleTouchStart}

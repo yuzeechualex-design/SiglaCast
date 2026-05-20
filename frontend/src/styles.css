@@ -3410,9 +3410,45 @@ textarea.profile-bio-input::placeholder {
 
 .bubble-with-actions {
   position: relative;
+  transition: transform 0.22s cubic-bezier(0.34, 1.36, 0.64, 1);
 }
 
-.bubble-react-picker {
+.bubble-with-actions.is-swipe-dragging {
+  transition: none;
+}
+
+.bubble-swipe-hint {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  width: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+}
+
+.bubble-swipe-hint--them {
+  left: 4px;
+}
+
+.bubble-swipe-hint--me {
+  right: 4px;
+}
+
+.bubble-swipe-hint-icon {
+  font-size: 1.35rem;
+  line-height: 1;
+  color: var(--blue-700);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.12));
+}
+
+[data-theme="dark"] .bubble-swipe-hint-icon {
+  color: var(--yellow-500);
+}
+
   position: absolute;
   bottom: calc(100% + 6px);
   z-index: 15;
@@ -5413,6 +5449,60 @@ button.comment-profile-avatar-btn:focus-visible {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.notifications-panel-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.notifications-head-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.notifications-clear-all-btn {
+  flex-shrink: 0;
+}
+
+.notification-list-item {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.notification-list-item .notification-tile {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-delete-btn {
+  flex-shrink: 0;
+  width: 44px;
+  align-self: stretch;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  font-size: 1.1rem;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.notification-delete-btn:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.notification-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 .notification-tile {

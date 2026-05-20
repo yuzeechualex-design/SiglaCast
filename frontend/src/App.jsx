@@ -1495,7 +1495,17 @@ export default function App() {
             />
           }
         />
-        <Route path="/notifications" element={<NotificationsPage notifications={notifications} />} />
+        <Route
+          path="/notifications"
+          element={
+            <NotificationsPage
+              notifications={notifications}
+              token={token}
+              onUnauthorizedRetry={onUnauthorizedRetry}
+              onNotificationsUpdated={(list) => setNotifications(list)}
+            />
+          }
+        />
         <Route
           path="/messages"
           element={
