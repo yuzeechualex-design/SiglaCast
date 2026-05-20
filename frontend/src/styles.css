@@ -951,6 +951,15 @@ label.btn.btn-icon {
   scrollbar-width: thin;
 }
 
+/* Horizontal strip is a scrollport: overflow-x: auto collapses overflow-y to "auto",
+   so overlapping note bubbles clip at the top. Reserve space whenever any bubble exists. */
+.community-stories-rail:not(.community-stories-rail--vertical)
+  .community-stories-strip:not(.community-stories-strip--vertical):has(.story-note-bubble) {
+  padding-top: 52px;
+  padding-bottom: 10px;
+  padding-inline: 4px;
+}
+
 .community-stories-strip::-webkit-scrollbar {
   height: 6px;
 }
@@ -1128,7 +1137,8 @@ label.btn.btn-icon {
   color: var(--blue-700, #1d4ed8);
 }
 
-/* Notes bubble: horizontal rail = centered above ring; Messages vertical rail = overlapping top-left + tail near avatar (matches FB/IG note look) */
+/* Notes bubble: default = centered overlapping ring top + tail aimed at avatar.
+   Vertical Messages rail tweaks position (below). */
 .story-ring-stack {
   position: relative;
   display: flex;
@@ -1139,7 +1149,7 @@ label.btn.btn-icon {
 
 .story-note-bubble {
   position: absolute;
-  bottom: calc(100% + 6px);
+  bottom: calc(100% - 12px);
   left: 50%;
   transform: translateX(-50%);
   z-index: 4;
@@ -1170,6 +1180,34 @@ label.btn.btn-icon {
 
 .community-stories-rail:not(.community-stories-rail--vertical) .story-note-bubble .overflow-marquee {
   text-align: center;
+}
+
+/* Community Feed horizontal rail: same wrapped “note” behavior as Messages column */
+.community-stories-rail:not(.community-stories-rail--vertical) .story-note-bubble {
+  bottom: calc(100% - 14px);
+  max-width: min(200px, calc(100vw - 112px));
+  padding: 6px 10px;
+  border-radius: 12px;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.community-stories-rail:not(.community-stories-rail--vertical)
+  .story-note-bubble
+  .overflow-marquee__inner {
+  white-space: normal;
+  display: block;
+}
+
+.community-stories-rail:not(.community-stories-rail--vertical)
+  .story-note-bubble
+  .overflow-marquee--active
+  .overflow-marquee__inner {
+  animation: none;
 }
 
 .community-stories-rail--vertical .story-note-bubble {
