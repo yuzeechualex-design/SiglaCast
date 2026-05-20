@@ -171,6 +171,7 @@ export default function CommunityStoriesRail({
             setViewer(null);
             loadStories();
           }}
+          onReloadStories={loadStories}
         />
       ) : null}
     </div>
@@ -258,6 +259,8 @@ function CreateStoryModal({ token, onClose, onPosted }) {
   );
 }
 
+const STORY_SLIDE_MS = 10_000;
+
 function StoryViewerModal({
   token,
   rings,
@@ -265,17 +268,51 @@ function StoryViewerModal({
   ringIndex: initialRi,
   storyIndex: initialSi,
   onClose,
-  onFinished
+  onFinished,
+  onReloadStories
 }) {
   const [{ ri, si }, setPos] = useState({ ri: initialRi, si: initialSi });
+  const [playing, setPlaying] = useState(true);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const endTimeRef = useRef(0);
+  const pauseRemainRef = useRef(STORY_SLIDE_MS);
+  const moreWrapRef = useRef(null);
 
   useEffect(() => {
     setPos({ ri: initialRi, si: initialSi });
+    setPlaying(true);
+    endTimeRef.current = Date.now() + STORY_SLIDE_MS;
+    pauseRemainRef.current = STORY_SLIDE_MS;
   }, [initialRi, initialSi]);
 
   const ring = rings[ri];
   const story = ring?.stories?.[si];
   const authorId = ring?.user?.id;
+
+  useEffect(() => {
+    if (!rings.length) {
+      onClose?.();
+      return;
+    }
+    if (ri < 0 || ri >= rings.length) {
+      onClose?.();
+      return;
+    }
+    const r = rings[ri];
+    if (!r?.stories?.length) {
+      onClose?.();
+      return;
+    }
+    if (si >= r.stories.length) {
+      setPos({ ri, si: r.stories.length - 1 });
+    }
+  }, [rings, ri, si, onClose]);
+
+  useEffect(() => {
+    endTimeRef.current = Date.now() + STORY_SLIDE_MS;
+    pauseRemainRef.current = STORY_SLIDE_MS;
+  }, [story?.id]);
 
   useEffect(() => {
     if (!story?.id || !authorId || authorId === currentUser?.id || !token) return undefined;
@@ -293,6 +330,8 @@ function StoryViewerModal({
 
   const go = useCallback(
     (delta) => {
+      setPlaying(true);
+      setMoreOpen(false);
       setPos(({ ri: cri, si: csi }) => {
         const r = rings[cri];
         if (!r) {
@@ -325,74 +364,201 @@ function StoryViewerModal({
   );
 
   useEffect(() => {
+    if (!story?.id) return undefined;
+    let cancelled = false;
+    let tid = null;
+    function arm() {
+      if (!playing || cancelled) return;
+      const msLeft = Math.max(0, endTimeRef.current - Date.now());
+      tid = window.setTimeout(() => {
+        if (cancelled) return;
+        go(1);
+      }, msLeft);
+    }
+    arm();
+    return () => {
+      cancelled = true;
+      if (tid !== null) window.clearTimeout(tid);
+    };
+  }, [story?.id, playing, go]);
+
+  useEffect(() => {
     function onKey(e) {
-      if (e.key === "Escape") onClose?.();
+      if (e.key === "Escape") {
+        if (moreOpen) setMoreOpen(false);
+        else onClose?.();
+      }
       if (e.key === "ArrowRight") go(1);
       if (e.key === "ArrowLeft") go(-1);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [go, onClose]);
+  }, [go, onClose, moreOpen]);
+
+  useEffect(() => {
+    if (!moreOpen) return undefined;
+    function handleMouseDown(e) {
+      if (!moreWrapRef.current?.contains(e.target)) setMoreOpen(false);
+    }
+    document.addEventListener("mousedown", handleMouseDown);
+    return () => document.removeEventListener("mousedown", handleMouseDown);
+  }, [moreOpen]);
+
+  useEffect(() => {
+    setMoreOpen(false);
+  }, [story?.id]);
+
+  function togglePause() {
+    setPlaying((p) => {
+      if (p) {
+        pauseRemainRef.current = Math.max(0, endTimeRef.current - Date.now());
+        return false;
+      }
+      endTimeRef.current = Date.now() + Math.max(80, pauseRemainRef.current);
+      return true;
+    });
+  }
+
+  async function deleteCurrentStory() {
+    if (!story?.id || authorId !== currentUser?.id || deleteBusy) return;
+    if (!window.confirm("Delete this story? Friends will no longer see it.")) return;
+    setDeleteBusy(true);
+    setMoreOpen(false);
+    try {
+      const data = await request(`/stories/${encodeURIComponent(story.id)}`, { token, method: "DELETE" });
+      if (data.error) {
+        window.alert(typeof data.error === "string" ? data.error : "Could not delete story.");
+        return;
+      }
+      await onReloadStories?.();
+      onClose?.();
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
 
   if (!ring || !story) return null;
 
   const imgSrc = story.imageUrl ? mediaUrl(story.imageUrl) : null;
+  const isOwner = authorId === currentUser?.id;
 
   return (
     <ModalPortal>
-      <div className="story-viewer-root" role="dialog" aria-modal="true" aria-label="Story viewer">
-        <button type="button" className="story-viewer-close" onClick={onClose} aria-label="Close">
-          ✕
-        </button>
+      <div
+        className="modal-backdrop modal-backdrop--portal story-viewer-portal"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div
+          className="modal-card story-viewer-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Story viewer"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <header className="story-viewer-modal-head">
+            <div className="story-viewer-author">
+              {ring.user.avatarUrl ? (
+                <img className="story-viewer-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" />
+              ) : (
+                <span className="story-viewer-avatar-ph">{ring.user.name?.charAt(0)}</span>
+              )}
+              <div className="story-viewer-meta">
+                <strong>{ring.user.name}</strong>
+                <small>{story.createdAt ? new Date(story.createdAt).toLocaleString() : ""}</small>
+              </div>
+            </div>
+            <div className="story-viewer-modal-actions">
+              <button
+                type="button"
+                className="story-viewer-icon-btn"
+                onClick={togglePause}
+                aria-label={playing ? "Pause story" : "Play story"}
+                title={playing ? "Pause" : "Play"}
+              >
+                {playing ? "⏸" : "▶"}
+              </button>
+              {isOwner ? (
+                <div className="story-viewer-more-wrap" ref={moreWrapRef}>
+                  <button
+                    type="button"
+                    className="story-viewer-icon-btn"
+                    aria-expanded={moreOpen}
+                    aria-haspopup="menu"
+                    aria-label="Story options"
+                    onClick={() => setMoreOpen((v) => !v)}
+                  >
+                    ⋯
+                  </button>
+                  {moreOpen ? (
+                    <div className="story-viewer-more-menu" role="menu">
+                      <button type="button" role="menuitem" disabled={deleteBusy} onClick={() => deleteCurrentStory()}>
+                        {deleteBusy ? "Deleting…" : "Delete story"}
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+              <button type="button" className="story-viewer-modal-close" onClick={onClose} aria-label="Close">
+                ✕
+              </button>
+            </div>
+          </header>
 
-        <header className="story-viewer-header">
-          {ring.user.avatarUrl ? (
-            <img className="story-viewer-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" />
-          ) : (
-            <span className="story-viewer-avatar-ph">{ring.user.name?.charAt(0)}</span>
-          )}
-          <div className="story-viewer-meta">
-            <strong>{ring.user.name}</strong>
-            <small>{story.createdAt ? new Date(story.createdAt).toLocaleString() : ""}</small>
+          <div className="story-viewer-progress">
+            {ring.stories.map((s, i) => {
+              let segClass = "story-viewer-progress-seg";
+              if (i < si) segClass += " story-viewer-progress-seg--done";
+              else if (i === si) segClass += ` story-viewer-progress-seg--active ${playing ? "is-playing" : "is-paused"}`;
+              return (
+                <span key={s.id} className={segClass}>
+                  {i === si ? (
+                    <span
+                      className="story-viewer-progress-fill"
+                      key={story.id}
+                      style={{ animationDuration: `${STORY_SLIDE_MS}ms` }}
+                    />
+                  ) : null}
+                </span>
+              );
+            })}
           </div>
-        </header>
 
-        <div className="story-viewer-progress">
-          {ring.stories.map((s, i) => (
-            <span key={s.id} className={`story-viewer-progress-seg ${i === si ? "active" : ""}`} />
-          ))}
-        </div>
+          <div className="story-viewer-modal-stage">
+            <button
+              type="button"
+              className="story-viewer-nav-btn story-viewer-nav-btn--prev"
+              aria-label="Previous story"
+              onClick={() => go(-1)}
+            >
+              ‹
+            </button>
+            <button
+              type="button"
+              className="story-viewer-nav-btn story-viewer-nav-btn--next"
+              aria-label="Next story"
+              onClick={() => go(1)}
+            >
+              ›
+            </button>
 
-        <button
-          type="button"
-          className="story-viewer-nav-btn story-viewer-nav-btn--prev"
-          aria-label="Previous story"
-          onClick={() => go(-1)}
-        >
-          ‹
-        </button>
-        <button
-          type="button"
-          className="story-viewer-nav-btn story-viewer-nav-btn--next"
-          aria-label="Next story"
-          onClick={() => go(1)}
-        >
-          ›
-        </button>
-
-        <div className="story-viewer-body">
-          {imgSrc ? (
-            <img className="story-viewer-media" src={imgSrc} alt="" decoding="async" />
-          ) : (
-            <div className="story-viewer-text-only">
-              <p>{story.text || ""}</p>
+            <div className="story-viewer-body">
+              {imgSrc ? (
+                <img className="story-viewer-media" src={imgSrc} alt="" decoding="async" />
+              ) : (
+                <div className="story-viewer-text-only">
+                  <p>{story.text || ""}</p>
+                </div>
+              )}
+              {imgSrc && story.text ? (
+                <div className="story-viewer-caption">
+                  <p>{story.text}</p>
+                </div>
+              ) : null}
             </div>
-          )}
-          {imgSrc && story.text ? (
-            <div className="story-viewer-caption">
-              <p>{story.text}</p>
-            </div>
-          ) : null}
+          </div>
+
+          <p className="story-viewer-expiry-hint muted small">Stories expire after 24 hours.</p>
         </div>
       </div>
     </ModalPortal>

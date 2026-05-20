@@ -1778,6 +1778,21 @@ app.post("/api/stories/:storyId/view", authenticate, async (req, res) => {
   }
 });
 
+app.delete("/api/stories/:storyId", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const { data: story } = await supabase.from("user_stories").select("id, user_id").eq("id", storyId).maybeSingle();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    if (story.user_id !== me) return res.status(403).json({ error: "Not allowed" });
+    const { error } = await supabase.from("user_stories").delete().eq("id", storyId);
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.post("/api/community/posts/:id/react", authenticate, async (req, res) => {
   const post_id = req.params.id;
   const requested = String(req.body?.reaction || "like").toLowerCase();

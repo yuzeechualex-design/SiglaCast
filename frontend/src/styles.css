@@ -1158,39 +1158,128 @@ label.btn-secondary:hover {
   color: #e11d48;
 }
 
-.story-viewer-root {
-  position: fixed;
-  inset: 0;
-  z-index: 420;
+.modal-backdrop.modal-backdrop--portal.story-viewer-portal {
+  z-index: 380;
+}
+
+.modal-card.story-viewer-modal {
+  width: min(520px, 100%);
+  padding: 0;
+  overflow: hidden;
   background: #0f172a;
   color: #f8fafc;
+  border-radius: 18px;
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(148, 163, 184, 0.14);
+}
+
+[data-theme="light"] .modal-card.story-viewer-modal {
+  box-shadow: 0 22px 70px rgba(13, 71, 161, 0.35), 0 0 0 1px rgba(13, 71, 161, 0.18);
+}
+
+.story-viewer-modal-head {
   display: flex;
-  flex-direction: column;
-  /* Anchor absolutely positioned nav controls */
-  isolation: isolate;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px 10px;
+  flex-shrink: 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.story-viewer-close {
-  position: absolute;
-  top: max(12px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
-  z-index: 30;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
-  font-size: 1.25rem;
-  cursor: pointer;
-}
-
-.story-viewer-header {
+.story-viewer-author {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: max(52px, calc(env(safe-area-inset-top) + 40px)) 16px 12px;
+  min-width: 0;
+}
+
+.story-viewer-modal-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-shrink: 0;
+}
+
+.story-viewer-icon-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+
+.story-viewer-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.story-viewer-modal-close {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #f8fafc;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.story-viewer-modal-close:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.story-viewer-more-wrap {
+  position: relative;
+}
+
+.story-viewer-more-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 160px;
+  padding: 6px;
+  border-radius: 12px;
+  background: #1e293b;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.45);
+  z-index: 50;
+}
+
+.story-viewer-more-menu button {
+  width: 100%;
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: #fecaca;
+  font-weight: 600;
+  font-size: 0.92rem;
+  cursor: pointer;
+}
+
+.story-viewer-more-menu button:hover:not(:disabled) {
+  background: rgba(239, 68, 68, 0.15);
+}
+
+.story-viewer-more-menu button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.story-viewer-expiry-hint {
+  margin: 0;
+  padding: 10px 14px 14px;
+  text-align: center;
+  opacity: 0.72;
 }
 
 .story-viewer-avatar,
@@ -1203,10 +1292,18 @@ label.btn-secondary:hover {
   display: grid;
   place-items: center;
   font-weight: 800;
+  flex-shrink: 0;
+}
+
+.story-viewer-meta {
+  min-width: 0;
 }
 
 .story-viewer-meta strong {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .story-viewer-meta small {
@@ -1216,7 +1313,7 @@ label.btn-secondary:hover {
 .story-viewer-progress {
   display: flex;
   gap: 4px;
-  padding: 0 12px 8px;
+  padding: 10px 14px 8px;
   flex-shrink: 0;
 }
 
@@ -1225,10 +1322,48 @@ label.btn-secondary:hover {
   height: 3px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+  position: relative;
 }
 
-.story-viewer-progress-seg.active {
+.story-viewer-progress-seg--done {
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.story-viewer-progress-fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: inherit;
   background: #fff;
+}
+
+@keyframes story-view-progress {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+.story-viewer-progress-seg--active.is-playing .story-viewer-progress-fill {
+  animation-name: story-view-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+.story-viewer-progress-seg--active.is-paused .story-viewer-progress-fill {
+  animation-name: story-view-progress;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+  animation-play-state: paused;
+}
+
+.story-viewer-modal-stage {
+  position: relative;
+  isolation: isolate;
+  min-height: min(380px, 52vh);
 }
 
 .story-viewer-nav-btn {
@@ -1236,15 +1371,15 @@ label.btn-secondary:hover {
   top: 50%;
   transform: translateY(-50%);
   z-index: 25;
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   padding: 0;
   margin: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(15, 23, 42, 0.55);
+  background: rgba(15, 23, 42, 0.58);
   color: #fff;
-  font-size: 1.85rem;
+  font-size: 1.75rem;
   font-weight: 700;
   line-height: 1;
   cursor: pointer;
@@ -1256,7 +1391,7 @@ label.btn-secondary:hover {
 }
 
 .story-viewer-nav-btn:hover {
-  background: rgba(15, 23, 42, 0.72);
+  background: rgba(15, 23, 42, 0.78);
 }
 
 .story-viewer-nav-btn:focus {
@@ -1277,20 +1412,18 @@ label.btn-secondary:hover {
 }
 
 .story-viewer-body {
-  flex: 1;
-  min-height: 0;
+  min-height: min(380px, 52vh);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 8px 16px max(24px, env(safe-area-inset-bottom));
+  padding: 12px 52px max(18px, env(safe-area-inset-bottom));
   position: relative;
 }
 
 .story-viewer-media {
   max-width: 100%;
-  max-height: calc(100vh - 180px);
-  max-height: calc(100dvh - 180px);
+  max-height: min(420px, 48vh);
   object-fit: contain;
   border-radius: 12px;
 }
@@ -1308,7 +1441,7 @@ label.btn-secondary:hover {
   padding: 10px 14px;
   border-radius: 12px;
   background: rgba(0, 0, 0, 0.35);
-  max-width: min(520px, 94vw);
+  max-width: min(440px, 90vw);
   text-align: center;
 }
 
