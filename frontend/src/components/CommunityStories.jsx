@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mediaUrl, request, requestForm } from "../services/api.js";
 import ModalPortal from "./ModalPortal.jsx";
 import ReactionActorsModal from "./ReactionActorsModal.jsx";
+import OverflowMarqueeText from "./OverflowMarqueeText.jsx";
+import { listeningStatusLine } from "../utils/displayStatus.js";
 
 function truncateName(name, max = 10) {
   const s = String(name || "").trim();
@@ -117,28 +119,38 @@ export default function CommunityStoriesRail({
             </button>
           </div>
 
-          {rings.map((ring, ri) => (
-            <div key={ring.user.id} className="story-ring-slot">
-              <button
-                type="button"
-                className={`story-ring-outer ${ring.hasUnviewed ? "story-ring-outer--fresh" : "story-ring-outer--seen"}`}
-                onClick={() => openRing(ri, 0)}
-                aria-label={`${ring.user.name}'s stories`}
-              >
-                <span className="story-ring-inner">
-                  {ring.user.avatarUrl ? (
-                    <img className="story-ring-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" decoding="async" />
-                  ) : (
-                    <span className="story-ring-placeholder">{ring.user.name?.charAt(0) || "?"}</span>
-                  )}
-                  <StoryPresenceDot presence={ring.user.presence} isOnline={ring.user.isOnline} />
+          {rings.map((ring, ri) => {
+            const statusLine = listeningStatusLine(ring.user);
+            return (
+              <div key={ring.user.id} className="story-ring-slot">
+                <div className="story-ring-stack">
+                  {statusLine ? (
+                    <div className="story-note-bubble" role="note" aria-live="polite">
+                      <OverflowMarqueeText text={statusLine} />
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={`story-ring-outer ${ring.hasUnviewed ? "story-ring-outer--fresh" : "story-ring-outer--seen"}`}
+                    onClick={() => openRing(ri, 0)}
+                    aria-label={`${ring.user.name}'s stories`}
+                  >
+                    <span className="story-ring-inner">
+                      {ring.user.avatarUrl ? (
+                        <img className="story-ring-avatar" src={mediaUrl(ring.user.avatarUrl)} alt="" decoding="async" />
+                      ) : (
+                        <span className="story-ring-placeholder">{ring.user.name?.charAt(0) || "?"}</span>
+                      )}
+                      <StoryPresenceDot presence={ring.user.presence} isOnline={ring.user.isOnline} />
+                    </span>
+                  </button>
+                </div>
+                <span className="story-ring-caption" title={ring.user.name}>
+                  {ring.user.id === currentUser?.id ? "Your story" : truncateName(ring.user.name)}
                 </span>
-              </button>
-              <span className="story-ring-caption" title={ring.user.name}>
-                {ring.user.id === currentUser?.id ? "Your story" : truncateName(ring.user.name)}
-              </span>
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
 
         <button

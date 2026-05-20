@@ -9,6 +9,8 @@ import ModalPortal from "../components/ModalPortal.jsx";
 import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
 import CommunityStoriesRail from "../components/CommunityStories.jsx";
 import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
+import OverflowMarqueeText from "../components/OverflowMarqueeText.jsx";
+import { listeningStatusLine } from "../utils/displayStatus.js";
 
 const CHAT_REACTIONS = [
   { type: "like", emoji: "👍", label: "Like" },
@@ -560,11 +562,14 @@ export default function MessagesPage({
                                 <strong className="user-line-name">
                                   {r.from?.name} <StatusEmojiChip emoji={r.from?.statusEmoji} />
                                 </strong>
-                                {r.from?.statusNote ? (
-                                  <span className="friend-req-status-line" title={r.from.statusNote}>
-                                    {r.from.statusNote}
-                                  </span>
-                                ) : null}
+                                {(() => {
+                                  const line = listeningStatusLine(r.from);
+                                  return line ? (
+                                    <span className="friend-req-status-line" title={line}>
+                                      <OverflowMarqueeText text={line} />
+                                    </span>
+                                  ) : null;
+                                })()}
                                 <small>{r.from?.email}</small>
                               </div>
                               <div className="friend-requests-menu-actions">
@@ -642,11 +647,14 @@ export default function MessagesPage({
                     <strong className="user-line-name">
                       {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
                     </strong>
-                    {u.statusNote ? (
-                      <span className="search-result-status" title={u.statusNote}>
-                        {u.statusNote}
-                      </span>
-                    ) : null}
+                    {(() => {
+                      const line = listeningStatusLine(u);
+                      return line ? (
+                        <span className="search-result-status" title={line}>
+                          <OverflowMarqueeText text={line} />
+                        </span>
+                      ) : null;
+                    })()}
                     <small>{u.email}</small>
                   </div>
                   <div className="search-result-actions">
@@ -736,10 +744,15 @@ export default function MessagesPage({
                         ) : null}
                         {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
                       </strong>
-                      {c.kind === "dm" && target?.statusNote ? (
-                        <span className="conv-status-sub" title={target.statusNote}>
-                          {target.statusNote}
-                        </span>
+                      {c.kind === "dm" ? (
+                        (() => {
+                          const line = listeningStatusLine(target);
+                          return line ? (
+                            <span className="conv-status-sub" title={line}>
+                              <OverflowMarqueeText text={line} />
+                            </span>
+                          ) : null;
+                        })()
                       ) : null}
                       <span className="conv-preview">
                         {c.lastMessage
@@ -839,13 +852,20 @@ export default function MessagesPage({
                     <small>Random anonymous chats — identities stay hidden.</small>
                   ) : isGroup ? (
                     <small>{activeChat.group?.members?.length || 0} members</small>
-                  ) : activeChat.user?.statusNote ? (
-                    <>
-                      <p className="thread-header-custom-note">{activeChat.user.statusNote}</p>
-                      <small>{activeChat.user?.email}</small>
-                    </>
                   ) : (
-                    <small>{activeChat.user?.email}</small>
+                    (() => {
+                      const line = listeningStatusLine(activeChat.user);
+                      return (
+                        <>
+                          {line ? (
+                            <p className="thread-header-custom-note">
+                              <OverflowMarqueeText text={line} />
+                            </p>
+                          ) : null}
+                          <small>{activeChat.user?.email}</small>
+                        </>
+                      );
+                    })()
                   )}
                   {!isGroup && !isUserphone && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>

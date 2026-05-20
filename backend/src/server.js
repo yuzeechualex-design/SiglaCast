@@ -210,7 +210,7 @@ async function fetchUserByEmail(email) {
 
 /** Explicit `users` projections for routes that cannot use select("*") (secrets). Omit columns at runtime when DB migrations lag. */
 const USER_SEARCH_SELECT_DEFAULT =
-  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note";
+  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing";
 
 const USER_ADMIN_LIST_SELECT_DEFAULT =
   "id, role, name, email, course, avatar_url, cover_url, bio, availability, created_at";
