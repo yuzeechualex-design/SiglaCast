@@ -124,7 +124,8 @@ export default function UserProfileModal({
         isOnline: prefetch?.isOnline,
         isFriend: prefetch?.isFriend,
         incomingRequestId: prefetch?.incomingRequestId,
-        outgoingRequestPending: prefetch?.outgoingRequestPending
+        outgoingRequestPending: prefetch?.outgoingRequestPending,
+        musicNowPlaying: prefetch?.musicNowPlaying
       };
 
   const isSelf = currentUser?.id === userId;
@@ -241,6 +242,41 @@ export default function UserProfileModal({
                     ) : null}
                   </p>
                   {merged.statusNote ? <p className="user-profile-custom-status">{merged.statusNote}</p> : null}
+                  {merged.musicNowPlaying?.title ? (
+                    <div className="profile-music-playing-card">
+                      <div className="profile-music-playing-head muted small">
+                        🎵 Now playing<span className="profile-music-spotify-pill">Spotify</span>
+                      </div>
+                      <div className="profile-music-playing-body">
+                        {merged.musicNowPlaying.imageUrl ? (
+                          <img
+                            className="profile-music-playing-art"
+                            src={merged.musicNowPlaying.imageUrl}
+                            alt=""
+                            decoding="async"
+                          />
+                        ) : (
+                          <div className="profile-music-playing-art-ph" aria-hidden />
+                        )}
+                        <div className="profile-music-playing-text">
+                          <strong>{merged.musicNowPlaying.title}</strong>
+                          {merged.musicNowPlaying.artist ? (
+                            <span className="muted small">{merged.musicNowPlaying.artist}</span>
+                          ) : null}
+                        </div>
+                        {merged.musicNowPlaying.externalUrl ? (
+                          <a
+                            className="btn btn-secondary btn-sm"
+                            href={merged.musicNowPlaying.externalUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Open
+                          </a>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
                   {(merged.bio || "").trim() ? (
                     <div className="user-profile-bio-block">
                       <p className="user-profile-bio-heading muted small">About me</p>

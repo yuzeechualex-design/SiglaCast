@@ -9,12 +9,14 @@ import CommunityPage from "./pages/CommunityPage.jsx";
 import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import MusicPage from "./pages/MusicPage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 import { ImageLightboxProvider } from "./components/ImageLightboxContext.jsx";
+import { MusicPlayerProvider } from "./components/MusicPlayerContext.jsx";
 import { notificationTargetPath } from "./utils/notificationTargetPath.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
@@ -813,6 +815,20 @@ export default function App() {
     setNotice("Profile updated");
   }
 
+  /** Refresh JWT session user (Spotify reconnect, prefs toggles, polls). */
+  async function refreshUserFromAuthMe() {
+    const res = await api("/auth/me");
+    if (res?.error) return;
+    if (res?.user) {
+      setUser(res.user);
+      try {
+        localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+      } catch (_) {
+        /* ignore */
+      }
+    }
+  }
+
   async function searchUsers() {
     const q = searchQuery.trim();
     setPeopleSearchHint("");
@@ -1433,6 +1449,7 @@ export default function App() {
       }}
     >
       <ImageLightboxProvider>
+      <MusicPlayerProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/community" replace />} />
         <Route
@@ -1534,6 +1551,18 @@ export default function App() {
           }
         />
         <Route
+          path="/music"
+          element={
+            <MusicPage
+              api={api}
+              token={token}
+              user={user}
+              setNotice={setNotice}
+              refreshUser={refreshUserFromAuthMe}
+            />
+          }
+        />
+        <Route
           path="/messages"
           element={
             <MessagesPage
@@ -1596,6 +1625,7 @@ export default function App() {
         onAcceptFriendRequest={acceptFriendRequest}
         onRejectFriendRequest={rejectFriendRequest}
       />
+      </MusicPlayerProvider>
       </ImageLightboxProvider>
     </AppShell>
   );

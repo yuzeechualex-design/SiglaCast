@@ -15,6 +15,17 @@ import multer from "multer";
 
 import { supabase, toPublicUser, toEvent, toCandidate, uploadToBucket, uploadAttachment } from "./supabase.js";
 import { validateRegisterForm } from "./registerValidation.js";
+import {
+  mintSpotifyOAuthState,
+  consumeSpotifyOAuthState,
+  buildSpotifyAuthorizeUrl,
+  exchangeSpotifyCode,
+  refreshSpotifyAccessToken,
+  fetchCurrentlyPlaying,
+  searchSpotifyTracks,
+  SPOTIFY_CLIENT_ID,
+  SPOTIFY_FRONTEND_AFTER_LINK
+} from "./spotifyMusic.js";
 
 const { xsltProcess, xmlParse } = xsltProcessor;
 
@@ -527,12 +538,70 @@ function sanitizeAvailability(raw) {
   return AVAILABILITY_VALUES.includes(v) ? v : "online";
 }
 
+/** Sanitize stored Spotify “now playing” JSON for API responses — never exposes refresh tokens. */
+function sanitizeMusicSnippet(raw) {
+  let o = raw;
+  if (typeof raw === "string") {
+    try {
+      o = JSON.parse(raw);
+    } catch {
+      return null;
+    }
+  }
+  if (!o || typeof o !== "object") return null;
+  return {
+    title: o.title ?? null,
+    artist: o.artist ?? null,
+    imageUrl: o.imageUrl ?? null,
+    externalUrl: o.externalUrl ?? null,
+    previewUrl: o.previewUrl ?? null,
+    spotifyTrackId: o.spotifyTrackId ?? null,
+    isPlaying: Boolean(o.isPlaying),
+    source: typeof o.source === "string" ? o.source : "spotify",
+    updatedAt: o.updatedAt ?? null,
+    progressMs: typeof o.progressMs === "number" ? o.progressMs : null,
+    durationMs: typeof o.durationMs === "number" ? o.durationMs : null
+  };
+}
+
+/** What other users see on your profile card when “share Now Playing” is on. */
+function peerMusicNowPlaying(dbRow) {
+  if (!dbRow?.music_share_now_playing) return null;
+  const s = sanitizeMusicSnippet(dbRow.music_now_playing);
+  if (!s?.isPlaying || !(s.title || s.spotifyTrackId)) return null;
+  return s;
+}
+
+function storedNowPlayingFromSpotify(playState) {
+  const t = playState.track;
+  const base = {
+    source: "spotify",
+    updatedAt: new Date().toISOString(),
+    progressMs: playState.rawProgress ?? null,
+    durationMs: playState.rawDuration ?? null
+  };
+  if (!t) return { ...base, isPlaying: false, title: null, artist: null, imageUrl: null, externalUrl: null, previewUrl: null, spotifyTrackId: null };
+  return {
+    ...base,
+    isPlaying: Boolean(playState.isPlaying),
+    title: t.title,
+    artist: t.artist,
+    imageUrl: t.imageUrl,
+    externalUrl: t.externalUrl,
+    previewUrl: t.previewUrl,
+    spotifyTrackId: t.spotifyTrackId
+  };
+}
+
 /** Session / profile responses — includes your own preference (not leaked to others via toPublicUser). */
 function authUserPayload(row) {
   if (!row) return null;
   return {
     ...toPublicUser(row),
-    availability: sanitizeAvailability(row.availability)
+    availability: sanitizeAvailability(row.availability),
+    spotifyLinked: Boolean(row.spotify_refresh_token),
+    musicShareNowPlaying: Boolean(row.music_share_now_playing),
+    musicNowPlaying: sanitizeMusicSnippet(row.music_now_playing)
   };
 }
 
@@ -570,7 +639,8 @@ function publicProfileWithPresence(dbRow, viewerId, onlineSet) {
     presence = "online";
   }
 
-  return { ...pub, isOnline, presence };
+  const musicNowPlaying = peerMusicNowPlaying(dbRow);
+  return { ...pub, isOnline, presence, musicNowPlaying };
 }
 
 async function upsertUserPresence(userId) {
@@ -687,6 +757,12 @@ async function buildStoryRings(viewerId) {
       id: r.id,
       text: r.body_text || "",
       imageUrl: r.media_url || null,
+      spotifyTrackId: r.spotify_track_id || null,
+      musicTitle: r.music_title || null,
+      musicArtist: r.music_artist || null,
+      musicImageUrl: r.music_image_url || null,
+      musicPreviewUrl: r.music_preview_url || null,
+      musicExternalUrl: r.music_external_url || null,
       createdAt: r.created_at,
       viewed: viewedSet.has(r.id),
       reactionBreakdown: bag.breakdown,
@@ -1567,7 +1643,7 @@ app.get("/api/auth/me", authenticate, (req, res) => {
 
 app.patch("/api/profile", authenticate, async (req, res) => {
   try {
-    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio, removeCover } =
+    const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio, removeCover, musicShareNowPlaying } =
       req.body || {};
     const updates = {};
     const trimmedName = name !== undefined ? String(name).trim() : "";
@@ -1589,6 +1665,9 @@ app.patch("/api/profile", authenticate, async (req, res) => {
     }
     if (removeCover === true) {
       updates.cover_url = null;
+    }
+    if (musicShareNowPlaying !== undefined && musicShareNowPlaying !== null) {
+      updates.music_share_now_playing = Boolean(musicShareNowPlaying);
     }
     if (newPassword) {
       if (!currentPassword) return res.status(400).json({ error: "Current password is required to set a new password" });
@@ -1638,6 +1717,112 @@ app.post("/api/profile/cover", authenticate, (req, res, next) => {
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
+});
+
+function spotifyFrontendRedirect(extraQueryPairs) {
+  const base = (SPOTIFY_FRONTEND_AFTER_LINK || "http://localhost:5173/music").trim();
+  const hasQ = base.includes("?");
+  const qs = Object.entries(extraQueryPairs)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v ?? ""))}`)
+    .join("&");
+  return `${base}${hasQ ? "&" : "?"}${qs}`;
+}
+
+// Spotify: search uses client-credentials; OAuth link + polling updates “Now Playing”.
+app.get("/api/music/search", authenticate, async (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  if (!q || q.length < 2) return res.status(400).json({ error: "Enter at least 2 characters to search." });
+  if (!SPOTIFY_CLIENT_ID) {
+    return res.status(503).json({ error: "Spotify is not configured on the server." });
+  }
+  try {
+    const tracks = await searchSpotifyTracks(q, 24);
+    res.json({ tracks });
+  } catch (e) {
+    console.error("[music/search]", e);
+    res.status(400).json({ error: e.message || "Could not search Spotify" });
+  }
+});
+
+app.post("/api/music/spotify/connect", authenticate, (req, res) => {
+  try {
+    if (!SPOTIFY_CLIENT_ID) return res.status(503).json({ error: "Spotify is not configured on the server." });
+    const state = mintSpotifyOAuthState(req.user.id);
+    res.json({ authorizeUrl: buildSpotifyAuthorizeUrl(state) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/music/spotify/callback", async (req, res) => {
+  const fail = req.query.error;
+  const code = req.query.code;
+  const state = req.query.state;
+  const failRedirect = spotifyFrontendRedirect({ spotify: "error", reason: typeof fail === "string" ? fail : "oauth" });
+
+  if (fail || !code || !state) return res.redirect(302, failRedirect);
+
+  const userId = consumeSpotifyOAuthState(String(state));
+  if (!userId) return res.redirect(302, failRedirect);
+
+  try {
+    const tokens = await exchangeSpotifyCode(String(code));
+    const { error } = await supabase
+      .from("users")
+      .update({
+        spotify_refresh_token: tokens.refresh_token,
+        spotify_linked_at: new Date().toISOString()
+      })
+      .eq("id", userId);
+    if (error) throw new Error(error.message);
+
+    const okRedirect = spotifyFrontendRedirect({ spotify: "connected" });
+    return res.redirect(302, okRedirect);
+  } catch (e) {
+    console.error("[music/spotify/callback]", e);
+    return res.redirect(302, failRedirect);
+  }
+});
+
+app.post("/api/music/spotify/sync-now-playing", authenticate, async (req, res) => {
+  try {
+    const row = req.user;
+    const refreshTok = row.spotify_refresh_token;
+    if (!refreshTok) return res.status(400).json({ error: "Connect Spotify first from the Music page." });
+
+    const { access_token } = await refreshSpotifyAccessToken(refreshTok);
+    const cp = await fetchCurrentlyPlaying(access_token);
+    const stored = storedNowPlayingFromSpotify(cp);
+
+    await supabase.from("users").update({ music_now_playing: stored }).eq("id", row.id);
+
+    const fresh = await fetchUserById(row.id);
+    res.json({
+      ok: true,
+      musicNowPlaying: sanitizeMusicSnippet(fresh.music_now_playing),
+      peerPreview: peerMusicNowPlaying(fresh)
+    });
+  } catch (e) {
+    console.error("[music/sync]", e);
+    if (String(e.message) === "SpotifyUnauthorized") {
+      return res.status(401).json({ error: "Spotify login expired — reconnect Spotify in Music settings." });
+    }
+    res.status(400).json({ error: e.message || "Could not refresh Now Playing." });
+  }
+});
+
+app.delete("/api/music/spotify", authenticate, async (req, res) => {
+  const { error } = await supabase
+    .from("users")
+    .update({
+      spotify_refresh_token: null,
+      spotify_linked_at: null,
+      music_now_playing: null
+    })
+    .eq("id", req.user.id);
+  if (error) return res.status(400).json({ error: error.message });
+  const fresh = await fetchUserById(req.user.id);
+  res.json({ user: authUserPayload(fresh) });
 });
 
 // Events
@@ -1784,35 +1969,58 @@ app.post("/api/stories", authenticate, (req, res, next) => {
 }, async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
-    if (!text && !req.file) return res.status(400).json({ error: "Add text or an image to your story" });
+    const spotifyTrackId = req.body.spotifyTrackId != null ? String(req.body.spotifyTrackId).trim() : "";
+    const musicTitle = req.body.musicTitle != null ? String(req.body.musicTitle).trim().slice(0, 512) : "";
+    const musicArtist = req.body.musicArtist != null ? String(req.body.musicArtist).trim().slice(0, 512) : "";
+    const musicImageUrl = req.body.musicImageUrl != null ? String(req.body.musicImageUrl).trim().slice(0, 2048) : "";
+    const musicPreviewUrl = req.body.musicPreviewUrl != null ? String(req.body.musicPreviewUrl).trim().slice(0, 2048) : "";
+    const musicExternalUrl = req.body.musicExternalUrl != null ? String(req.body.musicExternalUrl).trim().slice(0, 2048) : "";
+
+    const hasMusic = Boolean(spotifyTrackId);
+    if (!text && !req.file && !hasMusic) {
+      return res.status(400).json({ error: "Add text, a photo, or attach a Spotify track to your story" });
+    }
     let media_url = null;
     if (req.file) media_url = await uploadToBucket("posts", req.file);
     const id = `st${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const { data: row, error } = await supabase
-      .from("user_stories")
-      .insert({
-        id,
-        user_id: req.user.id,
-        body_text: text || "",
-        media_url
-      })
-      .select()
-      .maybeSingle();
+
+    /** @type {Record<string, unknown>} */
+    const insertRow = {
+      id,
+      user_id: req.user.id,
+      body_text: text || "",
+      media_url,
+      spotify_track_id: hasMusic ? spotifyTrackId : null,
+      music_title: hasMusic ? musicTitle || null : null,
+      music_artist: hasMusic ? musicArtist || null : null,
+      music_image_url: hasMusic ? musicImageUrl || null : null,
+      music_preview_url: hasMusic ? musicPreviewUrl || null : null,
+      music_external_url: hasMusic ? musicExternalUrl || null : null
+    };
+
+    const { data: row, error } = await supabase.from("user_stories").insert(insertRow).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
-    res.status(201).json({
-      story: {
-        id: row.id,
-        text: row.body_text || "",
-        imageUrl: row.media_url || null,
-        createdAt: row.created_at,
-        viewed: true,
-        reactionBreakdown: {},
-        myReaction: null,
-        reactionCount: 0,
-        commentCount: 0,
-        viewerCount: 0
-      }
-    });
+
+    /** @type {Record<string, unknown>} */
+    const storyOut = {
+      id: row.id,
+      text: row.body_text || "",
+      imageUrl: row.media_url || null,
+      spotifyTrackId: row.spotify_track_id || null,
+      musicTitle: row.music_title || null,
+      musicArtist: row.music_artist || null,
+      musicImageUrl: row.music_image_url || null,
+      musicPreviewUrl: row.music_preview_url || null,
+      musicExternalUrl: row.music_external_url || null,
+      createdAt: row.created_at,
+      viewed: true,
+      reactionBreakdown: {},
+      myReaction: null,
+      reactionCount: 0,
+      commentCount: 0,
+      viewerCount: 0
+    };
+    res.status(201).json({ story: storyOut });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

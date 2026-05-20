@@ -94,6 +94,10 @@ export default function FloatingQuickNav({
               {msg ? <span className="fq-ping">{msg}</span> : null}
               <span className="fq-label">Messages</span>
             </NavLink>
+            <NavLink to="/music" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              🎵
+              <span className="fq-label">Music</span>
+            </NavLink>
             <NavLink to="/notifications" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               🔔
               {bell ? <span className="fq-ping">{bell}</span> : null}

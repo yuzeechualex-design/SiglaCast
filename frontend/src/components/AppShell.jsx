@@ -49,6 +49,9 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
+          <NavLink to="/music" className="nav-btn">
+            🎵 Music
+          </NavLink>
           <NavLink to="/notifications" className="nav-btn">
             🔔 Notifications
             {bell ? (

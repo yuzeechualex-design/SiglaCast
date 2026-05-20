@@ -188,12 +188,39 @@ function CreateStoryModal({ token, onClose, onPosted }) {
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
+  const [attachTrack, setAttachTrack] = useState(null);
+  const [songQ, setSongQ] = useState("");
+  const [songHits, setSongHits] = useState([]);
+  const [songBusy, setSongBusy] = useState(false);
+
+  useEffect(() => {
+    const k = songQ.trim();
+    if (k.length < 2 || !token) {
+      setSongHits([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const tid = window.setTimeout(async () => {
+      setSongBusy(true);
+      try {
+        const data = await request(`/music/search?q=${encodeURIComponent(k)}`, { token });
+        if (cancelled) return;
+        setSongHits(Array.isArray(data?.tracks) ? data.tracks : []);
+      } finally {
+        if (!cancelled) setSongBusy(false);
+      }
+    }, 360);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(tid);
+    };
+  }, [songQ, token]);
 
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
-    if (!t && !file) {
-      setErr("Add text or a photo.");
+    if (!t && !file && !attachTrack?.spotifyTrackId) {
+      setErr("Add text, a photo, or attach a song.");
       return;
     }
     setSending(true);
@@ -201,6 +228,14 @@ function CreateStoryModal({ token, onClose, onPosted }) {
     const fd = new FormData();
     fd.append("text", t);
     if (file) fd.append("image", file);
+    if (attachTrack?.spotifyTrackId) {
+      fd.append("spotifyTrackId", attachTrack.spotifyTrackId || "");
+      fd.append("musicTitle", attachTrack.title || "");
+      fd.append("musicArtist", attachTrack.artist || "");
+      fd.append("musicImageUrl", attachTrack.imageUrl || "");
+      fd.append("musicPreviewUrl", attachTrack.previewUrl || "");
+      fd.append("musicExternalUrl", attachTrack.externalUrl || "");
+    }
     const data = await requestForm("/stories", { token, method: "POST", formData: fd });
     setSending(false);
     if (data.error) {
@@ -208,6 +243,12 @@ function CreateStoryModal({ token, onClose, onPosted }) {
       return;
     }
     onPosted?.();
+  }
+
+  function clearAttachedSong() {
+    setAttachTrack(null);
+    setSongQ("");
+    setSongHits([]);
   }
 
   return (
@@ -222,6 +263,45 @@ function CreateStoryModal({ token, onClose, onPosted }) {
           </div>
           <form className="modal-body stories-create-form" onSubmit={submit}>
             <p className="muted small">Stories disappear after 24 hours. Friends can view them.</p>
+
+            <div className="stories-create-sound-panel">
+              <label className="field-label stories-create-sound-label">Story sound (optional)</label>
+              <p className="muted small">Search Spotify — attached tracks render on the viewer with snippet controls.</p>
+              {attachTrack?.title ? (
+                <div className="stories-attach-chip">
+                  <strong>{attachTrack.title}</strong>
+                  <span className="muted small">{attachTrack.artist}</span>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={clearAttachedSong}>
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    type="text"
+                    className="stories-create-sound-search"
+                    placeholder="Song or artist…"
+                    value={songQ}
+                    onChange={(e) => setSongQ(e.target.value)}
+                    aria-label="Search Spotify for story sound"
+                  />
+                  <span className="muted small">{songBusy ? "Searching Spotify…" : "Type at least 2 characters"}</span>
+                  <div className="stories-create-sound-hits">
+                    {songHits.slice(0, 6).map((tr) => (
+                      <button
+                        key={tr.spotifyTrackId}
+                        type="button"
+                        className="btn btn-secondary btn-sm stories-create-hit"
+                        onClick={() => setAttachTrack(tr)}
+                      >
+                        ♪ {tr.title} · {tr.artist}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
             <textarea
               className="stories-create-textarea"
               rows={4}
@@ -231,12 +311,7 @@ function CreateStoryModal({ token, onClose, onPosted }) {
             />
             <label className="btn btn-secondary btn-sm stories-photo-pick">
               📷 Add photo
-              <input
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-              />
+              <input type="file" accept="image/*" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
             </label>
             {preview ? (
               <div className="stories-create-preview">
@@ -656,6 +731,8 @@ function StoryViewerModal({
   if (!ring || !story) return null;
 
   const imgSrc = story.imageUrl ? mediaUrl(story.imageUrl) : null;
+  const hasSong = Boolean(story.spotifyTrackId || story.musicTitle);
+  const albumHref = story.musicImageUrl ? mediaUrl(story.musicImageUrl) : null;
   const isOwner = authorId === currentUser?.id;
 
   function openAuthorProfile() {
@@ -667,7 +744,8 @@ function StoryViewerModal({
       avatarUrl: ring.user.avatarUrl,
       authorAvatar: ring.user.avatarUrl,
       presence: ring.user.presence,
-      isOnline: ring.user.isOnline
+      isOnline: ring.user.isOnline,
+      musicNowPlaying: ring.user.musicNowPlaying ?? null
     });
   }
 
@@ -817,10 +895,35 @@ function StoryViewerModal({
 
             <div className="story-viewer-body">
               {imgSrc ? (
-                <img className="story-viewer-media" src={imgSrc} alt="" decoding="async" />
+                <>
+                  <img className="story-viewer-media" src={imgSrc} alt="" decoding="async" />
+                  {hasSong ? (
+                    <div className="story-viewer-media-music-corner" aria-hidden>
+                      <strong>♪ {story.musicTitle || "Attached track"}</strong>
+                      <span>{story.musicArtist}</span>
+                    </div>
+                  ) : null}
+                </>
+              ) : albumHref ? (
+                <div className="story-viewer-music-visual">
+                  <img className="story-viewer-media story-viewer-music-cover" src={albumHref} alt="" decoding="async" />
+                  <div className="story-viewer-music-textboard">
+                    <strong>{story.musicTitle}</strong>
+                    <span className="muted">{story.musicArtist}</span>
+                    {(story.text || "").trim() ? <p>{story.text}</p> : null}
+                  </div>
+                </div>
               ) : (
-                <div className="story-viewer-text-only">
-                  <p>{story.text || ""}</p>
+                <div className={`story-viewer-text-only${hasSong ? " story-viewer-text-only--song" : ""}`}>
+                  {(story.text || "").trim() ? <p>{story.text}</p> : null}
+                  {hasSong ? (
+                    <p className="story-viewer-inline-song muted">
+                      ♪ <strong>{story.musicTitle}</strong>
+                      {story.musicArtist ? <span>{` · ${story.musicArtist}`}</span> : null}
+                    </p>
+                  ) : !(story.text || "").trim() ? (
+                    <p className="muted">Empty story slide</p>
+                  ) : null}
                 </div>
               )}
               {imgSrc && story.text ? (
@@ -829,6 +932,28 @@ function StoryViewerModal({
                 </div>
               ) : null}
             </div>
+
+            {hasSong ? (
+              <div className="story-viewer-snippet-row">
+                {story.musicPreviewUrl ? (
+                  <audio className="story-viewer-snippet-audio" controls preload="none" src={story.musicPreviewUrl}>
+                    Preview
+                  </audio>
+                ) : (
+                  <span className="muted small">Spotify catalogue has no snippet for this track.</span>
+                )}
+                {story.musicExternalUrl ? (
+                  <a
+                    className="btn btn-secondary btn-sm story-viewer-spotify-deep"
+                    href={story.musicExternalUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Open in Spotify
+                  </a>
+                ) : null}
+              </div>
+            ) : null}
           </div>
 
           <div className="story-viewer-footer">

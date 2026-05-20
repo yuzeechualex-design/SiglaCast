@@ -44,6 +44,19 @@ const AVAILABILITY_CHOICES = [
 ];
 
 export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout }) {
+  const spotifyLinked = Boolean(user.spotifyLinked);
+  const [musicShareNowPlaying, setMusicShareNowPlaying] = useState(() => Boolean(user.musicShareNowPlaying));
+  const np = user.musicNowPlaying;
+
+  useEffect(() => {
+    setMusicShareNowPlaying(Boolean(user.musicShareNowPlaying));
+  }, [user.musicShareNowPlaying]);
+
+  async function persistMusicSharing(nextVal) {
+    setMusicShareNowPlaying(Boolean(nextVal));
+    await onProfileSave({ musicShareNowPlaying: Boolean(nextVal) });
+  }
+
   const [name, setName] = useState(user.name);
   const [statusEmoji, setStatusEmoji] = useState(() => user.statusEmoji || "");
   const [statusNote, setStatusNote] = useState(() => user.statusNote || "");
@@ -275,6 +288,33 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
           maxLength={BIO_MAX_LEN}
           aria-label="Bio"
         />
+
+        <label className="field-label">Spotify activity</label>
+        <p className="muted small profile-field-hint">
+          Link Spotify on the Music page first. Friends only see tracks while Spotify reports you as actively listening.
+        </p>
+        {!spotifyLinked ? (
+          <p className="muted small profile-music-muted">
+            Connect Spotify under <strong>Music</strong> to enable listening status on your bio.
+          </p>
+        ) : null}
+
+        <label className={`profile-checkbox-row${!spotifyLinked ? " disabled" : ""}`}>
+          <input
+            type="checkbox"
+            checked={musicShareNowPlaying}
+            disabled={!spotifyLinked}
+            onChange={(e) => void persistMusicSharing(e.target.checked)}
+          />{" "}
+          Show what I&apos;m listening to on my profile card
+        </label>
+
+        {spotifyLinked && np?.title ? (
+          <div className="profile-music-snippet-muted muted small">
+            Last Spotify sync{np.isPlaying ? " (currently playing)" : " (paused or idle)"}: <strong>{np.title}</strong>
+            {np.artist ? <span>{` · ${np.artist}`}</span> : null}
+          </div>
+        ) : null}
 
         <label className="field-label">Availability</label>
         <p className="muted small profile-field-hint">
