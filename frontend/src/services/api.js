@@ -27,7 +27,8 @@ export async function request(path, { token, method = "GET", body, onUnauthorize
         return request(path, {
           token: retryResponse.retryWithToken,
           method,
-          body
+          body,
+          onUnauthorizedRetry
         });
       }
     }

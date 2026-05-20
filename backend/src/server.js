@@ -19,9 +19,9 @@ import { validateRegisterForm } from "./registerValidation.js";
 const { xsltProcess, xmlParse } = xsltProcessor;
 
 const JWT_SECRET = process.env.JWT_SECRET || "siglacast-dev-secret";
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "15m";
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-refresh-secret";
-const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "7d";
+const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "365d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 
 /** Sigla Assistant (Groq) — key must be supplied via environment only, never committed. */

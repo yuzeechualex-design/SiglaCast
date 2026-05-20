@@ -20,9 +20,9 @@ services:
       - key: REFRESH_TOKEN_SECRET
         generateValue: true
       - key: JWT_EXPIRES_IN
-        value: 15m
+        value: 24h
       - key: REFRESH_TOKEN_EXPIRES_IN
-        value: 7d
+        value: 365d
       - key: FRONTEND_ORIGIN
         sync: false
       - key: BROKER

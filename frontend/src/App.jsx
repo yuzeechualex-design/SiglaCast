@@ -19,6 +19,17 @@ import { notificationTargetPath } from "./utils/notificationTargetPath.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 
+/** Offline / overloaded server — do not wipe login; user stays signed in until explicit logout or real auth failure. */
+function isTransientSessionCheckFailure(result) {
+  const msg = typeof result?.error === "string" ? result.error : "";
+  if (!msg) return false;
+  if (msg.includes("Cannot connect")) return true;
+  if (/Request failed \(5\d\d\)/.test(msg)) return true;
+  if (/Request failed \(408\)/.test(msg)) return true;
+  if (/Request failed \(429\)/.test(msg)) return true;
+  return false;
+}
+
 export default function App() {
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
@@ -456,18 +467,32 @@ export default function App() {
   }, [notifications, user]);
 
   useEffect(() => {
-    if (!token) return;
+    if (!token) return undefined;
+    let cancelled = false;
     (async () => {
       const res = await api("/auth/me");
-      if (res.error) {
-        localStorage.removeItem("siglacast_token");
-        localStorage.removeItem("siglacast_refresh_token");
-        localStorage.removeItem("siglacast_user");
-        setToken("");
-        setUser(null);
-        setNotice("Session expired. Please login again.");
+      if (cancelled) return;
+      if (res?.user) {
+        setUser(res.user);
+        try {
+          localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+        } catch (_) {
+          /* ignore */
+        }
+        return;
       }
+      if (isTransientSessionCheckFailure(res)) return;
+
+      localStorage.removeItem("siglacast_token");
+      localStorage.removeItem("siglacast_refresh_token");
+      localStorage.removeItem("siglacast_user");
+      setToken("");
+      setUser(null);
+      setNotice("Session expired. Please login again.");
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
   async function loadMessages() {
