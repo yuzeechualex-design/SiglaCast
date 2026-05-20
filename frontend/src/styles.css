@@ -2197,17 +2197,26 @@ body.community-thread-overlay-open {
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 16px;
-  padding: 12px 10px 14px;
+  padding: 7px;
   background: #fff;
 }
 
 .messages-stories-sidebar > .community-stories-rail--vertical {
   border: none;
-  padding: 0;
-  background: transparent;
-  border-radius: 0;
+  padding: 10px 8px 12px;
+  background: var(--surface);
+  border-radius: 12px;
+  overflow: hidden;
   flex: 1;
   min-height: 0;
+}
+
+.messages-stories-sidebar .community-stories-strip--vertical {
+  border-radius: 10px;
+}
+
+[data-theme="dark"] .messages-stories-sidebar > .community-stories-rail--vertical {
+  background: rgba(255, 255, 255, 0.06);
 }
 
 @media (min-width: 901px) {
