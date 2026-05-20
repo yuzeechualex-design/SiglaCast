@@ -10,6 +10,7 @@ export function MusicPlayerProvider({ children }) {
   /** @type {[SpotifyLikeTrack | null, import("react").Dispatch<React.SetStateAction<SpotifyLikeTrack | null>>]} */
   const [track, setTrack] = useState(null);
   const [paused, setPaused] = useState(false);
+  const [progress, setProgress] = useState({ current: 0, duration: 0 });
 
   const playPreview = useCallback((t) => {
     const next = {
@@ -40,6 +41,7 @@ export function MusicPlayerProvider({ children }) {
     }
     setTrack(null);
     setPaused(false);
+    setProgress({ current: 0, duration: 0 });
   }, []);
 
   const togglePause = useCallback(() => {
@@ -53,6 +55,29 @@ export function MusicPlayerProvider({ children }) {
       setPaused(true);
     }
   }, [paused, track?.previewUrl]);
+
+  useEffect(() => {
+    const a = audioRef.current;
+    if (!a || !track?.previewUrl) {
+      setProgress({ current: 0, duration: 0 });
+      return undefined;
+    }
+    function sync() {
+      setProgress({
+        current: Number.isFinite(a.currentTime) ? a.currentTime : 0,
+        duration: Number.isFinite(a.duration) && a.duration > 0 ? a.duration : 0
+      });
+    }
+    a.addEventListener("timeupdate", sync);
+    a.addEventListener("loadedmetadata", sync);
+    a.addEventListener("durationchange", sync);
+    sync();
+    return () => {
+      a.removeEventListener("timeupdate", sync);
+      a.removeEventListener("loadedmetadata", sync);
+      a.removeEventListener("durationchange", sync);
+    };
+  }, [track?.previewUrl]);
 
   useEffect(() => {
     if (typeof document === "undefined") return undefined;
@@ -101,9 +126,10 @@ export function MusicPlayerProvider({ children }) {
       stopPlayback,
       togglePause,
       miniPlayerDismiss: stopPlayback,
-      hiddenAudioRef: audioRef
+      hiddenAudioRef: audioRef,
+      progress
     }),
-    [track, paused, playPreview, stopPlayback, togglePause]
+    [track, paused, progress, playPreview, stopPlayback, togglePause]
   );
 
   return (
