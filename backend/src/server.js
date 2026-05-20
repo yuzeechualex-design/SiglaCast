@@ -590,6 +590,86 @@ async function presenceOnlineSetForUserIds(userIds) {
   return new Set((data || []).map((r) => r.user_id));
 }
 
+/** Friend user IDs for accepted friendships (bidirectional rows). */
+async function friendIdsForUser(meId) {
+  const { data } = await supabase
+    .from("friends")
+    .select("user_id, friend_id")
+    .or(`user_id.eq.${meId},friend_id.eq.${meId}`);
+  const ids = [];
+  for (const f of data || []) {
+    ids.push(f.user_id === meId ? f.friend_id : f.user_id);
+  }
+  return ids;
+}
+
+const STORY_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Stories from the last 24h for me + friends, grouped by author with view state. */
+async function buildStoryRings(viewerId) {
+  const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
+  const friendIds = await friendIdsForUser(viewerId);
+  const scopeIds = Array.from(new Set([viewerId, ...friendIds]));
+  const { data: rows } = await supabase
+    .from("user_stories")
+    .select("*")
+    .in("user_id", scopeIds)
+    .gte("created_at", cutoff)
+    .order("created_at", { ascending: true });
+
+  if (!rows?.length) return { rings: [] };
+
+  const storyIds = rows.map((r) => r.id);
+  const { data: views } = await supabase
+    .from("story_views")
+    .select("story_id")
+    .eq("viewer_id", viewerId)
+    .in("story_id", storyIds);
+  const viewedSet = new Set((views || []).map((v) => v.story_id));
+
+  const byUser = new Map();
+  for (const r of rows) {
+    if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
+    byUser.get(r.user_id).push({
+      id: r.id,
+      text: r.body_text || "",
+      imageUrl: r.media_url || null,
+      createdAt: r.created_at,
+      viewed: viewedSet.has(r.id)
+    });
+  }
+
+  const authorIds = [...byUser.keys()];
+  const { data: users } = await supabase.from("users").select("*").in("id", authorIds);
+  const um = new Map((users || []).map((u) => [u.id, u]));
+  const onlineSet = await presenceOnlineSetForUserIds(authorIds);
+
+  function ringFor(uid) {
+    const u = um.get(uid);
+    if (!u) return null;
+    const stories = byUser.get(uid) || [];
+    const pub = publicProfileWithPresence(u, viewerId, onlineSet);
+    const isSelf = uid === viewerId;
+    const hasUnviewed = isSelf ? stories.length > 0 : stories.some((s) => !s.viewed);
+    return { user: pub, stories, hasUnviewed };
+  }
+
+  const rings = [];
+  if (byUser.has(viewerId)) {
+    const mine = ringFor(viewerId);
+    if (mine) rings.push(mine);
+  }
+  const others = authorIds
+    .filter((id) => id !== viewerId)
+    .sort((a, b) => String(um.get(a)?.name || "").localeCompare(String(um.get(b)?.name || "")));
+  for (const uid of others) {
+    const ring = ringFor(uid);
+    if (ring) rings.push(ring);
+  }
+
+  return { rings };
+}
+
 // ---------- Group chat helpers ----------
 
 async function ensureGroupMember(conversationId, userId) {
@@ -1623,6 +1703,76 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
     await broker.publish("post.created", { id: post.id });
     await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
     res.status(201).json(await serializePost(post, req.user.id));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Stories (24h; visible to friends + author)
+app.get("/api/stories", authenticate, async (req, res) => {
+  try {
+    const out = await buildStoryRings(req.user.id);
+    res.json(out);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/stories", authenticate, (req, res, next) => {
+  uploadImage.single("image")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const text = String(req.body?.text || "").trim();
+    if (!text && !req.file) return res.status(400).json({ error: "Add text or an image to your story" });
+    let media_url = null;
+    if (req.file) media_url = await uploadToBucket("posts", req.file);
+    const id = `st${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data: row, error } = await supabase
+      .from("user_stories")
+      .insert({
+        id,
+        user_id: req.user.id,
+        body_text: text || "",
+        media_url
+      })
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.status(201).json({
+      story: {
+        id: row.id,
+        text: row.body_text || "",
+        imageUrl: row.media_url || null,
+        createdAt: row.created_at,
+        viewed: true
+      }
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/stories/:storyId/view", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const { data: story } = await supabase.from("user_stories").select("*").eq("id", storyId).maybeSingle();
+    if (!story) return res.status(404).json({ error: "Story not found" });
+    const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
+    if (story.created_at < cutoff) return res.status(410).json({ error: "Story expired" });
+    const owner = story.user_id;
+    if (owner === me) return res.json({ ok: true });
+    const okFriend = await areFriends(me, owner);
+    if (!okFriend) return res.status(403).json({ error: "Not allowed" });
+    const { error } = await supabase.from("story_views").upsert(
+      { story_id: storyId, viewer_id: me },
+      { onConflict: "story_id,viewer_id" }
+    );
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ ok: true });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

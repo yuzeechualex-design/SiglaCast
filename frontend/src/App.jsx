@@ -1464,6 +1464,7 @@ export default function App() {
           path="/community"
           element={
             <CommunityPage
+              token={token}
               posts={posts}
               currentUser={user}
               onPost={postCommunityPost}

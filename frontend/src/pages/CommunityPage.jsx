@@ -5,6 +5,7 @@ import { mediaUrl } from "../services/api.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
+import CommunityStoriesRail from "../components/CommunityStories.jsx";
 import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
 import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 
@@ -29,6 +30,7 @@ const REACTION_MAP = REACTIONS.reduce((acc, r) => {
 const TRUNCATE_LIMIT = 280;
 
 export default function CommunityPage({
+  token,
   posts,
   currentUser,
   onPost,
@@ -195,6 +197,15 @@ export default function CommunityPage({
       <div className="panel-head">
         <h2>💬 Community Feed</h2>
         <p>Share updates, photos, and reactions with campus users.</p>
+      </div>
+      <div
+        className={
+          isCommunityNarrow && mobileThreadParam
+            ? "community-stories-shell community-stories-shell--hidden-feed"
+            : "community-stories-shell"
+        }
+      >
+        <CommunityStoriesRail token={token} currentUser={currentUser} />
       </div>
       <div
         className={`composer community-composer${
