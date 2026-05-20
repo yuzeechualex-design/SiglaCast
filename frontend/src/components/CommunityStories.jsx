@@ -345,6 +345,130 @@ function StoryViewersModal({ token, storyId, onClose }) {
   );
 }
 
+function StoryCommentsModal({ token, storyId, currentUser, onClose, onCommentsChanged }) {
+  const [comments, setComments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+  const [draft, setDraft] = useState("");
+  const [sending, setSending] = useState(false);
+
+  const load = useCallback(async () => {
+    if (!token || !storyId) return;
+    setLoading(true);
+    setErr("");
+    const data = await request(`/stories/${encodeURIComponent(storyId)}/comments`, { token });
+    setLoading(false);
+    if (data.error) {
+      setErr(typeof data.error === "string" ? data.error : "Could not load comments");
+      setComments([]);
+      return;
+    }
+    setComments(Array.isArray(data.comments) ? data.comments : []);
+  }, [storyId, token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  async function submit(e) {
+    e.preventDefault();
+    const t = draft.trim();
+    if (!t || sending || !token) return;
+    setSending(true);
+    setErr("");
+    const data = await request(`/stories/${encodeURIComponent(storyId)}/comments`, {
+      token,
+      method: "POST",
+      body: { text: t }
+    });
+    setSending(false);
+    if (data.error) {
+      setErr(typeof data.error === "string" ? data.error : "Could not post comment");
+      return;
+    }
+    setDraft("");
+    await load();
+    onCommentsChanged?.();
+  }
+
+  return (
+    <ModalPortal>
+      <div
+        className="modal-backdrop modal-backdrop--portal story-viewer-child-modal"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div className="modal-card modal-card-narrow story-comments-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>Story comments</h3>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div className="modal-body story-comments-modal-body">
+            {currentUser?.name ? (
+              <p className="muted small story-comments-posting-as">
+                Posting as <strong>{currentUser.name}</strong>
+              </p>
+            ) : null}
+
+            <div className="story-comments-thread">
+              {loading ? <p className="muted small">Loading…</p> : null}
+              {!loading && err ? <p className="small stories-create-error">{err}</p> : null}
+              {!loading && !err && !comments.length ? (
+                <p className="muted small">No comments yet — say something nice.</p>
+              ) : null}
+              <ul className="story-comments-list">
+                {comments.map((c) => (
+                  <li key={c.id} className="story-comment-row">
+                    <div className="story-comment-avatar">
+                      {c.authorAvatar ? (
+                        <img src={mediaUrl(c.authorAvatar)} alt="" />
+                      ) : (
+                        <span>{c.authorName?.charAt(0) || "?"}</span>
+                      )}
+                    </div>
+                    <div className="story-comment-main">
+                      <div className="story-comment-meta">
+                        <strong>{c.authorName}</strong>
+                        <span className="muted small story-comment-time">
+                          {c.createdAt ? new Date(c.createdAt).toLocaleString() : ""}
+                        </span>
+                      </div>
+                      <p className="story-comment-text">{c.text}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            <form className="story-comments-compose" onSubmit={submit}>
+              <label className="sr-only" htmlFor="story-comment-input">
+                Write a comment
+              </label>
+              <textarea
+                id="story-comment-input"
+                className="story-comments-textarea"
+                rows={3}
+                placeholder="Write a comment…"
+                value={draft}
+                maxLength={2000}
+                disabled={sending || !token}
+                onChange={(e) => setDraft(e.target.value)}
+              />
+              <div className="story-comments-compose-actions">
+                <button type="submit" className="btn btn-primary btn-sm" disabled={sending || !draft.trim() || !token}>
+                  {sending ? "Posting…" : "Post"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function StoryViewerModal({
   token,
   rings,
@@ -362,6 +486,7 @@ function StoryViewerModal({
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [reactorsOpen, setReactorsOpen] = useState(false);
   const [viewersOpen, setViewersOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [reactBusy, setReactBusy] = useState(false);
   const endTimeRef = useRef(0);
   const pauseRemainRef = useRef(STORY_SLIDE_MS);
@@ -496,6 +621,7 @@ function StoryViewerModal({
     setMoreOpen(false);
     setReactorsOpen(false);
     setViewersOpen(false);
+    setCommentsOpen(false);
   }, [story?.id]);
 
   function togglePause() {
@@ -756,6 +882,20 @@ function StoryViewerModal({
                   {typeof story.viewerCount === "number" ? ` (${story.viewerCount})` : ""}
                 </button>
               ) : null}
+
+              <div className="story-viewer-comments-trigger-row">
+                <button
+                  type="button"
+                  className="see-reactors-btn story-viewer-see-comments"
+                  onClick={() => setCommentsOpen(true)}
+                  disabled={!token}
+                >
+                  💬 See comments
+                  {typeof story.commentCount === "number" && story.commentCount > 0
+                    ? ` (${story.commentCount})`
+                    : ""}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -775,6 +915,15 @@ function StoryViewerModal({
       ) : null}
       {viewersOpen ? (
         <StoryViewersModal token={token} storyId={story.id} onClose={() => setViewersOpen(false)} />
+      ) : null}
+      {commentsOpen ? (
+        <StoryCommentsModal
+          token={token}
+          storyId={story.id}
+          currentUser={currentUser}
+          onClose={() => setCommentsOpen(false)}
+          onCommentsChanged={() => onReloadStories?.()}
+        />
       ) : null}
     </>
   );

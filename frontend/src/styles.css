@@ -1439,9 +1439,132 @@ label.btn.btn-icon {
   font-size: 0.78rem;
 }
 
-[data-theme="dark"] .story-viewers-modal-card {
+.story-viewer-comments-trigger-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.story-viewer-see-comments {
+  color: #e2e8f0 !important;
+}
+
+.story-comments-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: min(70vh, 560px);
+}
+
+.story-comments-posting-as {
+  margin: 0;
+}
+
+.story-comments-thread {
+  flex: 1;
+  min-height: 120px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.story-comments-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.story-comment-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.story-comment-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: rgba(37, 99, 235, 0.18);
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.story-comment-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.story-comment-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.story-comment-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.story-comment-meta strong {
+  font-size: 0.88rem;
+}
+
+.story-comment-time {
+  font-size: 0.72rem;
+}
+
+.story-comment-text {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.story-comments-compose {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.story-comments-textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  font: inherit;
+  background: var(--surface);
+  color: var(--ink-900);
+  margin-bottom: 10px;
+}
+
+.story-comments-compose-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+[data-theme="dark"] .story-comments-modal-card {
   background: var(--card);
 }
+
+[data-theme="dark"] .story-comments-textarea {
+  background: rgba(15, 23, 42, 0.65);
+  color: #f8fafc;
+  border-color: rgba(148, 163, 184, 0.28);
+}
+
 
 .story-viewer-avatar,
 .story-viewer-avatar-ph {

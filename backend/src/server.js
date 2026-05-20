@@ -669,6 +669,15 @@ async function buildStoryRings(viewerId) {
     }
   }
 
+  /** @type {Map<string, number>} */
+  const commentCountMap = new Map();
+  if (storyIds.length) {
+    const { data: scRows } = await supabase.from("story_comments").select("story_id").in("story_id", storyIds);
+    for (const row of scRows || []) {
+      commentCountMap.set(row.story_id, (commentCountMap.get(row.story_id) || 0) + 1);
+    }
+  }
+
   const byUser = new Map();
   for (const r of rows) {
     if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
@@ -683,6 +692,7 @@ async function buildStoryRings(viewerId) {
       reactionBreakdown: bag.breakdown,
       myReaction: bag.myReaction,
       reactionCount,
+      commentCount: commentCountMap.get(r.id) || 0,
       ...(r.user_id === viewerId ? { viewerCount: viewCountMap.get(r.id) || 0 } : {})
     });
   }
@@ -1799,6 +1809,7 @@ app.post("/api/stories", authenticate, (req, res, next) => {
         reactionBreakdown: {},
         myReaction: null,
         reactionCount: 0,
+        commentCount: 0,
         viewerCount: 0
       }
     });
@@ -1934,6 +1945,87 @@ app.get("/api/stories/:storyId/viewers", authenticate, async (req, res) => {
     });
 
     res.json({ viewers });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/stories/:storyId/comments", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+
+    const { data: rows } = await supabase
+      .from("story_comments")
+      .select("*")
+      .eq("story_id", storyId)
+      .order("created_at", { ascending: true });
+
+    const authorIds = [...new Set((rows || []).map((r) => r.author_id))];
+    const { data: users } = authorIds.length
+      ? await supabase.from("users").select("id, name, avatar_url").in("id", authorIds)
+      : { data: [] };
+    const um = new Map((users || []).map((u) => [u.id, u]));
+
+    const comments = (rows || []).map((row) => {
+      const u = um.get(row.author_id);
+      return {
+        id: row.id,
+        text: row.content || "",
+        authorId: row.author_id,
+        authorName: u?.name || "Unknown",
+        authorAvatar: u?.avatar_url || null,
+        createdAt: row.created_at
+      };
+    });
+
+    res.json({ comments });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/stories/:storyId/comments", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const raw = String(req.body?.text ?? "").trim();
+    if (!raw) return res.status(400).json({ error: "Comment cannot be empty" });
+    if (raw.length > 2000) return res.status(400).json({ error: "Comment is too long (max 2000 characters)" });
+
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+
+    const id = `sc${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const { error } = await supabase.from("story_comments").insert({
+      id,
+      story_id: storyId,
+      author_id: me,
+      content: raw
+    });
+    if (error) return res.status(400).json({ error: error.message });
+
+    if (acc.story.user_id && acc.story.user_id !== me) {
+      await insertNotification({
+        userId: acc.story.user_id,
+        text: `${req.user.name} commented on your story`,
+        kind: "story_comment",
+        badgeCount: 1,
+        linkPath: "/messages"
+      });
+    }
+
+    const comment = {
+      id,
+      text: raw,
+      authorId: me,
+      authorName: req.user.name,
+      authorAvatar: req.user.avatar_url || null,
+      createdAt: new Date().toISOString()
+    };
+    res.status(201).json({ comment });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

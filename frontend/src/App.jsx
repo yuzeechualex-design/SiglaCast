@@ -441,7 +441,9 @@ export default function App() {
       "dm",
       "announcement",
       "event",
-      "friend_request"
+      "friend_request",
+      "story_comment",
+      "story_reaction"
     ]);
     for (const n of notifications) {
       if (seenNotificationIds.current.has(n.id)) continue;
