@@ -2860,16 +2860,6 @@ textarea.profile-bio-input::placeholder {
   flex: 1;
 }
 
-.compose-attach-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.compose-attach-btn svg {
-  flex-shrink: 0;
-}
-
 .thread-compose .btn-send-msg,
 .comment-form .btn-send-msg {
   min-width: 44px;
@@ -3459,6 +3449,7 @@ textarea.profile-bio-input::placeholder {
   color: var(--yellow-500);
 }
 
+.bubble-react-picker {
   position: absolute;
   bottom: calc(100% + 6px);
   z-index: 15;
