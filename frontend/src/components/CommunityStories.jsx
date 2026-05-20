@@ -145,8 +145,8 @@ export default function CommunityStoriesRail({
                       ) : (
                         <span className="story-ring-placeholder">{ring.user.name?.charAt(0) || "?"}</span>
                       )}
-                      <StoryPresenceDot presence={ring.user.presence} isOnline={ring.user.isOnline} />
                     </span>
+                    <StoryPresenceDot presence={ring.user.presence} isOnline={ring.user.isOnline} />
                   </button>
                 </div>
                 <span className="story-ring-caption" title={ring.user.name}>
