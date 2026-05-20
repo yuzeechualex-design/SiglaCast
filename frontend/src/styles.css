@@ -955,12 +955,13 @@ label.btn.btn-icon {
 
 /* Horizontal strip is a scrollport: overflow-x: auto collapses overflow-y to "auto",
    so overlapping note bubbles clip at the top. `.community-stories-rail--has-notes` is set in JS so
-   every browser reserves space reliably (:class + :has as fallback when notes mount). */
+   every browser reserves space reliably (:class + :has as fallback when notes mount).
+   Locked-height bubbles use horizontal marquee overflow — reserve less vertical gutter. */
 .community-stories-rail:not(.community-stories-rail--vertical).community-stories-rail--has-notes
   .community-stories-strip:not(.community-stories-strip--vertical),
 .community-stories-rail:not(.community-stories-rail--vertical)
   .community-stories-strip:not(.community-stories-strip--vertical):has(.story-note-bubble) {
-  padding-top: 52px;
+  padding-top: 36px;
   padding-bottom: 10px;
   padding-inline: 4px;
 }
@@ -1186,35 +1187,35 @@ label.btn.btn-icon {
 }
 
 .community-stories-rail:not(.community-stories-rail--vertical) .story-note-bubble .overflow-marquee {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
   text-align: center;
 }
 
-/* Community Feed horizontal rail: same wrapped “note” behavior as Messages column */
+/* Horizontal rail only: fixed “pill” footprint + marquee scroll for overflow (never wrap / grow height). */
 .community-stories-rail:not(.community-stories-rail--vertical) .story-note-bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   bottom: calc(100% - 14px);
-  max-width: min(200px, calc(100vw - 112px));
-  padding: 6px 10px;
+  width: clamp(106px, 30vw, 138px);
+  max-width: none;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  overflow: hidden;
   border-radius: 12px;
   font-size: 0.62rem;
   font-weight: 600;
-  line-height: 1.35;
+  line-height: 1.2;
   text-align: center;
-  word-break: break-word;
-  white-space: normal;
-}
-
-.community-stories-rail:not(.community-stories-rail--vertical)
-  .story-note-bubble
-  .overflow-marquee__inner {
-  white-space: normal;
-  display: block;
-}
-
-.community-stories-rail:not(.community-stories-rail--vertical)
-  .story-note-bubble
-  .overflow-marquee--active
-  .overflow-marquee__inner {
-  animation: none;
+  word-break: normal;
+  overflow-wrap: normal;
+  white-space: nowrap;
 }
 
 .community-stories-rail--vertical .story-note-bubble {
@@ -6113,7 +6114,7 @@ button.comment-profile-avatar-btn:focus-visible {
     .community-stories-strip:not(.community-stories-strip--vertical),
   .community-stories-rail:not(.community-stories-rail--vertical)
     .community-stories-strip:not(.community-stories-strip--vertical):has(.story-note-bubble) {
-    padding-top: 58px;
+    padding-top: 40px;
     padding-bottom: 12px;
   }
 
@@ -6122,7 +6123,7 @@ button.comment-profile-avatar-btn:focus-visible {
       .community-stories-strip:not(.community-stories-strip--vertical),
     .community-stories-rail:not(.community-stories-rail--vertical)
       .community-stories-strip:not(.community-stories-strip--vertical):has(.story-note-bubble) {
-      padding-top: 64px;
+      padding-top: 42px;
       padding-bottom: 12px;
     }
   }
