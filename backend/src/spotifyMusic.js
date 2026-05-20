@@ -5,9 +5,12 @@ export const SPOTIFY_CLIENT_SECRET = process.env.SPOTIFY_CLIENT_SECRET || "";
 /** Must match a redirect URI in the Spotify app settings (API callback). */
 export const SPOTIFY_REDIRECT_URI =
   process.env.SPOTIFY_REDIRECT_URI || "http://localhost:4000/api/music/spotify/callback";
-/** Where users return in the browser after linking (no wildcards). */
+/** Where users return in the browser after linking (no wildcards). Prefer SPOTIFY_FRONTEND_AFTER_LINK; legacy keys still work. */
 export const SPOTIFY_FRONTEND_AFTER_LINK =
-  process.env.SPOTIFY_FRONTEND_REDIRECT || process.env.SPOTIFY_FRONTEND_RETURN || "http://localhost:5173/music";
+  process.env.SPOTIFY_FRONTEND_AFTER_LINK?.trim() ||
+  process.env.SPOTIFY_FRONTEND_REDIRECT?.trim() ||
+  process.env.SPOTIFY_FRONTEND_RETURN?.trim() ||
+  "http://localhost:5173/music";
 
 const SCOPES = ["user-read-currently-playing", "user-read-playback-state"].join(" ");
 
