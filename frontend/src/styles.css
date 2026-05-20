@@ -2860,6 +2860,16 @@ textarea.profile-bio-input::placeholder {
   flex: 1;
 }
 
+.compose-attach-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.compose-attach-btn svg {
+  flex-shrink: 0;
+}
+
 .thread-compose .btn-send-msg,
 .comment-form .btn-send-msg {
   min-width: 44px;
