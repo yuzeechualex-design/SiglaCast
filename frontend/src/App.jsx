@@ -3,7 +3,6 @@ import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-
 import { request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
-import DashboardPage from "./pages/DashboardPage.jsx";
 import EventsPage from "./pages/EventsPage.jsx";
 import EventDetailPage from "./pages/EventDetailPage.jsx";
 import CommunityPage from "./pages/CommunityPage.jsx";
@@ -39,7 +38,6 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [notifications, setNotifications] = useState([]);
-  const [dashboard, setDashboard] = useState(null);
   const [newAnnouncementTitle, setNewAnnouncementTitle] = useState("");
   const [newAnnouncementMessage, setNewAnnouncementMessage] = useState("");
   const [newEventTitle, setNewEventTitle] = useState("");
@@ -308,13 +306,6 @@ export default function App() {
     setPosts(Array.isArray(po) ? po : []);
   }
 
-  async function loadRoleDashboard() {
-    if (!token || !user) return;
-    const endpoint = user.role === "admin" ? "/dashboard/admin" : "/dashboard/student";
-    const data = await api(endpoint);
-    setDashboard(data?.metrics ? data : null);
-  }
-
   async function loadAdminUsers() {
     if (!token || !user || user.role !== "admin") {
       setAdminUsers([]);
@@ -332,7 +323,7 @@ export default function App() {
   }
 
   async function loadAll() {
-    await Promise.all([loadCore(), loadComms(), loadRoleDashboard(), loadAdminUsers()]);
+    await Promise.all([loadCore(), loadComms(), loadAdminUsers()]);
   }
 
   useEffect(() => {
@@ -650,7 +641,7 @@ export default function App() {
       localStorage.setItem("siglacast_refresh_token", res.refreshToken);
       localStorage.setItem("siglacast_user", JSON.stringify(res.user));
       setNotice(`Logged in as ${res.user.role}`);
-      navigate("/");
+      navigate("/community");
     }
     setLoadingAuth(false);
   }
@@ -1316,7 +1307,7 @@ export default function App() {
       return;
     }
     setNotice(`Deleted user ${target.name || target.id}`);
-    await Promise.all([loadAdminUsers(), loadCore(), loadRoleDashboard()]);
+    await Promise.all([loadAdminUsers(), loadCore()]);
   }
 
   async function deleteEvent(target) {
@@ -1400,7 +1391,6 @@ export default function App() {
     <AppShell
       user={user}
       notice={notice || ""}
-      onLogout={logout}
       theme={theme}
       onToggleTheme={toggleTheme}
       navBadges={{
@@ -1412,36 +1402,7 @@ export default function App() {
     >
       <ImageLightboxProvider>
       <Routes>
-        <Route
-          path="/"
-          element={
-            <DashboardPage
-              user={user}
-              dashboard={dashboard}
-              newEventTitle={newEventTitle}
-              setNewEventTitle={setNewEventTitle}
-              newEventDesc={newEventDesc}
-              setNewEventDesc={setNewEventDesc}
-              newEventRules={newEventRules}
-              setNewEventRules={setNewEventRules}
-              newEventMaxVotes={newEventMaxVotes}
-              setNewEventMaxVotes={setNewEventMaxVotes}
-              newEventStrategy={newEventStrategy}
-              setNewEventStrategy={setNewEventStrategy}
-              newEventCandidates={newEventCandidates}
-              setNewEventCandidates={setNewEventCandidates}
-              newCandidateImageUrls={newCandidateImageUrls}
-              setNewCandidateImageUrls={setNewCandidateImageUrls}
-              newEventCoverFile={newEventCoverFile}
-              setNewEventCoverFile={setNewEventCoverFile}
-              onCreateEvent={createEvent}
-              adminUsers={adminUsers}
-              onDeleteUser={deleteUser}
-              events={events}
-              onDeleteEvent={deleteEvent}
-            />
-          }
-        />
+        <Route path="/" element={<Navigate to="/community" replace />} />
         <Route
           path="/events"
           element={
@@ -1450,6 +1411,29 @@ export default function App() {
               onOpenEvent={openEvent}
               currentUser={user}
               onDeleteEvent={deleteEvent}
+              {...(user.role === "admin"
+                ? {
+                    newEventTitle,
+                    setNewEventTitle,
+                    newEventDesc,
+                    setNewEventDesc,
+                    newEventRules,
+                    setNewEventRules,
+                    newEventMaxVotes,
+                    setNewEventMaxVotes,
+                    newEventStrategy,
+                    setNewEventStrategy,
+                    newEventCandidates,
+                    setNewEventCandidates,
+                    newCandidateImageUrls,
+                    setNewCandidateImageUrls,
+                    newEventCoverFile,
+                    setNewEventCoverFile,
+                    onCreateEvent: createEvent,
+                    adminUsers,
+                    onDeleteUser: deleteUser
+                  }
+                : {})}
             />
           }
         />
@@ -1486,6 +1470,7 @@ export default function App() {
               onAvatarUpload={uploadAvatar}
               onCoverUpload={uploadCover}
               setNotice={setNotice}
+              onLogout={logout}
             />
           }
         />
@@ -1556,7 +1541,7 @@ export default function App() {
             />
           }
         />
-        <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="*" element={<Navigate to="/community" replace />} />
       </Routes>
       <UserProfileModal
         peek={userProfilePeek}

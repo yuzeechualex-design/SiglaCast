@@ -43,7 +43,7 @@ const AVAILABILITY_CHOICES = [
   }
 ];
 
-export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice }) {
+export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout }) {
   const [name, setName] = useState(user.name);
   const [statusEmoji, setStatusEmoji] = useState(() => user.statusEmoji || "");
   const [statusNote, setStatusNote] = useState(() => user.statusNote || "");
@@ -342,6 +342,13 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
 
         <button type="submit" className="btn btn-primary" disabled={saving}>{saving ? "Saving…" : "💾 Save changes"}</button>
       </form>
+
+      <div className="profile-logout-footer">
+        <p className="muted small profile-logout-hint">Sign out on this device.</p>
+        <button type="button" className="btn btn-ghost profile-logout-btn" onClick={() => onLogout?.()}>
+          ➜] Log out
+        </button>
+      </div>
     </section>
   );
 }

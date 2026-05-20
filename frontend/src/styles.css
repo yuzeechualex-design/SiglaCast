@@ -1573,6 +1573,24 @@ body.community-thread-overlay-open {
   margin: 4px 0 0 !important;
 }
 
+.profile-logout-footer {
+  margin-top: 28px;
+  padding-top: 22px;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.profile-logout-hint {
+  margin: 0;
+}
+
+.profile-logout-btn {
+  font-weight: 700;
+}
+
 .profile-avatar-wrap {
   display: flex;
   align-items: center;

@@ -11,7 +11,6 @@ function formatNavPing(n) {
 export default function AppShell({
   user,
   notice,
-  onLogout,
   theme,
   onToggleTheme,
   children,
@@ -35,36 +34,18 @@ export default function AppShell({
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           </div>
           <p className="hero-subtitle">
-            {user.role === "admin" ? "Admin Operations Dashboard" : "Student Dashboard"} — {user.name}
+            {user.role === "admin" ? "Administrator" : "Student"} — {user.name}
           </p>
         </div>
         <div className="nav-row">
-          <NavLink to="/" className="nav-btn" end>📊 Dashboard</NavLink>
-          <NavLink to="/events" className="nav-btn">
-            📅 Events
-            {ev ? (
-              <span className="nav-ping" aria-label={`${navBadges.events} open events`}>
-                {ev}
-              </span>
-            ) : null}
+          <NavLink to="/community" className="nav-btn">
+            💬 Community
           </NavLink>
-          <NavLink to="/assistant" className="nav-btn">
-            ✨ Assistant
-          </NavLink>
-          <NavLink to="/community" className="nav-btn">💬 Community</NavLink>
           <NavLink to="/messages" className="nav-btn">
             ✉️ Messages
             {msg ? (
               <span className="nav-ping" aria-label={`${navBadges.messages} unread messages`}>
                 {msg}
-              </span>
-            ) : null}
-          </NavLink>
-          <NavLink to="/announcements" className="nav-btn">
-            📣 Announcements
-            {ann ? (
-              <span className="nav-ping" aria-label={`${navBadges.announcements} new announcements`}>
-                {ann}
               </span>
             ) : null}
           </NavLink>
@@ -76,13 +57,33 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/profile" className="nav-btn">👤 Profile</NavLink>
-          <button type="button" className="nav-logout" onClick={onLogout}>➜] Logout</button>
+          <NavLink to="/announcements" className="nav-btn">
+            📣 Announcements
+            {ann ? (
+              <span className="nav-ping" aria-label={`${navBadges.announcements} new announcements`}>
+                {ann}
+              </span>
+            ) : null}
+          </NavLink>
+          <NavLink to="/events" className="nav-btn">
+            📅 Events
+            {ev ? (
+              <span className="nav-ping" aria-label={`${navBadges.events} open events`}>
+                {ev}
+              </span>
+            ) : null}
+          </NavLink>
+          <NavLink to="/assistant" className="nav-btn">
+            ✨ Assistant
+          </NavLink>
+          <NavLink to="/profile" className="nav-btn">
+            👤 Profile
+          </NavLink>
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>
       <main className="grid">{children}</main>
-      <FloatingQuickNav headerRef={dashboardHeaderRef} navBadges={navBadges} onLogout={onLogout} />
+      <FloatingQuickNav headerRef={dashboardHeaderRef} navBadges={navBadges} />
     </div>
   );
 }

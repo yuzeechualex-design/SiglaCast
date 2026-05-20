@@ -9,8 +9,7 @@ function formatNavPing(n) {
 /** Fixed dock that mirrors primary nav once the dashboard header scrolls off-screen — no replacement of the hero nav. */
 export default function FloatingQuickNav({
   headerRef,
-  navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0 },
-  onLogout
+  navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0 }
 }) {
   const [show, setShow] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -86,9 +85,24 @@ export default function FloatingQuickNav({
             ↑ Top
           </button>
           <div className="floating-quick-links">
-            <NavLink to="/" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`} end>
-              📊
-              <span className="fq-label">Home</span>
+            <NavLink to="/community" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              💬
+              <span className="fq-label">Community</span>
+            </NavLink>
+            <NavLink to="/messages" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              ✉️
+              {msg ? <span className="fq-ping">{msg}</span> : null}
+              <span className="fq-label">Messages</span>
+            </NavLink>
+            <NavLink to="/notifications" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              🔔
+              {bell ? <span className="fq-ping">{bell}</span> : null}
+              <span className="fq-label">Alerts</span>
+            </NavLink>
+            <NavLink to="/announcements" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              📣
+              {ann ? <span className="fq-ping">{ann}</span> : null}
+              <span className="fq-label">News</span>
             </NavLink>
             <NavLink to="/events" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               📅
@@ -99,33 +113,10 @@ export default function FloatingQuickNav({
               ✨
               <span className="fq-label">Assistant</span>
             </NavLink>
-            <NavLink to="/community" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              💬
-              <span className="fq-label">Community</span>
-            </NavLink>
-            <NavLink to="/messages" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              ✉️
-              {msg ? <span className="fq-ping">{msg}</span> : null}
-              <span className="fq-label">Messages</span>
-            </NavLink>
-            <NavLink to="/announcements" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              📣
-              {ann ? <span className="fq-ping">{ann}</span> : null}
-              <span className="fq-label">News</span>
-            </NavLink>
-            <NavLink to="/notifications" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              🔔
-              {bell ? <span className="fq-ping">{bell}</span> : null}
-              <span className="fq-label">Alerts</span>
-            </NavLink>
             <NavLink to="/profile" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               👤
               <span className="fq-label">Profile</span>
             </NavLink>
-            <button type="button" className="fq-logout" onClick={onLogout} title="Log out">
-              ➜]
-              <span className="fq-label">Out</span>
-            </button>
           </div>
         </div>
       </nav>
