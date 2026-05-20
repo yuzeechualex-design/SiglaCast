@@ -462,7 +462,9 @@ async function bumpAggregatedNotification({ userId, sourceKey, kind, textForCoun
   const next = (row?.badge_count ?? 0) + 1;
   const text = typeof textForCount === "function" ? textForCount(next) : `${textForCount}`;
   if (row) {
-    await supabase.from("notifications").update({ badge_count: next, text }).eq("id", row.id);
+    const patch = { badge_count: next, text };
+    if (linkPath) patch.link_path = linkPath;
+    await supabase.from("notifications").update(patch).eq("id", row.id);
   } else {
     await supabase.from("notifications").insert({
       id: `n${Date.now()}-${userId}-${Math.random().toString(36).slice(2, 6)}`,

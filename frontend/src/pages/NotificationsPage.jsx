@@ -7,7 +7,7 @@ export default function NotificationsPage({ notifications }) {
   function go(notification) {
     const path = notificationTargetPath(notification);
     if (!path) return;
-    navigate(path);
+    navigate(path, { replace: false });
   }
 
   return (

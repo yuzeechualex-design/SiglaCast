@@ -673,7 +673,7 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
         placeholder={placeholder || `Reply as ${currentUser.name}…`}
         autoFocus
       />
-      <label className="btn btn-ghost btn-sm photo-pick-btn" title="Attach a photo">
+      <label className="btn btn-icon photo-pick-btn" title="Attach a photo">
         📷
         <input
           type="file"
@@ -860,7 +860,7 @@ function CommentBox({ postId, onComment, currentUser }) {
         onChange={setText}
         placeholder={`Comment as ${currentUser.name}… use @ to mention`}
       />
-      <label className="btn btn-ghost btn-sm photo-pick-btn" title="Attach a photo">
+      <label className="btn btn-icon photo-pick-btn" title="Attach a photo">
         📷
         <input
           type="file"

@@ -865,15 +865,31 @@ label.btn-secondary:hover {
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1;
-  background: #fff;
+  background: rgba(31, 94, 199, 0.1);
   color: var(--blue-800);
-  border: 1px solid #c5d8f0;
-  box-shadow: 0 2px 8px rgba(13, 71, 161, 0.08);
+  border: 1px solid rgba(31, 94, 199, 0.26);
+  box-shadow: none;
 }
 
 .btn-icon:hover {
-  background: #eef4ff;
-  box-shadow: 0 4px 12px rgba(13, 71, 161, 0.12);
+  background: rgba(31, 94, 199, 0.16);
+  border-color: rgba(31, 94, 199, 0.38);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.btn-icon:focus-visible {
+  outline: 2px solid rgba(31, 94, 199, 0.45);
+  outline-offset: 2px;
+}
+
+/* label.btn defaults fight .btn-icon sizing — match square icon tiles */
+label.btn.btn-icon {
+  padding: 0;
+  min-width: 44px;
+  width: 44px;
+  min-height: 44px;
+  height: 44px;
 }
 
 .community-composer .composer-toolbar {
@@ -4677,6 +4693,21 @@ button.comment-profile-avatar-btn:focus-visible {
   background: var(--surface) !important;
 }
 
+[data-theme="dark"] .btn-icon {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--ink-900);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+[data-theme="dark"] .btn-icon:hover {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+[data-theme="dark"] .btn-icon:focus-visible {
+  outline-color: rgba(147, 197, 253, 0.55);
+}
+
 [data-theme="dark"] .thread-compose {
   background: var(--card) !important;
 }
@@ -4966,9 +4997,8 @@ button.comment-profile-avatar-btn:focus-visible {
 
 /* ---------- Comment photo upload + delete ---------- */
 .photo-pick-btn {
-  position: relative;
-  padding: 6px 10px;
-  font-size: 15px;
+  flex-shrink: 0;
+  cursor: pointer;
 }
 
 .comment-photo-preview {

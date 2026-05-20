@@ -15,11 +15,14 @@ import UserProfileModal from "./components/UserProfileModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 import { ImageLightboxProvider } from "./components/ImageLightboxContext.jsx";
+import { notificationTargetPath } from "./utils/notificationTargetPath.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 
 export default function App() {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const location = useLocation();
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -443,6 +446,8 @@ export default function App() {
         const notif = new Notification("SiglaCast", { body, tag: n.id });
         notif.onclick = () => {
           window.focus();
+          const path = notificationTargetPath(n);
+          if (path) navigateRef.current(path);
         };
       } catch (_) {
         /* some browsers block unless served from a SW */
