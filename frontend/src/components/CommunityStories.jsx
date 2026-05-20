@@ -23,9 +23,14 @@ function StoryPresenceDot({ presence, isOnline }) {
 }
 
 /**
- * Horizontal stories rail (+ add, friend rings with gradient / seen ring, scroll arrows).
+ * Stories rail: horizontal (Community / Messages mobile) or vertical (Messages desktop sidebar).
  */
-export default function CommunityStoriesRail({ token, currentUser }) {
+export default function CommunityStoriesRail({
+  token,
+  currentUser,
+  variant = "horizontal",
+  className = ""
+}) {
   const [rings, setRings] = useState([]);
   const [loading, setLoading] = useState(false);
   const scrollerRef = useRef(null);
@@ -45,12 +50,20 @@ export default function CommunityStoriesRail({ token, currentUser }) {
     loadStories();
   }, [loadStories]);
 
-  const scrollStrip = useCallback((dir) => {
-    const el = scrollerRef.current;
-    if (!el) return;
-    const delta = dir * Math.min(320, Math.floor(el.clientWidth * 0.75));
-    el.scrollBy({ left: delta, behavior: "smooth" });
-  }, []);
+  const scrollStrip = useCallback(
+    (dir) => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      if (variant === "vertical") {
+        const delta = dir * Math.min(220, Math.floor(el.clientHeight * 0.65));
+        el.scrollBy({ top: delta, behavior: "smooth" });
+      } else {
+        const delta = dir * Math.min(320, Math.floor(el.clientWidth * 0.75));
+        el.scrollBy({ left: delta, behavior: "smooth" });
+      }
+    },
+    [variant]
+  );
 
   const [createOpen, setCreateOpen] = useState(false);
   /** `{ ringIndex, storyIndex }` while viewing */
@@ -63,24 +76,31 @@ export default function CommunityStoriesRail({ token, currentUser }) {
     setViewer({ ringIndex, storyIndex: idx });
   }, [rings]);
 
+  const isVertical = variant === "vertical";
+
   return (
-    <div className="community-stories-rail">
+    <div className={`community-stories-rail ${isVertical ? "community-stories-rail--vertical" : ""} ${className}`.trim()}>
       <div className="community-stories-head">
         <h3 className="community-stories-title">Stories</h3>
         {loading ? <span className="muted small stories-loading-label">Updating…</span> : null}
       </div>
 
-      <div className="community-stories-scroll-wrap">
+      <div
+        className={`community-stories-scroll-wrap ${isVertical ? "community-stories-scroll-wrap--vertical" : ""}`.trim()}
+      >
         <button
           type="button"
-          className="community-stories-scroll-btn community-stories-scroll-btn--prev"
-          aria-label="Scroll stories left"
+          className={`community-stories-scroll-btn community-stories-scroll-btn--prev ${isVertical ? "community-stories-scroll-btn--vertical" : ""}`.trim()}
+          aria-label={isVertical ? "Scroll stories up" : "Scroll stories left"}
           onClick={() => scrollStrip(-1)}
         >
-          ‹
+          {isVertical ? "▲" : "‹"}
         </button>
 
-        <div className="community-stories-strip" ref={scrollerRef}>
+        <div
+          className={`community-stories-strip ${isVertical ? "community-stories-strip--vertical" : ""}`.trim()}
+          ref={scrollerRef}
+        >
           <div className="story-ring-slot story-ring-slot--add">
             <button
               type="button"
@@ -120,11 +140,11 @@ export default function CommunityStoriesRail({ token, currentUser }) {
 
         <button
           type="button"
-          className="community-stories-scroll-btn community-stories-scroll-btn--next"
-          aria-label="Scroll stories right"
+          className={`community-stories-scroll-btn community-stories-scroll-btn--next ${isVertical ? "community-stories-scroll-btn--vertical" : ""}`.trim()}
+          aria-label={isVertical ? "Scroll stories down" : "Scroll stories right"}
           onClick={() => scrollStrip(1)}
         >
-          ›
+          {isVertical ? "▼" : "›"}
         </button>
       </div>
 

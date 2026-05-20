@@ -946,6 +946,48 @@ label.btn-secondary:hover {
   background: #eef4ff;
 }
 
+/* Vertical stories strip (Messages desktop column) */
+.community-stories-rail--vertical {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.community-stories-rail--vertical .community-stories-head {
+  flex-shrink: 0;
+}
+
+.community-stories-scroll-wrap--vertical {
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.community-stories-strip--vertical {
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scroll-snap-type: y proximity;
+  flex: 1;
+  min-height: 100px;
+  padding: 4px 0 10px;
+}
+
+.community-stories-strip--vertical::-webkit-scrollbar {
+  width: 6px;
+}
+
+.community-stories-scroll-btn--vertical {
+  width: 100%;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+
 .story-ring-slot {
   flex-shrink: 0;
   width: 76px;
@@ -1978,9 +2020,34 @@ body.community-thread-overlay-open {
   margin-inline: auto;
 }
 
+.messages-stories-sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 8px 6px 10px;
+  background: #fff;
+}
+
+.messages-stories-sidebar > .community-stories-rail--vertical {
+  border: none;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  flex: 1;
+  min-height: 0;
+}
+
 @media (min-width: 901px) {
   .messages-layout {
-    grid-template-columns: minmax(240px, 300px) minmax(260px, 520px);
+    grid-template-columns: minmax(260px, 300px) minmax(420px, 1fr) minmax(172px, 210px);
+    gap: 14px;
+    max-width: none;
+    width: 100%;
+    margin-inline: 0;
+    justify-content: stretch;
   }
 }
 
@@ -4384,6 +4451,7 @@ button.comment-profile-avatar-btn:focus-visible {
 [data-theme="dark"] .conv-item,
 [data-theme="dark"] .messages-sidebar,
 [data-theme="dark"] .messages-thread,
+[data-theme="dark"] .messages-stories-sidebar,
 [data-theme="dark"] .search-results,
 [data-theme="dark"] .search-result-row,
 [data-theme="dark"] .thread-menu,
@@ -5237,6 +5305,16 @@ button.comment-profile-avatar-btn:focus-visible {
     margin-inline: 0;
     flex: 1;
     min-height: 0;
+  }
+
+  .messages-mobile-stories {
+    display: block;
+    grid-column: 1 / -1;
+    margin-bottom: 10px;
+  }
+
+  .messages-mobile-stories--hidden-fullscreen {
+    display: none !important;
   }
 
   .messages-panel:not(.messages-mobile-fullscreen) .messages-thread {

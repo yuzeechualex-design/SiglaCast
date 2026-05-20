@@ -7,6 +7,7 @@ import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import ModalPortal from "../components/ModalPortal.jsx";
 import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
+import CommunityStoriesRail from "../components/CommunityStories.jsx";
 import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 
 const CHAT_REACTIONS = [
@@ -62,6 +63,7 @@ function StatusEmojiChip({ emoji }) {
 }
 
 export default function MessagesPage({
+  token,
   currentUser,
   conversations,
   messagesArchivedView = false,
@@ -397,6 +399,15 @@ export default function MessagesPage({
       </div>
 
       <div className="messages-layout">
+        {isNarrowViewport && token ? (
+          <div
+            className={`messages-mobile-stories${
+              mobileThreadFullscreen ? " messages-mobile-stories--hidden-fullscreen" : ""
+            }`}
+          >
+            <CommunityStoriesRail token={token} currentUser={currentUser} variant="horizontal" />
+          </div>
+        ) : null}
         <aside className="messages-sidebar">
           <div className="sidebar-top-row">
             <p className="sidebar-title">Chats</p>
@@ -1259,6 +1270,12 @@ export default function MessagesPage({
             </>
           )}
         </div>
+
+        {!isNarrowViewport && token ? (
+          <aside className="messages-stories-sidebar" aria-label="Stories">
+            <CommunityStoriesRail token={token} currentUser={currentUser} variant="vertical" />
+          </aside>
+        ) : null}
       </div>
 
       {showCreateGroup ? (

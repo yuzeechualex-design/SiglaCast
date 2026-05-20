@@ -1552,6 +1552,7 @@ export default function App() {
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
               onSendSiglaInActiveThread={sendSiglaInActiveThread}
               onOpenUserProfile={openUserProfileModal}
+              token={token}
             />
           }
         />
