@@ -437,7 +437,7 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
                   <strong className="music-hub-banner-title">{np.title}</strong>
                   <p className="music-hub-muted">{np.artist}</p>
                   {np.externalUrl ? (
-                    <a className="music-hub-banner-btn" href={np.externalUrl} target="_blank" rel="noopener noreferrer">
+                    <a className="music-hub-banner-open-btn" href={np.externalUrl} target="_blank" rel="noopener noreferrer">
                       Open in Spotify ↗
                     </a>
                   ) : null}
@@ -526,7 +526,12 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
               ) : null}
 
               {focusTrack.externalUrl ? (
-                <a className="music-hub-banner-btn slim" href={focusTrack.externalUrl} target="_blank" rel="noopener noreferrer">
+                <a
+                  className="music-hub-banner-open-btn music-hub-banner-open-btn--compact"
+                  href={focusTrack.externalUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   Open track in Spotify ↗
                 </a>
               ) : (

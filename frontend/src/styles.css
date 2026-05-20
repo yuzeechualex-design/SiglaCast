@@ -6325,8 +6325,9 @@ body.music-spotify-hub-open .music-mini-player-bar {
   background: var(--sp-bg);
   color: #f6f6f6;
   border-radius: 10px;
-  overflow: clip;
-  min-height: min(520px, 78vh);
+  /* Avoid clip + fixed max-heights trapping content — page/body handles scroll */
+  overflow: visible;
+  min-height: min(440px, 70vh);
   font-family:
     Circular,
     "SF Pro Display",
@@ -6340,11 +6341,12 @@ body.music-spotify-hub-open .music-mini-player-bar {
 }
 
 .music-hub-layout {
-  flex: 1;
+  flex: 1 1 auto;
   display: grid;
   grid-template-columns: 236px minmax(0, 1fr) minmax(0, 280px);
-  min-height: min(620px, 70vh);
-  max-height: min(740px, 78vh);
+  align-items: start;
+  gap: 12px;
+  min-height: 0;
 }
 
 .music-hub-sidebar {
@@ -6354,6 +6356,11 @@ body.music-spotify-hub-open .music-mini-player-bar {
   flex-direction: column;
   gap: 14px;
   border-right: 1px solid var(--sp-line);
+  position: sticky;
+  top: 12px;
+  align-self: start;
+  max-height: none;
+  border-radius: 0;
 }
 
 .music-hub-brand {
@@ -6509,6 +6516,7 @@ body.music-spotify-hub-open .music-mini-player-bar {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  align-self: stretch;
   background: linear-gradient(#1e2a3d 0%, var(--sp-bg) 260px);
 }
 
@@ -6518,6 +6526,12 @@ body.music-spotify-hub-open .music-mini-player-bar {
   gap: 12px;
   padding: 14px 20px;
   flex-wrap: wrap;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: linear-gradient(180deg, rgba(30, 42, 61, 0.97), rgba(18, 18, 18, 0.92));
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .music-hub-toolbar-nav {
@@ -6599,9 +6613,9 @@ body.music-spotify-hub-open .music-mini-player-bar {
 }
 
 .music-hub-scroll {
-  flex: 1;
-  overflow-y: auto;
-  padding: 0 20px 100px;
+  flex: 0 1 auto;
+  overflow: visible;
+  padding: 0 16px clamp(112px, 18vw, 140px);
   scroll-behavior: smooth;
 }
 
@@ -6716,6 +6730,40 @@ body.music-spotify-hub-open .music-mini-player-bar {
 .music-hub-banner-btn.slim {
   margin-top: 8px;
   font-size: 0.76rem;
+}
+
+/* Primary Spotify open action on session hero — rounded “button” vs plain link text */
+.music-hub-banner-open-btn {
+  margin-top: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #121212;
+  font-weight: 800;
+  font-size: 0.76rem;
+  letter-spacing: 0.06em;
+  text-decoration: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.25);
+  transition:
+    transform 0.14s ease,
+    filter 0.14s ease;
+}
+
+.music-hub-banner-open-btn:hover {
+  filter: brightness(1.06);
+  text-decoration: none;
+  transform: translateY(-1px);
+}
+
+.music-hub-banner-open-btn--compact {
+  margin-top: 10px;
+  padding: 8px 15px;
+  font-size: 0.71rem;
 }
 
 .music-hub-shelf-title {
@@ -6837,7 +6885,12 @@ body.music-spotify-hub-open .music-mini-player-bar {
   background: var(--sp-bg);
   border-left: 1px solid var(--sp-line);
   padding: 20px;
-  overflow-y: auto;
+  overflow: visible;
+  align-self: start;
+  position: sticky;
+  top: 12px;
+  border-radius: 12px;
+  outline: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .music-hub-np-heading {
@@ -7232,18 +7285,20 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 .music-hub-friend-name {
   font-size: 0.92rem;
   font-weight: 800;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
 }
 
 .music-hub-friend-artist {
   font-size: 0.78rem;
   color: var(--sp-muted);
   line-height: 1.35;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  word-break: break-word;
 }
 
 .music-hub-friend-actions {
@@ -7350,19 +7405,44 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   .music-hub-now-playing {
     display: none;
   }
+
+  .music-hub-sidebar {
+    top: 8px;
+    max-height: calc(100vh - 140px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 @media (max-width: 720px) {
+  .music-spotify-shell {
+    border-radius: 14px;
+    min-height: 0;
+  }
+
+  body.music-spotify-hub-open .app {
+    padding-left: max(14px, env(safe-area-inset-left));
+    padding-right: max(14px, env(safe-area-inset-right));
+    padding-bottom: max(120px, env(safe-area-inset-bottom));
+  }
+
   .music-hub-layout {
     grid-template-columns: 1fr;
+    gap: 8px;
   }
 
   .music-hub-sidebar {
+    position: relative;
+    top: auto;
+    max-height: none;
+    overflow: visible;
     flex-direction: row;
     align-items: center;
     flex-wrap: wrap;
     border-right: none;
     border-bottom: 1px solid var(--sp-line);
+    border-radius: 12px;
+    outline: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .music-hub-library-body {
@@ -7371,6 +7451,57 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
   .music-hub-foot-link {
     width: 100%;
+  }
+
+  .music-hub-toolbar {
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+    top: 0;
+    z-index: 4;
+    border-radius: 0;
+  }
+
+  .music-hub-scroll {
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+    padding-bottom: max(148px, calc(132px + env(safe-area-inset-bottom)));
+  }
+
+  .music-hub-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px;
+  }
+
+  .music-hub-banner-title {
+    font-size: clamp(1.35rem, 7vw, 1.85rem);
+  }
+
+  .music-hub-banner-visual img {
+    width: min(100%, 260px);
+    height: auto;
+    max-height: none;
+    aspect-ratio: 1;
+  }
+
+  .music-hub-section-title {
+    font-size: clamp(1.3rem, 6vw, 1.65rem);
+  }
+
+  .music-hub-friend-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .music-hub-friend-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .music-hub-friend-act {
+    flex: 1 1 calc(50% - 8px);
+    justify-content: center;
+    min-height: 40px;
   }
 
   .music-hub-ft-left {
