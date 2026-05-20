@@ -607,6 +607,18 @@ async function friendIdsForUser(meId) {
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
+/** Friend or owner can access non-expired story (for reactions / reactor list). */
+async function storyFriendAccess(storyId, viewerId) {
+  const { data: story } = await supabase.from("user_stories").select("*").eq("id", storyId).maybeSingle();
+  if (!story) return { ok: false, status: 404, msg: "Story not found" };
+  const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
+  if (story.created_at < cutoff) return { ok: false, status: 410, msg: "Story expired" };
+  if (story.user_id === viewerId) return { ok: true, story };
+  const okFriend = await areFriends(viewerId, story.user_id);
+  if (!okFriend) return { ok: false, status: 403, msg: "Not allowed" };
+  return { ok: true, story };
+}
+
 /** Stories from the last 24h for me + friends, grouped by author with view state. */
 async function buildStoryRings(viewerId) {
   const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
@@ -629,15 +641,49 @@ async function buildStoryRings(viewerId) {
     .in("story_id", storyIds);
   const viewedSet = new Set((views || []).map((v) => v.story_id));
 
+  const { data: rxRows } =
+    storyIds.length > 0
+      ? await supabase.from("story_reactions").select("story_id, user_id, reaction").in("story_id", storyIds)
+      : { data: [] };
+
+  /** @type {Map<string, { breakdown: Record<string, number>, myReaction: string | null }>} */
+  const rxMap = new Map();
+  for (const sid of storyIds) {
+    rxMap.set(sid, { breakdown: {}, myReaction: null });
+  }
+  for (const row of rxRows || []) {
+    const bag = rxMap.get(row.story_id);
+    if (!bag) continue;
+    const type = ALLOWED_REACTIONS.includes(row.reaction) ? row.reaction : "like";
+    bag.breakdown[type] = (bag.breakdown[type] || 0) + 1;
+    if (row.user_id === viewerId) bag.myReaction = type;
+  }
+
+  const ownStoryIds = rows.filter((row) => row.user_id === viewerId).map((row) => row.id);
+  /** @type {Map<string, number>} */
+  const viewCountMap = new Map();
+  if (ownStoryIds.length) {
+    const { data: vcRows } = await supabase.from("story_views").select("story_id").in("story_id", ownStoryIds);
+    for (const row of vcRows || []) {
+      viewCountMap.set(row.story_id, (viewCountMap.get(row.story_id) || 0) + 1);
+    }
+  }
+
   const byUser = new Map();
   for (const r of rows) {
     if (!byUser.has(r.user_id)) byUser.set(r.user_id, []);
+    const bag = rxMap.get(r.id) || { breakdown: {}, myReaction: null };
+    const reactionCount = Object.values(bag.breakdown).reduce((a, b) => a + b, 0);
     byUser.get(r.user_id).push({
       id: r.id,
       text: r.body_text || "",
       imageUrl: r.media_url || null,
       createdAt: r.created_at,
-      viewed: viewedSet.has(r.id)
+      viewed: viewedSet.has(r.id),
+      reactionBreakdown: bag.breakdown,
+      myReaction: bag.myReaction,
+      reactionCount,
+      ...(r.user_id === viewerId ? { viewerCount: viewCountMap.get(r.id) || 0 } : {})
     });
   }
 
@@ -1749,7 +1795,11 @@ app.post("/api/stories", authenticate, (req, res, next) => {
         text: row.body_text || "",
         imageUrl: row.media_url || null,
         createdAt: row.created_at,
-        viewed: true
+        viewed: true,
+        reactionBreakdown: {},
+        myReaction: null,
+        reactionCount: 0,
+        viewerCount: 0
       }
     });
   } catch (e) {
@@ -1775,6 +1825,115 @@ app.post("/api/stories/:storyId/view", authenticate, async (req, res) => {
     );
     if (error) return res.status(400).json({ error: error.message });
     res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/stories/:storyId/react", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const requested = String(req.body?.reaction || "like").toLowerCase();
+    const wantClear = req.body?.reaction === null || req.body?.reaction === "";
+    const reaction = ALLOWED_REACTIONS.includes(requested) ? requested : "like";
+
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+    if (acc.story.user_id === me) return res.status(403).json({ error: "You can't react to your own story" });
+
+    const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", cry: "😭", angry: "😡" };
+
+    if (wantClear) {
+      await supabase.from("story_reactions").delete().eq("story_id", storyId).eq("user_id", me);
+    } else {
+      const { data: existingRow } = await supabase
+        .from("story_reactions")
+        .select("story_id")
+        .eq("story_id", storyId)
+        .eq("user_id", me)
+        .maybeSingle();
+      const wasNew = !existingRow;
+      if (existingRow) {
+        await supabase.from("story_reactions").update({ reaction }).eq("story_id", storyId).eq("user_id", me);
+      } else {
+        await supabase.from("story_reactions").insert({ story_id: storyId, user_id: me, reaction });
+      }
+      if (wasNew) {
+        await insertNotification({
+          userId: acc.story.user_id,
+          text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your story`,
+          kind: "story_reaction",
+          badgeCount: 1,
+          linkPath: "/messages"
+        });
+      }
+    }
+
+    const { data: rxRows } = await supabase.from("story_reactions").select("story_id, user_id, reaction").eq("story_id", storyId);
+    const bag = { breakdown: {}, myReaction: null };
+    for (const row of rxRows || []) {
+      const type = ALLOWED_REACTIONS.includes(row.reaction) ? row.reaction : "like";
+      bag.breakdown[type] = (bag.breakdown[type] || 0) + 1;
+      if (row.user_id === me) bag.myReaction = type;
+    }
+    const reactionCount = Object.values(bag.breakdown).reduce((a, b) => a + b, 0);
+
+    res.json({
+      reactionBreakdown: bag.breakdown,
+      myReaction: bag.myReaction,
+      reactionCount
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/stories/:storyId/reactors", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+    const { data: rows } = await supabase.from("story_reactions").select("user_id, reaction").eq("story_id", storyId);
+    const breakdown = await reactorsBreakdownFromRows(rows || []);
+    res.json({ breakdown });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/stories/:storyId/viewers", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const storyId = req.params.storyId;
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+    if (acc.story.user_id !== me) return res.status(403).json({ error: "Only the story owner can see who viewed" });
+
+    const { data: viewRows } = await supabase
+      .from("story_views")
+      .select("viewer_id, viewed_at")
+      .eq("story_id", storyId)
+      .order("viewed_at", { ascending: false });
+
+    const viewerIds = [...new Set((viewRows || []).map((v) => v.viewer_id))];
+    const { data: users } = viewerIds.length
+      ? await supabase.from("users").select("id, name, avatar_url").in("id", viewerIds)
+      : { data: [] };
+    const um = new Map((users || []).map((u) => [u.id, u]));
+
+    const viewers = (viewRows || []).map((row) => {
+      const u = um.get(row.viewer_id);
+      return {
+        userId: row.viewer_id,
+        name: u?.name || "Unknown",
+        avatarUrl: u?.avatar_url || null,
+        viewedAt: row.viewed_at
+      };
+    });
+
+    res.json({ viewers });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

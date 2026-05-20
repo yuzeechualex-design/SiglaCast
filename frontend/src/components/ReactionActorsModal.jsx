@@ -9,7 +9,7 @@ import { request } from "../services/api.js";
  * Portaled to document.body so position:fixed is viewport-relative (ancestors like .panel use
  * transform animations that would otherwise trap fixed overlays).
  */
-export default function ReactionActorsModal({ title, path, reactionTypes, onClose }) {
+export default function ReactionActorsModal({ title, path, reactionTypes, onClose, backdropClassName = "" }) {
   const [breakdown, setBreakdown] = useState({});
   const [loading, setLoading] = useState(true);
 
@@ -35,7 +35,11 @@ export default function ReactionActorsModal({ title, path, reactionTypes, onClos
   const blocks = (reactionTypes || []).filter((r) => (breakdown[r.type] || []).length);
 
   const content = (
-    <div className="modal-backdrop modal-backdrop--portal" onClick={onClose} role="presentation">
+    <div
+      className={`modal-backdrop modal-backdrop--portal ${backdropClassName}`.trim()}
+      onClick={onClose}
+      role="presentation"
+    >
       <div className="modal-card modal-card-narrow" onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h3>{title}</h3>

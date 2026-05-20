@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { mediaUrl, request, requestForm } from "../services/api.js";
 import ModalPortal from "./ModalPortal.jsx";
+import ReactionActorsModal from "./ReactionActorsModal.jsx";
 
 function truncateName(name, max = 10) {
   const s = String(name || "").trim();
@@ -263,6 +264,87 @@ function CreateStoryModal({ token, onClose, onPosted }) {
 
 const STORY_SLIDE_MS = 10_000;
 
+const STORY_REACTION_TYPES = [
+  { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
+  { type: "love", emoji: "❤️", label: "Love", color: "#e11d48" },
+  { type: "haha", emoji: "😂", label: "Haha", color: "#f59e0b" },
+  { type: "wow", emoji: "😮", label: "Wow", color: "#f59e0b" },
+  { type: "sad", emoji: "😢", label: "Sad", color: "#0ea5e9" },
+  { type: "cry", emoji: "😭", label: "Crying", color: "#6366f6" },
+  { type: "angry", emoji: "😡", label: "Angry", color: "#dc2626" }
+];
+
+function StoryViewersModal({ token, storyId, onClose }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setErr("");
+    request(`/stories/${encodeURIComponent(storyId)}/viewers`, { token })
+      .then((data) => {
+        if (cancelled) return;
+        if (data.error) setErr(typeof data.error === "string" ? data.error : "Could not load viewers");
+        else setRows(Array.isArray(data.viewers) ? data.viewers : []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setErr("Could not load viewers");
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [storyId, token]);
+
+  return (
+    <ModalPortal>
+      <div
+        className="modal-backdrop modal-backdrop--portal story-viewer-child-modal"
+        role="presentation"
+        onClick={onClose}
+      >
+        <div className="modal-card modal-card-narrow story-viewers-modal-card" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>Who viewed</h3>
+            <button type="button" className="modal-close" onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
+          <div className="modal-body story-viewers-modal-body">
+            {loading ? <p className="muted small">Loading…</p> : null}
+            {err ? <p className="small stories-create-error">{err}</p> : null}
+            {!loading && !err && !rows.length ? (
+              <p className="muted small">No views yet from friends.</p>
+            ) : null}
+            <ul className="story-viewers-list">
+              {rows.map((v) => (
+                <li key={v.userId} className="story-viewers-row">
+                  <span className="story-viewers-avatar-wrap">
+                    {v.avatarUrl ? (
+                      <img className="story-viewers-avatar" src={mediaUrl(v.avatarUrl)} alt="" />
+                    ) : (
+                      <span className="story-viewers-avatar-ph">{v.name?.charAt(0) || "?"}</span>
+                    )}
+                  </span>
+                  <span className="story-viewers-name">{v.name}</span>
+                  <span className="story-viewers-time muted small">
+                    {v.viewedAt ? new Date(v.viewedAt).toLocaleString() : ""}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function StoryViewerModal({
   token,
   rings,
@@ -278,6 +360,9 @@ function StoryViewerModal({
   const [playing, setPlaying] = useState(true);
   const [moreOpen, setMoreOpen] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
+  const [reactorsOpen, setReactorsOpen] = useState(false);
+  const [viewersOpen, setViewersOpen] = useState(false);
+  const [reactBusy, setReactBusy] = useState(false);
   const endTimeRef = useRef(0);
   const pauseRemainRef = useRef(STORY_SLIDE_MS);
   const moreWrapRef = useRef(null);
@@ -409,6 +494,8 @@ function StoryViewerModal({
 
   useEffect(() => {
     setMoreOpen(false);
+    setReactorsOpen(false);
+    setViewersOpen(false);
   }, [story?.id]);
 
   function togglePause() {
@@ -458,8 +545,38 @@ function StoryViewerModal({
     });
   }
 
+  const breakdown = story.reactionBreakdown || {};
+  const reactionCount =
+    typeof story.reactionCount === "number"
+      ? story.reactionCount
+      : Object.values(breakdown).reduce((a, b) => a + (Number(b) || 0), 0);
+  const topReactions = STORY_REACTION_TYPES.filter((r) => breakdown[r.type]).sort(
+    (a, b) => (breakdown[b.type] || 0) - (breakdown[a.type] || 0)
+  );
+
+  async function sendStoryReaction(nextType) {
+    if (!token || !story?.id || reactBusy || isOwner) return;
+    setReactBusy(true);
+    try {
+      const body = nextType === null ? { reaction: "" } : { reaction: nextType };
+      const data = await request(`/stories/${encodeURIComponent(story.id)}/react`, {
+        token,
+        method: "POST",
+        body
+      });
+      if (data.error) {
+        window.alert(typeof data.error === "string" ? data.error : "Could not react.");
+        return;
+      }
+      await onReloadStories?.();
+    } finally {
+      setReactBusy(false);
+    }
+  }
+
   return (
-    <ModalPortal>
+    <>
+      <ModalPortal>
       <div
         className="modal-backdrop modal-backdrop--portal story-viewer-portal"
         role="presentation"
@@ -588,9 +705,77 @@ function StoryViewerModal({
             </div>
           </div>
 
+          <div className="story-viewer-footer">
+            <div className="story-viewer-footer-inner">
+              {!isOwner ? (
+                <div className="story-viewer-rx-area">
+                  <p className="story-viewer-rx-label muted small">React</p>
+                  <div className="story-viewer-rx-strip">
+                    {STORY_REACTION_TYPES.map((r, idx) => (
+                      <button
+                        key={r.type}
+                        type="button"
+                        className={`reaction-emoji-btn sm ${story.myReaction === r.type ? "is-active" : ""}`}
+                        style={{ animationDelay: `${idx * 25}ms` }}
+                        title={r.label}
+                        disabled={reactBusy || !token}
+                        onClick={() => sendStoryReaction(story.myReaction === r.type ? null : r.type)}
+                      >
+                        <span className="reaction-emoji">{r.emoji}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="muted small story-viewer-rx-owner-hint">Friends can react to your story.</p>
+              )}
+
+              {reactionCount > 0 ? (
+                <div className="story-viewer-rx-summary-row">
+                  <div className="reaction-summary story-viewer-rx-summary">
+                    {topReactions.slice(0, 4).map((r) => (
+                      <span key={r.type} className="reaction-summary-emoji" title={`${breakdown[r.type]} ${r.label}`}>
+                        {r.emoji}
+                      </span>
+                    ))}
+                    <span className="reaction-count">{reactionCount}</span>
+                  </div>
+                  <button type="button" className="see-reactors-btn story-viewer-see-rx" onClick={() => setReactorsOpen(true)}>
+                    See reactions
+                  </button>
+                </div>
+              ) : null}
+
+              {isOwner ? (
+                <button
+                  type="button"
+                  className="story-viewer-viewers-btn btn btn-ghost btn-sm"
+                  onClick={() => setViewersOpen(true)}
+                >
+                  👁 Viewers
+                  {typeof story.viewerCount === "number" ? ` (${story.viewerCount})` : ""}
+                </button>
+              ) : null}
+            </div>
+          </div>
+
           <p className="story-viewer-expiry-hint muted small">Stories expire after 24 hours.</p>
         </div>
       </div>
     </ModalPortal>
+
+      {reactorsOpen ? (
+        <ReactionActorsModal
+          title="Story reactions"
+          path={`/stories/${encodeURIComponent(story.id)}/reactors`}
+          reactionTypes={STORY_REACTION_TYPES}
+          backdropClassName="story-viewer-child-modal"
+          onClose={() => setReactorsOpen(false)}
+        />
+      ) : null}
+      {viewersOpen ? (
+        <StoryViewersModal token={token} storyId={story.id} onClose={() => setViewersOpen(false)} />
+      ) : null}
+    </>
   );
 }
