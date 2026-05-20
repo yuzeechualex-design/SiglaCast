@@ -484,14 +484,21 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
                           <button
                             type="button"
                             className="music-hub-friend-act music-hub-friend-act--outline"
+                            aria-label={canListen ? "Open friend track in Spotify" : "Friend is not broadcasting a Spotify link"}
                             disabled={!canListen}
                             onClick={() =>
                               canListen ? window.open(m.externalUrl, "_blank", "noopener,noreferrer") : undefined}
                           >
                             Listen
                           </button>
-                          <button type="button" className="music-hub-friend-act music-hub-friend-act--solid" onClick={() => void handleRequestTogether(f)}>
-                            Request listen together
+                          <button
+                            type="button"
+                            className="music-hub-friend-act music-hub-friend-act--solid"
+                            aria-label="Request listen together"
+                            onClick={() => void handleRequestTogether(f)}
+                          >
+                            <span className="music-hub-friend-act-txt music-hub-friend-act-txt--desktop">Request listen together</span>
+                            <span className="music-hub-friend-act-txt music-hub-friend-act-txt--mobile">Together</span>
                           </button>
                         </div>
                       </li>

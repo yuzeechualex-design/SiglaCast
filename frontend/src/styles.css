@@ -7308,20 +7308,19 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   gap: 10px;
 }
 
+/* Desktop / default: dense row — meta flexes, actions pinned right */
 .music-hub-friend-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px 14px;
-  border-radius: 12px;
+  gap: 10px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
   background: var(--sp-card);
   outline: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .music-hub-friend-main {
-  flex: 1 1 200px;
   min-width: 0;
   display: flex;
   align-items: center;
@@ -7385,26 +7384,32 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 .music-hub-friend-name {
   font-size: 0.92rem;
   font-weight: 800;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
+  line-height: 1.25;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
 }
 
 .music-hub-friend-artist {
   font-size: 0.78rem;
   color: var(--sp-muted);
   line-height: 1.35;
-  white-space: normal;
-  overflow: visible;
-  text-overflow: unset;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .music-hub-friend-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  flex-shrink: 0;
   gap: 8px;
+  align-items: center;
   justify-content: flex-end;
 }
 
@@ -7416,6 +7421,38 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   border-radius: 999px;
   cursor: pointer;
   letter-spacing: 0.02em;
+  min-height: unset;
+}
+
+.music-hub-friend-act-txt--desktop {
+  display: inline;
+}
+
+.music-hub-friend-act-txt--mobile {
+  display: none;
+}
+
+@media (min-width: 721px) {
+  .music-hub-friend-row {
+    padding: 11px 14px;
+    column-gap: 16px;
+    border-radius: 11px;
+  }
+
+  .music-hub-friend-actions {
+    gap: 10px;
+  }
+
+  .music-hub-friend-act {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding-inline: 14px;
+  }
+
+  /* Keep subtitles from stealing space from buttons */
+  .music-hub-friend-main {
+    padding-right: 6px;
+  }
 }
 
 .music-hub-friend-act:disabled {
@@ -7588,20 +7625,63 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
     font-size: clamp(1.3rem, 6vw, 1.65rem);
   }
 
+  /* Compact friend cards: one horizontal row — narrow stacked actions on the right */
+  .music-hub-friends-list {
+    gap: 8px;
+  }
+
   .music-hub-friend-row {
-    flex-direction: column;
-    align-items: stretch;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 8px;
+    row-gap: 0;
+    padding: 8px 10px;
+    border-radius: 10px;
+  }
+
+  .music-hub-friend-main {
+    gap: 10px;
+  }
+
+  .music-hub-friend-avatar,
+  .music-hub-friend-avatar-ph {
+    width: 40px;
+    height: 40px;
+  }
+
+  .music-hub-friend-name {
+    font-size: 0.86rem;
+  }
+
+  .music-hub-friend-artist {
+    font-size: 0.72rem;
+    -webkit-line-clamp: 2;
   }
 
   .music-hub-friend-actions {
-    justify-content: stretch;
-    width: 100%;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 5px;
+    width: auto;
+    min-width: min(118px, 32vw);
   }
 
   .music-hub-friend-act {
-    flex: 1 1 calc(50% - 8px);
     justify-content: center;
-    min-height: 40px;
+    flex: unset;
+    width: 100%;
+    padding: 6px 8px;
+    font-size: 0.61rem;
+  }
+
+  .music-hub-friend-act-txt--desktop {
+    display: none !important;
+  }
+
+  .music-hub-friend-act-txt--mobile {
+    display: inline !important;
   }
 
   .music-hub-ft-left {
