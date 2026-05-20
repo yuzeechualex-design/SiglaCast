@@ -31,7 +31,8 @@ export default function CommunityStoriesRail({
   currentUser,
   variant = "horizontal",
   className = "",
-  onOpenUserProfile
+  onOpenUserProfile,
+  onUnauthorizedRetry
 }) {
   const [rings, setRings] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -41,12 +42,12 @@ export default function CommunityStoriesRail({
     if (!token) return;
     setLoading(true);
     try {
-      const data = await request("/stories", { token });
+      const data = await request("/stories", { token, onUnauthorizedRetry });
       if (!data.error && Array.isArray(data.rings)) setRings(data.rings);
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, onUnauthorizedRetry]);
 
   useEffect(() => {
     loadStories();
@@ -153,6 +154,7 @@ export default function CommunityStoriesRail({
       {createOpen ? (
         <CreateStoryModal
           token={token}
+          onUnauthorizedRetry={onUnauthorizedRetry}
           onClose={() => setCreateOpen(false)}
           onPosted={() => {
             setCreateOpen(false);
@@ -181,7 +183,7 @@ export default function CommunityStoriesRail({
   );
 }
 
-function CreateStoryModal({ token, onClose, onPosted }) {
+function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const preview = file ? URL.createObjectURL(file) : null;
@@ -192,29 +194,39 @@ function CreateStoryModal({ token, onClose, onPosted }) {
   const [songQ, setSongQ] = useState("");
   const [songHits, setSongHits] = useState([]);
   const [songBusy, setSongBusy] = useState(false);
+  const [songSearchErr, setSongSearchErr] = useState("");
 
   useEffect(() => {
     const k = songQ.trim();
     if (k.length < 2 || !token) {
       setSongHits([]);
+      setSongSearchErr("");
       return undefined;
     }
     let cancelled = false;
     const tid = window.setTimeout(async () => {
       setSongBusy(true);
+      setSongSearchErr("");
       try {
-        const data = await request(`/music/search?q=${encodeURIComponent(k)}`, { token });
+        const data = await request(`/music/search?q=${encodeURIComponent(k)}`, { token, onUnauthorizedRetry });
         if (cancelled) return;
-        setSongHits(Array.isArray(data?.tracks) ? data.tracks : []);
+        if (data?.error) {
+          const msg = typeof data.error === "string" ? data.error : "Song search failed.";
+          setSongSearchErr(msg.includes("configured") ? "Spotify isn’t configured on this server yet — admins need SPOTIFY_CLIENT_ID/SECRET." : msg);
+          setSongHits([]);
+          return;
+        }
+        const tracks = Array.isArray(data?.tracks) ? data.tracks : [];
+        setSongHits(tracks);
       } finally {
         if (!cancelled) setSongBusy(false);
       }
-    }, 360);
+    }, 420);
     return () => {
       cancelled = true;
       window.clearTimeout(tid);
     };
-  }, [songQ, token]);
+  }, [songQ, token, onUnauthorizedRetry]);
 
   async function submit(e) {
     e.preventDefault();
@@ -236,7 +248,7 @@ function CreateStoryModal({ token, onClose, onPosted }) {
       fd.append("musicPreviewUrl", attachTrack.previewUrl || "");
       fd.append("musicExternalUrl", attachTrack.externalUrl || "");
     }
-    const data = await requestForm("/stories", { token, method: "POST", formData: fd });
+    const data = await requestForm("/stories", { token, method: "POST", formData: fd, onUnauthorizedRetry });
     setSending(false);
     if (data.error) {
       setErr(typeof data.error === "string" ? data.error : "Could not post story.");
@@ -249,6 +261,7 @@ function CreateStoryModal({ token, onClose, onPosted }) {
     setAttachTrack(null);
     setSongQ("");
     setSongHits([]);
+    setSongSearchErr("");
   }
 
   return (
@@ -286,6 +299,7 @@ function CreateStoryModal({ token, onClose, onPosted }) {
                     aria-label="Search Spotify for story sound"
                   />
                   <span className="muted small">{songBusy ? "Searching Spotify…" : "Type at least 2 characters"}</span>
+                  {songSearchErr ? <p className="small stories-create-sound-search-err">{songSearchErr}</p> : null}
                   <div className="stories-create-sound-hits">
                     {songHits.slice(0, 6).map((tr) => (
                       <button

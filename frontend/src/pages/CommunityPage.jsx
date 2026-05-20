@@ -39,7 +39,8 @@ export default function CommunityPage({
   onComment,
   onDeletePost,
   onDeleteComment,
-  onOpenUserProfile
+  onOpenUserProfile,
+  onUnauthorizedRetry
 }) {
   const isAdmin = currentUser?.role === "admin";
   const [params, setSearchParams] = useSearchParams();
@@ -205,7 +206,12 @@ export default function CommunityPage({
             : "community-stories-shell"
         }
       >
-        <CommunityStoriesRail token={token} currentUser={currentUser} onOpenUserProfile={onOpenUserProfile} />
+        <CommunityStoriesRail
+          token={token}
+          currentUser={currentUser}
+          onOpenUserProfile={onOpenUserProfile}
+          onUnauthorizedRetry={onUnauthorizedRetry}
+        />
       </div>
       <div
         className={`composer community-composer${

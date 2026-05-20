@@ -1744,6 +1744,38 @@ app.get("/api/music/search", authenticate, async (req, res) => {
   }
 });
 
+/** Friends-only “now broadcasting” summaries for Music hub (respects Spotify share gates). */
+app.get("/api/music/friends-listening", authenticate, async (req, res) => {
+  try {
+    const meId = req.user.id;
+    const friendIds = await friendIdsForUser(meId);
+    if (!friendIds.length) return res.json({ friends: [] });
+
+    const { data: rows, error } = await supabase.from("users").select("*").in("id", friendIds);
+    if (error) return res.status(400).json({ error: error.message });
+
+    const onlineSet = await presenceOnlineSetForUserIds(friendIds);
+    const enriched = (rows || [])
+      .map((row) => publicProfileWithPresence(row, meId, onlineSet))
+      .filter(Boolean);
+
+    enriched.sort((a, b) => {
+      const aListen = Boolean(a.musicNowPlaying);
+      const bListen = Boolean(b.musicNowPlaying);
+      if (aListen !== bListen) return aListen ? -1 : 1;
+      const aOn = Boolean(a.isOnline);
+      const bOn = Boolean(b.isOnline);
+      if (aOn !== bOn) return aOn ? -1 : 1;
+      return String(a.name || "").localeCompare(String(b.name || ""));
+    });
+
+    res.json({ friends: enriched });
+  } catch (e) {
+    console.error("[music/friends-listening]", e);
+    res.status(400).json({ error: e.message || "Could not load friends" });
+  }
+});
+
 app.post("/api/music/spotify/connect", authenticate, (req, res) => {
   try {
     if (!SPOTIFY_CLIENT_ID) return res.status(503).json({ error: "Spotify is not configured on the server." });

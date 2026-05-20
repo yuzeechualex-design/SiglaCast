@@ -258,22 +258,24 @@ export default function UserProfileModal({
                         ) : (
                           <div className="profile-music-playing-art-ph" aria-hidden />
                         )}
-                        <div className="profile-music-playing-text">
-                          <strong>{merged.musicNowPlaying.title}</strong>
-                          {merged.musicNowPlaying.artist ? (
-                            <span className="muted small">{merged.musicNowPlaying.artist}</span>
+                        <div className="profile-music-playing-column">
+                          <div className="profile-music-playing-text">
+                            <strong>{merged.musicNowPlaying.title}</strong>
+                            {merged.musicNowPlaying.artist ? (
+                              <span className="muted small">{merged.musicNowPlaying.artist}</span>
+                            ) : null}
+                          </div>
+                          {merged.musicNowPlaying.externalUrl ? (
+                            <a
+                              className="profile-music-open-btn"
+                              href={merged.musicNowPlaying.externalUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              Open in Spotify ↗
+                            </a>
                           ) : null}
                         </div>
-                        {merged.musicNowPlaying.externalUrl ? (
-                          <a
-                            className="btn btn-secondary btn-sm"
-                            href={merged.musicNowPlaying.externalUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Open
-                          </a>
-                        ) : null}
                       </div>
                     </div>
                   ) : null}

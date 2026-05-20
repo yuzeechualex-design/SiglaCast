@@ -105,7 +105,8 @@ export default function MessagesPage({
   userPhoneAutoReconnect,
   setUserPhoneAutoReconnect,
   onSendSiglaInActiveThread = async () => {},
-  onOpenUserProfile
+  onOpenUserProfile,
+  onUnauthorizedRetry
 }) {
   const navigate = useNavigate();
   const [draft, setDraft] = useState("");
@@ -1284,6 +1285,7 @@ export default function MessagesPage({
               currentUser={currentUser}
               variant="vertical"
               onOpenUserProfile={onOpenUserProfile}
+              onUnauthorizedRetry={onUnauthorizedRetry}
             />
           </aside>
         ) : null}

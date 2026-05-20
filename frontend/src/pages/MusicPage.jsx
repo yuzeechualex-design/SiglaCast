@@ -1,9 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { request } from "../services/api.js";
+import { mediaUrl } from "../services/api.js";
 import { useMusicPlayer } from "../components/MusicPlayerContext.jsx";
-
-const LAST_HITS_KEY = "siglacast_music_last_hits";
 
 /** @returns {number} clamped pct 0–100 */
 function progressPct(current, duration) {
@@ -18,39 +16,66 @@ function formatTime(sec) {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+function friendPresenceDotClass(presence) {
+  const p = presence || "offline";
+  const map = {
+    online: "presence-dot presence-online",
+    idle: "presence-dot presence-idle",
+    dnd: "presence-dot presence-dnd",
+    invisible: "presence-dot presence-invisible",
+    offline: "presence-dot presence-offline"
+  };
+  return map[p] || map.offline;
+}
+
+function peerSnippetAsTrack(snippet) {
+  if (!snippet?.title && !snippet?.spotifyTrackId) return null;
+  return {
+    spotifyTrackId: snippet.spotifyTrackId,
+    title: snippet.title,
+    artist: snippet.artist,
+    imageUrl: snippet.imageUrl,
+    externalUrl: snippet.externalUrl,
+    previewUrl: snippet.previewUrl
+  };
+}
+
+function buildListenTogetherDm(headline, myLine, peerLine) {
+  const parts = [headline, "", myLine];
+  if (peerLine) parts.push("", peerLine);
+  parts.push(
+    "",
+    "Tip — Spotify Premium: Playing bar ⋮ → “Start a Jam” syncs playback in real time.",
+    "",
+    "— SiglaCast Music"
+  );
+  return parts.join("\n");
+}
+
 /**
- * Spotify-inspired Music hub — search + preview playback (Premium Web Playback SDK optional later).
+ * Friends listening hub + Spotify OAuth / sync (no Spotify Web catalogue search UI).
  */
-export default function MusicPage({ api, token, user, setNotice, refreshUser }) {
+export default function MusicPage({ api, apiForm, token, user, setNotice, refreshUser, onOpenDmWithUser }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const searchInputRef = useRef(null);
 
   const { track: playingTrack, paused, playPreview, stopPlayback, togglePause, progress } = useMusicPlayer();
 
-  const [navTab, setNavTab] = useState("home");
-  const [q, setQ] = useState("");
-  const [hits, setHits] = useState([]);
-  const [searchBusy, setSearchBusy] = useState(false);
+  const [filterTab, setFilterTab] = useState("all");
+  const [friends, setFriends] = useState([]);
+  const [friendsBusy, setFriendsBusy] = useState(false);
+  const [friendsErr, setFriendsErr] = useState("");
+
   const [connectBusy, setConnectBusy] = useState(false);
   const [detailTrack, setDetailTrack] = useState(null);
-  const [lastShelf, setLastShelf] = useState(() => {
-    try {
-      const raw = sessionStorage.getItem(LAST_HITS_KEY);
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.slice(0, 24) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [inviteTargetId, setInviteTargetId] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
 
-  /** Full-player layout: hide global mini bar while on this hub. */
   useEffect(() => {
     document.body.classList.add("music-spotify-hub-open");
     return () => document.body.classList.remove("music-spotify-hub-open");
   }, []);
 
-  /** OAuth landing cleanup */
   useEffect(() => {
     const p = new URLSearchParams(location.search);
     const s = p.get("spotify");
@@ -63,41 +88,38 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
     return undefined;
   }, [location.search, navigate, refreshUser, setNotice]);
 
-  /** Debounced search */
-  useEffect(() => {
-    const k = q.trim();
-    if (k.length < 2 || !token) {
-      setHits([]);
-      return undefined;
-    }
-    let cancelled = false;
-    const tid = window.setTimeout(async () => {
-      setSearchBusy(true);
-      try {
-        const data = await request(`/music/search?q=${encodeURIComponent(k)}`, { token });
-        if (cancelled) return;
-        if (data?.error || !Array.isArray(data?.tracks)) {
-          setHits([]);
-          return;
-        }
-        setHits(data.tracks);
-        try {
-          sessionStorage.setItem(LAST_HITS_KEY, JSON.stringify(data.tracks.slice(0, 24)));
-          setLastShelf(data.tracks.slice(0, 12));
-        } catch {
-          /* ignore */
-        }
-      } finally {
-        if (!cancelled) setSearchBusy(false);
+  const loadFriendsListening = useCallback(async () => {
+    if (!token) return;
+    setFriendsBusy(true);
+    try {
+      const data = await api("/music/friends-listening");
+      if (data?.error) {
+        setFriendsErr(typeof data.error === "string" ? data.error : "Could not load friends.");
+        setFriends([]);
+        return;
       }
-    }, 320);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(tid);
-    };
-  }, [q, token]);
+      setFriendsErr("");
+      const list = Array.isArray(data?.friends) ? data.friends : [];
+      setFriends(list);
+      setInviteTargetId((prev) => {
+        if (prev && list.some((f) => f.id === prev)) return prev;
+        return list[0]?.id ?? "";
+      });
+    } finally {
+      setFriendsBusy(false);
+    }
+  }, [token, api]);
 
-  /** Keep detail panel loosely in sync when playing starts */
+  useEffect(() => {
+    void loadFriendsListening();
+  }, [loadFriendsListening]);
+
+  useEffect(() => {
+    if (!token) return undefined;
+    const iv = window.setInterval(() => void loadFriendsListening(), 25_000);
+    return () => window.clearInterval(iv);
+  }, [token, loadFriendsListening]);
+
   useEffect(() => {
     if (!playingTrack?.spotifyTrackId) return;
     setDetailTrack((prev) => {
@@ -105,10 +127,6 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
       return playingTrack;
     });
   }, [playingTrack?.spotifyTrackId, playingTrack]);
-
-  useEffect(() => {
-    if (navTab === "search") searchInputRef.current?.focus();
-  }, [navTab]);
 
   const syncNow = useCallback(async () => {
     if (!token) return;
@@ -118,8 +136,9 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
       return;
     }
     await refreshUser?.();
+    void loadFriendsListening();
     setNotice?.("Synced from Spotify.");
-  }, [api, token, setNotice, refreshUser]);
+  }, [api, token, setNotice, refreshUser, loadFriendsListening]);
 
   useEffect(() => {
     if (!token || !user?.spotifyLinked || !user?.musicShareNowPlaying) return undefined;
@@ -127,12 +146,13 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
     async function ping() {
       await api("/music/spotify/sync-now-playing", { method: "POST", body: {} });
       await refreshUser?.();
+      void loadFriendsListening();
     }
 
-    ping();
-    const iv = window.setInterval(ping, 22_000);
+    void ping();
+    const iv = window.setInterval(() => void ping(), 22_000);
     return () => window.clearInterval(iv);
-  }, [token, user?.spotifyLinked, user?.musicShareNowPlaying, api, refreshUser]);
+  }, [token, user?.spotifyLinked, user?.musicShareNowPlaying, api, refreshUser, loadFriendsListening]);
 
   async function handleConnectSpotify() {
     if (!token) return;
@@ -162,58 +182,150 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
   }
 
   const np = user?.musicNowPlaying;
+  const myPlaybackUrl = detailTrack?.externalUrl || playingTrack?.externalUrl || np?.externalUrl || null;
+  const myPlaybackTitle = detailTrack?.title || playingTrack?.title || np?.title || "";
 
-  const showGrid =
-    hits.length > 0 && q.trim().length >= 2
-      ? hits
-      : navTab === "home" && lastShelf.length && q.trim().length < 2
-        ? lastShelf
-        : [];
+  async function sendDm(peerId, text) {
+    if (!peerId || !apiForm) {
+      setNotice?.("Messaging is unavailable right now.");
+      return;
+    }
+    const fd = new FormData();
+    fd.append("text", text.trim());
+    const res = await apiForm(`/messages/with/${peerId}`, fd);
+    if (res?.error) {
+      setNotice?.(typeof res.error === "string" ? res.error : "Could not send message.");
+      return;
+    }
+    setNotice?.("Message sent.");
+    if (typeof onOpenDmWithUser === "function") await onOpenDmWithUser(peerId);
+    else navigate("/messages");
+  }
 
-  const subtitle = useMemo(() => {
-    if (searchBusy && q.trim().length >= 2) return "Searching Spotify…";
-    if (hits.length && q.trim().length >= 2) return `${hits.length} tracks`;
-    if (showGrid.length && navTab === "home") return "Recently discovered";
-    return "Start searching for songs & artists";
-  }, [searchBusy, q, hits.length, showGrid.length, navTab]);
+  async function handleRequestTogether(friend) {
+    const name = String(friend?.name || "there").trim() || "there";
+    const peer = friend.musicNowPlaying;
+    const peerUrl = peer?.externalUrl || null;
+    const peerTitle = peer ? `${peer.title}${peer.artist ? ` · ${peer.artist}` : ""}` : null;
+
+    const myLine =
+      myPlaybackUrl ?
+        `I’m listening to «${myPlaybackTitle || "a track"}» — ${myPlaybackUrl}`
+      : "Sync “Now Playing” in SiglaCast after you start something on Spotify — I couldn’t attach my Open link yet.";
+
+    let peerLine = "";
+    if (peerUrl) peerLine = `You’re broadcasting «${peerTitle}» — ${peerUrl}`;
+    else if (peerTitle)
+      peerLine = `Caught you sharing «${peerTitle}», but Spotify didn’t return an Open URL for it yet.`;
+
+    const text = buildListenTogetherDm(`🎧 ${name}, want to listen together?`, myLine, peerLine || undefined);
+    await sendDm(friend.id, text);
+  }
+
+  async function handleInviteFromPanel() {
+    if (!inviteTargetId) {
+      setNotice?.("Pick a friend to invite.");
+      return;
+    }
+    const buddy = friends.find((f) => f.id === inviteTargetId);
+    const namePart = String(buddy?.name || "").trim();
+    const label = namePart ? `${namePart}!` : "";
+    const myLine =
+      myPlaybackUrl ?
+        `Listen with me — here’s what I’m on: ${myPlaybackUrl}`
+      : "(No Spotify deep link synced yet — start playback on Spotify then tap Sync Now Playing, then resend.)";
+
+    setInviteBusy(true);
+    try {
+      const greeting = label ? `🎧 Hey ${label} Listen together when you’re free.` : `🎧 Want to listen together?`;
+      const text = buildListenTogetherDm(greeting, myLine, undefined);
+      await sendDm(inviteTargetId, text);
+    } finally {
+      setInviteBusy(false);
+    }
+  }
+
+  const filteredFriends = useMemo(() => {
+    if (filterTab === "live") return friends.filter((f) => Boolean(f.musicNowPlaying));
+    return friends;
+  }, [friends, filterTab]);
+
+  const syncedAsTrack = useMemo(() => peerSnippetAsTrack(np), [np]);
+
+  /** Prefer a picked row; fall back to your synced session; lastly any preview-track from the footer */
+  const focusTrack = detailTrack || syncedAsTrack || playingTrack || null;
+
+  const eyebrow =
+    detailTrack?.spotifyTrackId && syncedAsTrack?.spotifyTrackId && detailTrack.spotifyTrackId === syncedAsTrack.spotifyTrackId ?
+      "Synced from Spotify app"
+    : detailTrack ?
+      "From a friend broadcast"
+    : syncedAsTrack ?
+      "Synced from Spotify app"
+    : playingTrack ?
+      "Preview focus"
+    : "";
+
+  function onFriendRowActivate(friend) {
+    const t = peerSnippetAsTrack(friend.musicNowPlaying);
+    if (t) setDetailTrack(t);
+    else setDetailTrack(null);
+    setInviteTargetId(friend.id);
+  }
 
   const pct = progressPct(progress?.current ?? 0, progress?.duration ?? 0);
 
-  /** Current track displayed in sidebar / detail */
-  const focusTrack = detailTrack || playingTrack;
-
-  function onPickTrack(t, play = false) {
-    setDetailTrack(t);
-    if (play && t.previewUrl) playPreview(t);
-  }
+  const inviteControls =
+    friends.length > 0 ? (
+      <>
+        <label className="music-hub-invite-select-label" htmlFor="music-invite-friend-select">
+          Friend to DM
+        </label>
+        <select
+          id="music-invite-friend-select"
+          className="music-hub-invite-select"
+          value={inviteTargetId}
+          onChange={(e) => setInviteTargetId(e.target.value)}
+        >
+          <option value="">Choose…</option>
+          {friends.map((fr) => (
+            <option key={fr.id} value={fr.id}>
+              {fr.name || fr.id.slice(0, 8)}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          className="music-hub-invite-send"
+          disabled={inviteBusy || !inviteTargetId}
+          onClick={() => void handleInviteFromPanel()}
+        >
+          {inviteBusy ? "Sending…" : "Invite to listen"}
+        </button>
+      </>
+    ) : (
+      <p className="music-hub-muted small">Add friends in Messages — then you can send listen invites.</p>
+    );
 
   return (
     <section className="music-spotify-shell single" aria-label="Music">
       <div className="music-hub-layout">
-        {/* ---- Left sidebar (Spotify-like) ---- */}
         <aside className="music-hub-sidebar">
           <div className="music-hub-brand">
             <span className="music-hub-logo-dot" aria-hidden />
             <div>
               <strong>Sigla Music</strong>
-              <span className="music-hub-brand-sub">Spotify previews in SiglaCast</span>
+              <span className="music-hub-brand-sub">Friends &amp; Spotify status</span>
             </div>
           </div>
 
           <nav className="music-hub-nav-main">
-            <button
-              type="button"
-              className={`music-hub-nav-btn${navTab === "home" ? " active" : ""}`}
-              onClick={() => setNavTab("home")}
-            >
-              <span className="music-hub-nav-ico">⌂</span> Home
+            <button type="button" className="music-hub-nav-btn active">
+              <span className="music-hub-nav-ico">⌂</span> Friends
             </button>
-            <button
-              type="button"
-              className={`music-hub-nav-btn${navTab === "search" ? " active" : ""}`}
-              onClick={() => setNavTab("search")}
-            >
-              <span className="music-hub-nav-ico">⌕</span> Search
+            <button type="button" className="music-hub-nav-btn" disabled title="Coming later">
+              <span className="music-hub-nav-ico">♪</span> Discover
+              <span className="music-hub-nav-soon-hint">soon</span>
             </button>
           </nav>
 
@@ -257,34 +369,20 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
           </Link>
         </aside>
 
-        {/* ---- Main column ---- */}
         <div className="music-hub-main">
-          {/* Top toolbar */}
           <header className="music-hub-toolbar">
             <div className="music-hub-toolbar-nav">
-              <button type="button" className="music-hub-circle-btn" title="Home" aria-label="Home" disabled>
-                ‹
+              <button type="button" className="music-hub-circle-btn" title="Refresh" aria-label="Refresh friends" onClick={() => void loadFriendsListening()}>
+                ⟳
               </button>
-              <button type="button" className="music-hub-circle-btn" title="Forward" aria-label="Forward" disabled>
+              <button type="button" className="music-hub-circle-btn muted" aria-label="No forward history" disabled>
                 ›
               </button>
             </div>
 
-            <div className="music-hub-search-wrap">
-              <label className="music-hub-search-label" htmlFor="music-hub-search-q">
-                <span className="music-hub-search-ico">⌕</span>
-              </label>
-              <input
-                id="music-hub-search-q"
-                ref={searchInputRef}
-                type="search"
-                className="music-hub-search"
-                placeholder="What do you want to play?"
-                value={q}
-                onFocus={() => setNavTab("search")}
-                onChange={(e) => setQ(e.target.value)}
-                autoComplete="off"
-              />
+            <div className="music-hub-toolbar-headline">
+              <span className="music-hub-toolbar-eyebrow">Friends</span>
+              <strong className="music-hub-toolbar-title">{friendsBusy ? "Updating…" : "Who’s listening"}</strong>
             </div>
 
             <div className="music-hub-toolbar-right">
@@ -303,50 +401,39 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
             </div>
           </header>
 
-          {/* Content */}
           <div className="music-hub-scroll">
             <div className="music-hub-filters">
               <button
                 type="button"
-                className={`music-hub-chip-filter${navTab === "home" ? " active" : ""}`}
-                onClick={() => setNavTab("home")}
+                className={`music-hub-chip-filter${filterTab === "all" ? " active" : ""}`}
+                onClick={() => setFilterTab("all")}
               >
-                All
+                All friends
               </button>
               <button
                 type="button"
-                className={`music-hub-chip-filter${navTab === "search" ? " active" : ""}`}
-                onClick={() => setNavTab("search")}
+                className={`music-hub-chip-filter${filterTab === "live" ? " active" : ""}`}
+                onClick={() => setFilterTab("live")}
               >
-                Music
+                Listening now
               </button>
-              <button type="button" className="music-hub-chip-filter disabled" disabled title="Coming soon">
+              <button type="button" className="music-hub-chip-filter disabled" disabled title="Coming later">
                 Podcasts
               </button>
             </div>
 
-            {navTab === "home" ? (
-              <div className="music-hub-home-hero">
-                <h2 className="music-hub-section-title">{subtitle}</h2>
-                <p className="music-hub-muted">
-                  Play catalogue <strong>30-second previews</strong> here — full uninterrupted playback needs Spotify Premium +
-                  Web Playback SDK (optional upgrade later).
-                </p>
-              </div>
-            ) : (
-              <div className="music-hub-home-hero">
-                <h2 className="music-hub-section-title">Search Spotify</h2>
-                <p className="music-hub-muted">{subtitle}</p>
-              </div>
-            )}
+            <div className="music-hub-home-hero">
+              <h2 className="music-hub-section-title">Hang out around music</h2>
+              <p className="music-hub-muted music-hub-intro-copy">
+                Broadcasts appear when friends turn on Spotify sharing in Profile — then you can ping them here or DM a listen-together invite with links.
+              </p>
+            </div>
 
-            {np?.title && navTab === "home" ? (
+            {np?.title ? (
               <section className="music-hub-banner">
-                <div className="music-hub-banner-visual">
-                  {np.imageUrl ? <img src={np.imageUrl} alt="" decoding="async" /> : null}
-                </div>
+                <div className="music-hub-banner-visual">{np.imageUrl ? <img src={np.imageUrl} alt="" decoding="async" /> : null}</div>
                 <div className="music-hub-banner-text">
-                  <span className="music-hub-banner-eyebrow">From your Spotify • profile sharing</span>
+                  <span className="music-hub-banner-eyebrow">Your Spotify session</span>
                   <strong className="music-hub-banner-title">{np.title}</strong>
                   <p className="music-hub-muted">{np.artist}</p>
                   {np.externalUrl ? (
@@ -358,113 +445,123 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
               </section>
             ) : null}
 
-            {showGrid.length ? (
-              <section className="music-hub-shelf">
-                <h3 className="music-hub-shelf-title">
-                  {q.trim().length >= 2 ? "Tracks" : "Jump back in"}
-                </h3>
-                <div className="music-hub-card-grid">
-                  {showGrid.map((t) => (
-                    <article key={t.spotifyTrackId} className="music-hub-card-wrap">
-                      <div
-                        className={`music-hub-card ${detailTrack?.spotifyTrackId === t.spotifyTrackId ? "picked" : ""}`}
-                        onClick={() => onPickTrack(t, false)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" || e.key === " ") {
-                            e.preventDefault();
-                            onPickTrack(t, false);
-                          }
-                        }}
-                        tabIndex={0}
-                        aria-label={`${t.title} by ${t.artist}`}
-                      >
-                        <div className="music-hub-card-cover-slot">
-                          {t.imageUrl ? (
-                            <img src={t.imageUrl} alt="" className="music-hub-card-cover" decoding="async" loading="lazy" />
-                          ) : (
-                            <span className="music-hub-card-ph" aria-hidden />
-                          )}
-                          {t.previewUrl ? (
-                            <button
-                              type="button"
-                              className="music-hub-card-play-spotify"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onPickTrack(t, true);
-                              }}
-                              aria-label={`Play preview: ${t.title}`}
-                            >
-                              ▶
-                            </button>
-                          ) : (
-                            <span className="music-hub-card-lock" title="No preview on Spotify">
-                              —
-                            </span>
-                          )}
-                        </div>
-                        <strong className="music-hub-card-title">{t.title}</strong>
-                        <span className="music-hub-card-artist">{t.artist}</span>
-                      </div>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            ) : navTab === "search" && q.trim().length >= 2 && !searchBusy ? (
-              <p className="music-hub-muted music-hub-empty">No tracks matched. Try another search.</p>
+            {friendsErr ? <p className="music-hub-muted music-hub-friends-err">{friendsErr}</p> : null}
+
+            {!friends.length && !friendsBusy && !friendsErr ? (
+              <p className="music-hub-muted music-hub-empty">
+                No friends yet. Add people under <Link to="/messages">Messages</Link> — broadcasts show once they enable sharing.
+              </p>
             ) : null}
+
+            {filteredFriends.length ? (
+              <section className="music-hub-friends-shelf">
+                <h3 className="music-hub-shelf-title">Friends</h3>
+                <ul className="music-hub-friends-list">
+                  {filteredFriends.map((f) => {
+                    const m = f.musicNowPlaying;
+                    const canListen = Boolean(m?.externalUrl);
+                    return (
+                      <li key={f.id} className="music-hub-friend-row">
+                        <button type="button" className="music-hub-friend-main" onClick={() => onFriendRowActivate(f)}>
+                          <div className="music-hub-friend-avatar-wrap">
+                            {f.avatarUrl ? (
+                              <img className="music-hub-friend-avatar" src={mediaUrl(f.avatarUrl)} alt="" decoding="async" />
+                            ) : (
+                              <span className="music-hub-friend-avatar-ph" aria-hidden>
+                                {(f.name || "?").charAt(0)}
+                              </span>
+                            )}
+                            <span className={friendPresenceDotClass(f.presence)} title={f.presence} aria-hidden />
+                          </div>
+                          <div className="music-hub-friend-meta">
+                            <strong className="music-hub-friend-name">{f.name || "Friend"}</strong>
+                            <span className="music-hub-friend-artist">
+                              {m?.title ? `${m.title}${m.artist ? ` · ${m.artist}` : ""}` : "Not broadcasting"}
+                            </span>
+                          </div>
+                        </button>
+                        <div className="music-hub-friend-actions">
+                          <button
+                            type="button"
+                            className="music-hub-friend-act music-hub-friend-act--outline"
+                            disabled={!canListen}
+                            onClick={() =>
+                              canListen ? window.open(m.externalUrl, "_blank", "noopener,noreferrer") : undefined}
+                          >
+                            Listen
+                          </button>
+                          <button type="button" className="music-hub-friend-act music-hub-friend-act--solid" onClick={() => void handleRequestTogether(f)}>
+                            Request listen together
+                          </button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ) : (
+              friends.length > 0 && (
+                <p className="music-hub-muted music-hub-empty">Nobody is broadcasting Spotify right now. Try switching to All friends.</p>
+              )
+            )}
           </div>
         </div>
 
-        {/* ---- Right panel: now picking / synced ---- */}
         <aside className="music-hub-now-playing">
           <p className="music-hub-np-heading">Song details</p>
-          {focusTrack ? (
+          {focusTrack?.title ? (
             <>
               <div className="music-hub-np-art">
-                {focusTrack.imageUrl ? (
-                  <img src={focusTrack.imageUrl} alt="" decoding="async" />
-                ) : (
-                  <div className="music-hub-np-art-ph" />
-                )}
+                {focusTrack.imageUrl ? <img src={focusTrack.imageUrl} alt="" decoding="async" /> : <div className="music-hub-np-art-ph" />}
               </div>
+              {eyebrow ? <span className="music-hub-banner-eyebrow">{eyebrow}</span> : null}
               <h3 className="music-hub-np-title">{focusTrack.title}</h3>
               <p className="music-hub-np-artist">{focusTrack.artist}</p>
+
+              {syncedAsTrack?.spotifyTrackId &&
+              focusTrack?.spotifyTrackId &&
+              syncedAsTrack.spotifyTrackId === focusTrack.spotifyTrackId &&
+              np?.isPlaying === false ? (
+                <p className="music-hub-muted fine-print">Idle / paused inside Spotify.</p>
+              ) : null}
+
               {focusTrack.externalUrl ? (
                 <a className="music-hub-banner-btn slim" href={focusTrack.externalUrl} target="_blank" rel="noopener noreferrer">
                   Open track in Spotify ↗
                 </a>
-              ) : null}
+              ) : (
+                <p className="music-hub-muted fine-print">No Open link surfaced for this item.</p>
+              )}
+
               {focusTrack.previewUrl ? (
                 <button type="button" className="music-hub-np-bigplay" onClick={() => playPreview(focusTrack)}>
                   ▶ Play preview
                 </button>
               ) : (
-                <p className="music-hub-muted small">No snippet for this catalogue entry.</p>
+                <p className="music-hub-muted small">No 30‑second catalogue preview.</p>
               )}
+
               <div className="music-hub-np-about">
-                <strong>Sigla preview</strong>
-                <span className="music-hub-muted small">
-                  Streams a short excerpt from Spotify for listening while browsing — not full-length playback unless we add Premium Web Playback SDK.
+                <strong className="music-hub-about-title">Preview note</strong>
+                <span className="music-hub-muted small music-hub-about-body">
+                  SiglaCast can play short excerpts when Spotify exposes them — full uninterrupted playback stays in Spotify.
                 </span>
               </div>
             </>
-          ) : np?.title ? (
-            <>
-              <div className="music-hub-np-art">
-                {np.imageUrl ? <img src={np.imageUrl} alt="" decoding="async" /> : <div className="music-hub-np-art-ph" />}
-              </div>
-              <span className="music-hub-banner-eyebrow">Synced from Spotify app</span>
-              <h3 className="music-hub-np-title">{np.title}</h3>
-              <p className="music-hub-np-artist">{np.artist}</p>
-              {np.isPlaying === false ? <p className="music-hub-muted small">Idle / paused in Spotify.</p> : null}
-            </>
           ) : (
-            <p className="music-hub-muted small">Pick a track from the grid or link Spotify to sync your session.</p>
+            <p className="music-hub-muted small music-hub-placeholder-line">Tap a broadcasting friend or sync Spotify so this panel fills in.</p>
           )}
+
+          <div className="music-hub-invite-block">
+            <p className="music-hub-invite-heading">Invite to listen</p>
+            <p className="music-hub-muted fine-print music-hub-invite-help">
+              Opens or focuses your DM thread with Spotify links plus a Spotify Jam reminder for Premium.
+            </p>
+            {inviteControls}
+          </div>
         </aside>
       </div>
 
-      {/* Bottom player — Spotify-like (previews only) */}
       <footer className={`music-hub-footer${playingTrack?.previewUrl ? " visible" : ""}`}>
         <div className="music-hub-footer-inner">
           <div className="music-hub-ft-left">
@@ -492,12 +589,7 @@ export default function MusicPage({ api, token, user, setNotice, refreshUser }) 
               <button type="button" className="music-hub-ft-ico muted" aria-label="Previous" disabled>
                 ⏮
               </button>
-              <button
-                type="button"
-                className="music-hub-ft-play-pause"
-                aria-label={paused ? "Play" : "Pause"}
-                onClick={togglePause}
-              >
+              <button type="button" className="music-hub-ft-play-pause" aria-label={paused ? "Play" : "Pause"} onClick={togglePause}>
                 {paused ? "▶" : "⏸"}
               </button>
               <button type="button" className="music-hub-ft-ico muted" aria-label="Next" disabled>

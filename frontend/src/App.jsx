@@ -1507,6 +1507,7 @@ export default function App() {
               onReactComment={reactToComment}
               onDeleteComment={deleteComment}
               onOpenUserProfile={openUserProfileModal}
+              onUnauthorizedRetry={onUnauthorizedRetry}
             />
           }
         />
@@ -1555,10 +1556,12 @@ export default function App() {
           element={
             <MusicPage
               api={api}
+              apiForm={apiForm}
               token={token}
               user={user}
               setNotice={setNotice}
               refreshUser={refreshUserFromAuthMe}
+              onOpenDmWithUser={(friendId) => void openDmAndFocusUser(friendId)}
             />
           }
         />
@@ -1608,6 +1611,7 @@ export default function App() {
               setUserPhoneAutoReconnect={setUserPhoneAutoReconnect}
               onSendSiglaInActiveThread={sendSiglaInActiveThread}
               onOpenUserProfile={openUserProfileModal}
+              onUnauthorizedRetry={onUnauthorizedRetry}
               token={token}
             />
           }
