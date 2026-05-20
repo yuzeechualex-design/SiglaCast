@@ -349,6 +349,20 @@ body.floating-quick-nav-open main.grid {
   width: min(960px, 100%);
 }
 
+/* Desktop: hug contents — avoid a wide pill with empty space on the right */
+@media (min-width: 681px) {
+  .floating-quick-nav {
+    width: fit-content;
+    max-width: min(960px, calc(100% - 24px));
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+
+  .floating-quick-links {
+    flex: 0 1 auto;
+  }
+}
+
 .floating-quick-nav-inner {
   display: flex;
   align-items: stretch;
