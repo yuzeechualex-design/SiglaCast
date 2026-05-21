@@ -3674,8 +3674,14 @@ body.community-thread-overlay-open {
 }
 
 .profile-composer-toolbar {
-  justify-content: flex-end;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin-top: 10px;
+}
+
+.profile-composer-toolbar .btn-primary {
+  margin-left: auto;
 }
 
 .my-profile-section-head {
@@ -7082,27 +7088,138 @@ button.comment-profile-avatar-btn:focus-visible {
   gap: 8px;
 }
 
-.stories-visibility-select {
+/* ---------- Custom Visibility Dropdown ---------- */
+.custom-visibility-dropdown {
+  position: relative;
+  display: inline-block;
+  user-select: none;
+}
+
+.custom-visibility-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 12px;
   border-radius: 8px;
   border: 1px solid var(--line);
-  background: var(--bg-input, rgba(0, 0, 0, 0.05));
-  color: var(--text-normal);
+  background: var(--input-bg, rgba(0, 0, 0, 0.03));
+  color: var(--ink-900);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition: all 0.2s ease;
+  min-width: 120px;
 }
 
-.stories-visibility-select:focus {
-  border-color: var(--blue-500, #3b82f6);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+.custom-visibility-trigger:hover,
+.custom-visibility-trigger:focus {
+  border-color: var(--blue-700, #3b82f6);
+  background: var(--line);
 }
 
-[data-theme="dark"] .stories-visibility-select {
-  background: rgba(255, 255, 255, 0.08);
-  border-color: rgba(255, 255, 255, 0.15);
+[data-theme="dark"] .custom-visibility-trigger {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .custom-visibility-trigger:hover,
+[data-theme="dark"] .custom-visibility-trigger:focus {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--blue-700, #3a73e0);
+}
+
+.custom-visibility-trigger-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  color: var(--ink-900);
+}
+
+.custom-visibility-trigger-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+}
+
+.custom-visibility-trigger-label {
+  flex-grow: 1;
+  text-align: left;
+}
+
+.custom-visibility-trigger-arrow {
+  font-size: 8px;
+  opacity: 0.6;
+  margin-left: 4px;
+}
+
+.custom-visibility-options {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  right: 0;
+  z-index: 120;
+  width: 140px;
+  padding: 4px;
+  margin: 0;
+  list-style: none;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--card, #ffffff);
+  box-shadow: var(--shadow-soft);
+  animation: dropdownFadeIn 0.15s ease-out;
+}
+
+@keyframes dropdownFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.custom-visibility-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  color: var(--ink-600);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.custom-visibility-option:hover {
+  background: var(--line);
+  color: var(--ink-900);
+}
+
+.custom-visibility-option.active {
+  background: var(--blue-800, #3b82f6);
+  color: #fff;
+}
+
+.custom-visibility-option-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+}
+
+.custom-visibility-option-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke: currentColor;
+}
+
+.custom-visibility-option-label {
+  flex-grow: 1;
 }
 
 /* ---------- Mention chips ---------- */

@@ -61,6 +61,83 @@ function GlobeIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="story-filter-toggle-svg"
+    >
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  );
+}
+
+function VisibilityDropdown({ value, onChange }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  const options = [
+    { value: "friends", label: "Friends", icon: <FriendsIcon /> },
+    { value: "public", label: "Public", icon: <GlobeIcon /> },
+    { value: "only me", label: "Only me", icon: <LockIcon /> }
+  ];
+
+  const currentOption = options.find((opt) => opt.value === value) || options[0];
+
+  useEffect(() => {
+    if (!isOpen) return;
+    function handleOutsideClick(e) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, [isOpen]);
+
+  return (
+    <div className="custom-visibility-dropdown" ref={dropdownRef}>
+      <button
+        type="button"
+        className="custom-visibility-trigger"
+        onClick={() => setIsOpen(!isOpen)}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
+      >
+        <span className="custom-visibility-trigger-icon">{currentOption.icon}</span>
+        <span className="custom-visibility-trigger-label">{currentOption.label}</span>
+        <span className="custom-visibility-trigger-arrow">▼</span>
+      </button>
+
+      {isOpen && (
+        <ul className="custom-visibility-options" role="listbox">
+          {options.map((opt) => (
+            <li
+              key={opt.value}
+              role="option"
+              aria-selected={opt.value === value}
+              className={`custom-visibility-option ${opt.value === value ? "active" : ""}`}
+              onClick={() => {
+                onChange(opt.value);
+                setIsOpen(false);
+              }}
+            >
+              <span className="custom-visibility-option-icon">{opt.icon}</span>
+              <span className="custom-visibility-option-label">{opt.label}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 /**
  * Stories rail: horizontal (Community / Messages mobile) or vertical (Messages desktop sidebar).
  */
@@ -333,15 +410,7 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
 
               <div className="stories-visibility-selector">
                 <span className="stories-visibility-label muted small">Visible to:</span>
-                <select
-                  className="stories-visibility-select"
-                  value={visibility}
-                  onChange={(e) => setVisibility(e.target.value)}
-                >
-                  <option value="friends">👥 Friends</option>
-                  <option value="public">🌐 Public</option>
-                  <option value="only me">🔒 Only me</option>
-                </select>
+                <VisibilityDropdown value={visibility} onChange={setVisibility} />
               </div>
             </div>
 
