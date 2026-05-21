@@ -70,6 +70,7 @@ export default function FloatingQuickNav({
   const msg = formatNavPing(navBadges.messages);
   const ann = formatNavPing(navBadges.announcements);
   const bell = formatNavPing(navBadges.notifications);
+  const addFriends = formatNavPing(navBadges.addFriends);
 
   function scrollToTop() {
     window.scrollTo({ top: 0, behavior: reducedMotion ? "auto" : "smooth" });
@@ -94,6 +95,11 @@ export default function FloatingQuickNav({
               <NavIcon name="messages" />
               {msg ? <span className="fq-ping">{msg}</span> : null}
               <span className="fq-label">Messages</span>
+            </NavLink>
+            <NavLink to="/add-friends" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              <NavIcon name="friends" />
+              {addFriends ? <span className="fq-ping">{addFriends}</span> : null}
+              <span className="fq-label">Add Friends</span>
             </NavLink>
             <NavLink to="/music" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               <NavIcon name="music" />

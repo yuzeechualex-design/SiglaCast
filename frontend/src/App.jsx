@@ -15,6 +15,7 @@ import MusicPage from "./pages/MusicPage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
 import DownloadPage from "./pages/DownloadPage.jsx";
+import AddFriendsPage from "./pages/AddFriendsPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
@@ -1628,16 +1629,6 @@ export default function App() {
       onToggleLiteMode={toggleLiteMode}
       onRefresh={refreshVisibleContent}
       refreshBusy={appRefreshBusy}
-      navBadges={{
-        events: navBadges.events,
-        messages: navBadges.messages,
-        announcements: navBadges.announcements,
-        notifications: navBadges.notifications
-      }}
-    >
-      <ImageLightboxProvider>
-      <MusicPlayerProvider>
-      <Routes>
         <Route path="/" element={<Navigate to="/community" replace />} />
         <Route
           path="/events"

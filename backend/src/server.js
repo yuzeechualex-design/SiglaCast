@@ -2939,6 +2939,53 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   res.json(out);
 });
 
+app.get("/api/users/discover", authenticate, async (req, res) => {
+  try {
+    const me = req.user.id;
+    const result = await usersSelectOmitMissingColumns(async (cols) => {
+      return supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID);
+    }, USER_SEARCH_SELECT_DEFAULT);
+
+    if (result.error) return res.status(400).json({ error: result.error.message });
+    const users = result.data || [];
+    if (!users.length) return res.json({ online: [], others: [] });
+
+    const ids = users.map((u) => u.id);
+    const [{ data: friendsRows }, { data: toMeReqs }, { data: fromMeReqs }] = await Promise.all([
+      supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
+      supabase.from("friend_requests").select("id, from_user_id").eq("to_user_id", me).in("from_user_id", ids),
+      supabase.from("friend_requests").select("id, to_user_id").eq("from_user_id", me).in("to_user_id", ids)
+    ]);
+
+    const friendIdSet = new Set();
+    for (const f of friendsRows || []) {
+      friendIdSet.add(f.user_id === me ? f.friend_id : f.user_id);
+    }
+    const incomingByFrom = new Map((toMeReqs || []).map((r) => [r.from_user_id, r.id]));
+    const outgoingToSet = new Set((fromMeReqs || []).map((r) => r.to_user_id));
+    const onlineSet = await presenceOnlineSetForUserIds(ids);
+
+    const decorated = users.map((u) => ({
+      ...publicProfileWithPresence(u, me, onlineSet),
+      isFriend: friendIdSet.has(u.id),
+      incomingRequestId: incomingByFrom.get(u.id) || null,
+      outgoingRequestPending: outgoingToSet.has(u.id)
+    }));
+
+    const online = decorated.filter((u) => u.presence?.online);
+    const others = decorated.filter((u) => !u.presence?.online);
+
+    const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
+
+    res.json({
+      online: shuffle(online),
+      others: shuffle(others)
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 /** Public-ish profile card for avatar popovers (Community, message bubbles). Mirror search-row friend flags. */
 app.get("/api/users/:userId", authenticate, async (req, res) => {
   const me = req.user.id;

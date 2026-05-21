@@ -19,12 +19,13 @@ export default function AppShell({
   onRefresh,
   refreshBusy = false,
   children,
-  navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0 }
+  navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0, addFriends: 0 }
 }) {
   const ev = formatNavPing(navBadges.events);
   const msg = formatNavPing(navBadges.messages);
   const ann = formatNavPing(navBadges.announcements);
   const bell = formatNavPing(navBadges.notifications);
+  const addFriends = formatNavPing(navBadges.addFriends);
 
   /** Observed so the floating quick-nav dock appears after this block scrolls out of view (long feeds / threads). */
   const dashboardHeaderRef = useRef(null);
@@ -129,6 +130,14 @@ export default function AppShell({
             {msg ? (
               <span className="nav-ping" aria-label={`${navBadges.messages} unread messages`}>
                 {msg}
+              </span>
+            ) : null}
+          </NavLink>
+          <NavLink to="/add-friends" className="nav-btn">
+            <NavIcon name="friends" /> Add Friends
+            {addFriends ? (
+              <span className="nav-ping" aria-label={`${navBadges.addFriends} pending requests`}>
+                {addFriends}
               </span>
             ) : null}
           </NavLink>
