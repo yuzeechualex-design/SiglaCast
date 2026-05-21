@@ -6602,14 +6602,17 @@ body.music-spotify-hub-open .music-mini-player-bar {
   border: 1px solid #242424;
   display: flex;
   flex-direction: column;
+  width: 100%;
+  max-width: 1184px;
+  margin-inline: auto;
 }
 
 .music-hub-layout {
   flex: 1 1 auto;
   display: grid;
-  grid-template-columns: 236px minmax(0, 1fr) minmax(0, 280px);
-  align-items: start;
-  gap: 12px;
+  grid-template-columns: 220px minmax(0, 1fr) 264px;
+  align-items: stretch;
+  gap: 10px;
   min-height: 0;
 }
 
@@ -6622,9 +6625,12 @@ body.music-spotify-hub-open .music-mini-player-bar {
   border-right: 1px solid var(--sp-line);
   position: sticky;
   top: 12px;
-  align-self: start;
-  max-height: none;
+  align-self: stretch;
+  min-height: 100%;
+  max-height: calc(100vh - 104px);
   border-radius: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .music-hub-brand {
@@ -6788,7 +6794,7 @@ body.music-spotify-hub-open .music-mini-player-bar {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 20px;
+  padding: 14px 24px;
   flex-wrap: wrap;
   position: sticky;
   top: 0;
@@ -6879,7 +6885,7 @@ body.music-spotify-hub-open .music-mini-player-bar {
 .music-hub-scroll {
   flex: 0 1 auto;
   overflow: visible;
-  padding: 0 16px clamp(112px, 18vw, 140px);
+  padding: 0 24px clamp(112px, 18vw, 140px);
   scroll-behavior: smooth;
 }
 
@@ -6938,8 +6944,8 @@ body.music-spotify-hub-open .music-mini-player-bar {
 .music-hub-banner {
   display: flex;
   gap: 16px;
-  align-items: flex-end;
-  padding: 20px;
+  align-items: center;
+  padding: 18px;
   margin-bottom: 24px;
   border-radius: 12px;
   background: linear-gradient(120deg, #3b2b6b 0%, #1db95459 120%);
@@ -6951,8 +6957,8 @@ body.music-spotify-hub-open .music-mini-player-bar {
 }
 
 .music-hub-banner-visual img {
-  width: 132px;
-  height: 132px;
+  width: 112px;
+  height: 112px;
   object-fit: cover;
   border-radius: 10px;
   box-shadow: 0 22px 50px rgba(0, 0, 0, 0.55);
@@ -6967,7 +6973,9 @@ body.music-spotify-hub-open .music-mini-player-bar {
 }
 
 .music-hub-banner-title {
-  font-size: 2rem;
+  display: block;
+  font-size: clamp(1.45rem, 3vw, 1.8rem);
+  line-height: 1.05;
   margin: 4px 0;
   letter-spacing: -0.04em;
 }
@@ -7148,11 +7156,13 @@ body.music-spotify-hub-open .music-mini-player-bar {
 .music-hub-now-playing {
   background: var(--sp-bg);
   border-left: 1px solid var(--sp-line);
-  padding: 20px;
+  padding: 18px;
   overflow: visible;
-  align-self: start;
+  align-self: stretch;
   position: sticky;
   top: 12px;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
   border-radius: 12px;
   outline: 1px solid rgba(255, 255, 255, 0.06);
 }
@@ -7696,6 +7706,59 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .music-hub-invite-send:not(:disabled):hover {
   filter: brightness(1.06);
+}
+
+@media (min-width: 1041px) and (max-width: 1180px) {
+  .music-hub-layout {
+    grid-template-columns: 188px minmax(0, 1fr) 232px;
+    gap: 8px;
+  }
+
+  .music-hub-sidebar {
+    padding: 16px 10px;
+  }
+
+  .music-hub-brand {
+    gap: 10px;
+  }
+
+  .music-hub-logo-dot {
+    width: 28px;
+    height: 28px;
+  }
+
+  .music-hub-toolbar,
+  .music-hub-scroll {
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+
+  .music-hub-banner {
+    gap: 14px;
+    padding: 16px;
+  }
+
+  .music-hub-banner-visual img {
+    width: 104px;
+    height: 104px;
+  }
+
+  .music-hub-now-playing {
+    padding: 16px;
+  }
+
+  .music-hub-friend-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: 10px 12px;
+  }
+
+  .music-hub-friend-actions {
+    gap: 8px;
+  }
+
+  .music-hub-friend-act {
+    padding-inline: 12px;
+  }
 }
 
 @media (max-width: 1040px) {
