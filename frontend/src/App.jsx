@@ -1629,6 +1629,17 @@ export default function App() {
       onToggleLiteMode={toggleLiteMode}
       onRefresh={refreshVisibleContent}
       refreshBusy={appRefreshBusy}
+      navBadges={{
+        events: navBadges.events,
+        messages: navBadges.messages,
+        announcements: navBadges.announcements,
+        notifications: navBadges.notifications,
+        addFriends: friendIncomingRequests.length
+      }}
+    >
+      <ImageLightboxProvider>
+      <MusicPlayerProvider>
+      <Routes>
         <Route path="/" element={<Navigate to="/community" replace />} />
         <Route
           path="/events"
@@ -1832,6 +1843,22 @@ export default function App() {
               onOpenUserProfile={openUserProfileModal}
               onUnauthorizedRetry={onUnauthorizedRetry}
               token={token}
+              liteMode={liteMode}
+            />
+          }
+        />
+        <Route
+          path="/add-friends"
+          element={
+            <AddFriendsPage
+              api={api}
+              currentUser={user}
+              friendIncomingRequests={friendIncomingRequests}
+              onAcceptFriendRequest={acceptFriendRequest}
+              onRejectFriendRequest={rejectFriendRequest}
+              onAddFriend={addFriend}
+              onOpenUserProfile={openUserProfileModal}
+              onOpenDmWithUser={(friendId) => void openDmAndFocusUser(friendId)}
               liteMode={liteMode}
             />
           }
