@@ -4805,9 +4805,21 @@ button.comment-profile-avatar-btn:focus-visible {
   font-size: 11px;
 }
 
-.reply-link:hover {
+.reply-link:hover,
+.reply-link:active,
+.reply-link:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
   color: var(--blue-700);
   text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.reply-link:focus-visible {
+  outline: 1px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .reply-form {
@@ -5590,7 +5602,12 @@ button.comment-profile-avatar-btn:focus-visible {
   color: #e11d48;
 }
 
-.comment-delete-link:hover {
+.comment-delete-link:hover,
+.comment-delete-link:active,
+.comment-delete-link:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
   color: #be123c;
 }
 
@@ -5856,8 +5873,21 @@ button.comment-profile-avatar-btn:focus-visible {
   padding: 0;
 }
 
-.see-reactors-btn:hover {
+.see-reactors-btn:hover,
+.see-reactors-btn:active,
+.see-reactors-btn:focus-visible {
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  color: var(--blue-800, #1e40af);
   text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.see-reactors-btn:focus-visible {
+  outline: 1px solid rgba(37, 99, 235, 0.45);
+  outline-offset: 3px;
+  border-radius: 4px;
 }
 
 .comment-reaction-row {
