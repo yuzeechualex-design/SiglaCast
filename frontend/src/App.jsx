@@ -1769,6 +1769,8 @@ export default function App() {
               onCoverUpload={uploadCover}
               setNotice={setNotice}
               onLogout={logout}
+              liteMode={liteMode}
+              onToggleLiteMode={toggleLiteMode}
             />
           }
         />

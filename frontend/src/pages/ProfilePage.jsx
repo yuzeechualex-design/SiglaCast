@@ -43,7 +43,7 @@ const AVAILABILITY_CHOICES = [
   }
 ];
 
-export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout }) {
+export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout, liteMode, onToggleLiteMode }) {
   const spotifyLinked = Boolean(user.spotifyLinked);
   const [musicShareNowPlaying, setMusicShareNowPlaying] = useState(() => Boolean(user.musicShareNowPlaying));
   const np = user.musicNowPlaying;
@@ -375,6 +375,19 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
             aria-label="Status message"
           />
         </div>
+
+        <label className="field-label">Lite Mode</label>
+        <p className="muted small profile-field-hint">
+          Reduces background animations and visual effects to speed up the app and save data.
+        </p>
+        <label className="profile-checkbox-row">
+          <input
+            type="checkbox"
+            checked={liteMode}
+            onChange={onToggleLiteMode}
+          />{" "}
+          Enable Lite Mode (reduces visual effects)
+        </label>
 
         <label className="field-label">Change password</label>
         <input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="Current password (if changing)" />

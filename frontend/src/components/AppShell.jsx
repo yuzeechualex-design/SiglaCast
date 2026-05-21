@@ -101,26 +101,9 @@ export default function AppShell({
         <span />
       </div>
       <header ref={dashboardHeaderRef} className="hero">
-        <div className="hero-main">
-          <p className="eyebrow">Community Platform</p>
-          <div className="hero-title-row">
-            <h1>SiglaCast</h1>
-            <div className="hero-mode-actions">
-              <button
-                type="button"
-                className={`lite-toggle ${liteMode ? "active" : ""}`}
-                onClick={onToggleLiteMode}
-                title={liteMode ? "Lite mode is on" : "Turn on Lite mode"}
-              >
-                Lite
-              </button>
-              <ThemeToggle theme={theme} onToggle={onToggleTheme} />
-            </div>
-          </div>
-        </div>
         <div className="nav-row">
-          <NavLink to="/community" className="nav-btn" title="Community">
-            <NavIcon name="community" />
+          <NavLink to="/community" className="nav-btn" title="Home">
+            <NavIcon name="home" />
           </NavLink>
           <NavLink to="/messages" className="nav-btn" title="Messages">
             <NavIcon name="messages" />
@@ -171,6 +154,7 @@ export default function AppShell({
           <NavLink to="/settings" className="nav-btn" title="Settings">
             <NavIcon name="settings" />
           </NavLink>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>
