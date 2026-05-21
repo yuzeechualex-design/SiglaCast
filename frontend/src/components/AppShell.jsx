@@ -117,62 +117,59 @@ export default function AppShell({
               <ThemeToggle theme={theme} onToggle={onToggleTheme} />
             </div>
           </div>
-          <p className="hero-subtitle">
-            {user.role === "admin" ? "Administrator" : "Student"}{" \u2014 "}{user.name}
-          </p>
         </div>
         <div className="nav-row">
-          <NavLink to="/community" className="nav-btn">
-            <NavIcon name="community" /> Community
+          <NavLink to="/community" className="nav-btn" title="Community">
+            <NavIcon name="community" />
           </NavLink>
-          <NavLink to="/messages" className="nav-btn">
-            <NavIcon name="messages" /> Messages
+          <NavLink to="/messages" className="nav-btn" title="Messages">
+            <NavIcon name="messages" />
             {msg ? (
               <span className="nav-ping" aria-label={`${navBadges.messages} unread messages`}>
                 {msg}
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/add-friends" className="nav-btn">
-            <NavIcon name="friends" /> Add Friends
+          <NavLink to="/add-friends" className="nav-btn" title="Discover Friends">
+            <NavIcon name="friends" />
             {addFriends ? (
               <span className="nav-ping" aria-label={`${navBadges.addFriends} pending requests`}>
                 {addFriends}
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/music" className="nav-btn">
-            <NavIcon name="music" /> Music
+          <NavLink to="/music" className="nav-btn" title="Music">
+            <NavIcon name="music" />
           </NavLink>
-          <NavLink to="/notifications" className="nav-btn">
-            <NavIcon name="notifications" /> Notifications
+          <NavLink to="/notifications" className="nav-btn" title="Notifications">
+            <NavIcon name="notifications" />
             {bell ? (
               <span className="nav-ping" aria-label={`${navBadges.notifications} unread notifications`}>
                 {bell}
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/announcements" className="nav-btn">
-            <NavIcon name="announcements" /> Announcements
+          <NavLink to="/announcements" className="nav-btn" title="Announcements">
+            <NavIcon name="announcements" />
             {ann ? (
               <span className="nav-ping" aria-label={`${navBadges.announcements} new announcements`}>
                 {ann}
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/events" className="nav-btn">
-            <NavIcon name="events" /> Events
+          <NavLink to="/events" className="nav-btn" title="Events">
+            <NavIcon name="events" />
             {ev ? (
               <span className="nav-ping" aria-label={`${navBadges.events} open events`}>
                 {ev}
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/profile" className="nav-btn">
-            <NavIcon name="profile" /> Profile
+          <NavLink to="/profile" className="nav-btn" title="Profile">
+            <NavIcon name="profile" />
           </NavLink>
-          <NavLink to="/settings" className="nav-btn">
-            <NavIcon name="settings" /> Settings
+          <NavLink to="/settings" className="nav-btn" title="Settings">
+            <NavIcon name="settings" />
           </NavLink>
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
