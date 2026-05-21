@@ -82,7 +82,7 @@ export default function AddFriendsPage({
   const othersFiltered = filterUsers(discoverData.others || []);
 
   return (
-    <div className="add-friends-container">
+    <section className="panel single add-friends-container">
       {/* Search Header */}
       <div className="add-friends-header tile">
         <h2>Discover Friends</h2>
@@ -287,6 +287,6 @@ export default function AddFriendsPage({
           </section>
         </>
       )}
-    </div>
+    </section>
   );
 }

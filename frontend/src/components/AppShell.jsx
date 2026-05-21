@@ -168,9 +168,6 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/assistant" className="nav-btn">
-            <NavIcon name="assistant" /> Assistant
-          </NavLink>
           <NavLink to="/profile" className="nav-btn">
             <NavIcon name="profile" /> Profile
           </NavLink>

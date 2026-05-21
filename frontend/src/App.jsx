@@ -366,7 +366,31 @@ export default function App() {
     const withoutAiDm = (messagesArchivedView ? archivedConversationsSidebar : conversations || []).filter(
       (c) => !(c.kind === "dm" && c.user?.id === SIGLACAST_AI_USER_ID)
     );
-    return [userphoneRow, ...withoutAiDm];
+    const existingAiDm = (messagesArchivedView ? archivedConversationsSidebar : conversations || []).find(
+      (c) => c.kind === "dm" && c.user?.id === SIGLACAST_AI_USER_ID
+    );
+    const aiLastMessage = existingAiDm?.lastMessage || {
+      text: "Ask me anything! Tap to start chatting",
+      createdAt: new Date(0).toISOString(),
+      fromMe: false
+    };
+    const aiRow = {
+      kind: "dm",
+      id: `dm:${SIGLACAST_AI_USER_ID}`,
+      user: {
+        id: SIGLACAST_AI_USER_ID,
+        name: "SiglaCast AI Assistant",
+        email: "assistant@siglacast.com",
+        course: "AI Helper",
+        avatarUrl: null,
+        statusEmoji: "✨",
+        presence: "online"
+      },
+      isFriend: true,
+      lastMessage: aiLastMessage,
+      unreadCount: existingAiDm?.unreadCount || 0
+    };
+    return [userphoneRow, aiRow, ...withoutAiDm];
   }, [
     conversations,
     archivedConversationsSidebar,
@@ -1677,12 +1701,7 @@ export default function App() {
           }
         />
         <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} liteMode={liteMode} />} />
-        <Route
-          path="/assistant"
-          element={
-            <AssistantPage chatWithGroq={(messages) => api("/assistant/chat", { method: "POST", body: { messages } })} />
-          }
-        />
+        <Route path="/assistant" element={<Navigate to="/messages" replace />} />
         <Route
           path="/community"
           element={

@@ -9941,5 +9941,14 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   to { transform: rotate(360deg); }
 }
 
+.msg-avatar.placeholder.chatbot-avatar {
+  background: linear-gradient(135deg, #00f2fe, #4facfe);
+  color: #fff;
+  font-size: 1.1rem;
+}
+.msg-avatar.sm.placeholder.chatbot-avatar {
+  font-size: 0.95rem;
+}
+
 
 

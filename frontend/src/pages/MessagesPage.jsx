@@ -140,19 +140,6 @@ export default function MessagesPage({
 
   useEffect(() => {
     if (!deepLinkDm && !deepLinkGroup) return undefined;
-    if (deepLinkDm === SIGLACAST_AI_USER_ID) {
-      navigate("/assistant", { replace: true });
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          next.delete("dm");
-          next.delete("group");
-          return next;
-        },
-        { replace: true }
-      );
-      return undefined;
-    }
     let cancelled = false;
     (async () => {
       if (deepLinkDm) await onOpenChat?.("dm", deepLinkDm);
@@ -172,14 +159,6 @@ export default function MessagesPage({
       cancelled = true;
     };
   }, [deepLinkDm, deepLinkGroup, navigate, onOpenChat, setSearchParams]);
-
-  /** Dedicated Assistant lives on `/assistant`; don’t leave the sentinel bot thread open inside Messages. */
-  useEffect(() => {
-    const isAiDm = activeChat?.kind === "dm" && activeChat?.user?.id === SIGLACAST_AI_USER_ID;
-    if (!isAiDm) return undefined;
-    onCloseMobileChat?.();
-    return undefined;
-  }, [activeChat?.kind, activeChat?.user?.id, onCloseMobileChat]);
 
   const isGroup = activeChat?.kind === "group";
   const isUserphone = activeChat?.kind === "userphone";
@@ -294,8 +273,11 @@ export default function MessagesPage({
   function renderAvatar(entity, size = "md", opts = {}) {
     const showPresence = !!(opts.showPresence && entity && !entity?.isGroup);
     const cls = size === "sm" ? "msg-avatar sm" : "msg-avatar";
+    const isAi = entity?.id === SIGLACAST_AI_USER_ID;
     const url = entity?.avatarUrl || entity?.photoUrl;
-    const inner = url ? (
+    const inner = isAi ? (
+      <div className={`${cls} placeholder chatbot-avatar`}>🤖</div>
+    ) : url ? (
       <img className={cls} src={mediaUrl(url)} alt="" />
     ) : (
       <div className={`${cls} placeholder`}>{entity?.name?.charAt(0) || "?"}</div>
@@ -524,7 +506,7 @@ export default function MessagesPage({
                         <li className="chat-app-row">
                           <div className="chat-app-meta">
                             <strong>Assistant</strong>
-                            <span className="muted small">Standalone AI chat (same as ✨ Assistant in the top nav)</span>
+                            <span className="muted small">Ask our AI helpful questions</span>
                           </div>
                           <button
                             type="button"
@@ -532,7 +514,7 @@ export default function MessagesPage({
                             onClick={() => {
                               setPlusMenuOpen(false);
                               setPlusMenuPane("main");
-                              navigate("/assistant");
+                              onOpenChat?.("dm", SIGLACAST_AI_USER_ID);
                             }}
                           >
                             Open
