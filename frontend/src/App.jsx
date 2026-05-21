@@ -9,6 +9,7 @@ import CommunityPage from "./pages/CommunityPage.jsx";
 import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
+import MyProfilePage from "./pages/MyProfilePage.jsx";
 import MusicPage from "./pages/MusicPage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
@@ -1513,6 +1514,10 @@ export default function App() {
         />
         <Route
           path="/profile"
+          element={<MyProfilePage user={user} posts={posts} />}
+        />
+        <Route
+          path="/settings"
           element={
             <ProfilePage
               user={user}

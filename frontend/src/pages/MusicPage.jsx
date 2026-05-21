@@ -364,7 +364,7 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
             ) : null}
           </div>
 
-          <Link to="/profile" className="music-hub-foot-link">
+          <Link to="/settings" className="music-hub-foot-link">
             Profile &amp; bio status →
           </Link>
         </aside>

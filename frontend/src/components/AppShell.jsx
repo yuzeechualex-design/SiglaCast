@@ -83,6 +83,9 @@ export default function AppShell({
           <NavLink to="/profile" className="nav-btn">
             <NavIcon name="profile" /> Profile
           </NavLink>
+          <NavLink to="/settings" className="nav-btn">
+            <NavIcon name="settings" /> Settings
+          </NavLink>
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>

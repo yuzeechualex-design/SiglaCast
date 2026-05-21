@@ -122,6 +122,10 @@ export default function FloatingQuickNav({
               <NavIcon name="profile" />
               <span className="fq-label">Profile</span>
             </NavLink>
+            <NavLink to="/settings" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              <NavIcon name="settings" />
+              <span className="fq-label">Settings</span>
+            </NavLink>
           </div>
         </div>
       </nav>

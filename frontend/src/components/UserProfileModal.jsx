@@ -181,7 +181,7 @@ export default function UserProfileModal({
 
   function goEditProfile() {
     onClose?.();
-    navigate?.("/profile");
+    navigate?.("/settings");
   }
 
   return (

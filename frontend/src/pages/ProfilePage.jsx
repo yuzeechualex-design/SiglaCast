@@ -193,7 +193,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
   return (
     <section className="panel single">
       <div className="panel-head">
-        <h2>👤 Profile</h2>
+        <h2>Settings</h2>
         <p>Update your cover, profile photo, display name, bio, availability, custom status, and password.</p>
       </div>
 
