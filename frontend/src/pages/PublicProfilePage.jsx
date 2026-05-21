@@ -2,7 +2,19 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import MyProfilePage from "./MyProfilePage.jsx";
 
-export default function PublicProfilePage({ api, liteMode = false }) {
+export default function PublicProfilePage({
+  api,
+  posts: livePosts = [],
+  currentUser,
+  liteMode = false,
+  onReact,
+  onComment,
+  onReactComment,
+  onDeleteComment,
+  onDeletePost,
+  onShare,
+  onOpenUserProfile
+}) {
   const { userId } = useParams();
   const [profile, setProfile] = useState(null);
   const [posts, setPosts] = useState([]);
@@ -51,5 +63,23 @@ export default function PublicProfilePage({ api, liteMode = false }) {
     );
   }
 
-  return <MyProfilePage user={profile} posts={posts} liteMode={liteMode} isOwnProfile={false} backHref="/community" />;
+  const profilePosts = livePosts.length ? livePosts : posts;
+
+  return (
+    <MyProfilePage
+      user={profile}
+      posts={profilePosts}
+      currentUser={currentUser}
+      liteMode={liteMode}
+      isOwnProfile={false}
+      backHref="/community"
+      onReact={onReact}
+      onComment={onComment}
+      onReactComment={onReactComment}
+      onDeleteComment={onDeleteComment}
+      onDeletePost={onDeletePost}
+      onShare={onShare}
+      onOpenUserProfile={onOpenUserProfile}
+    />
+  );
 }

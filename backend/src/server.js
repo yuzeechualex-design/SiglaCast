@@ -312,11 +312,32 @@ async function serializeEventDetail(event, viewerId) {
 }
 const ALLOWED_REACTIONS = ["like", "love", "haha", "wow", "sad", "cry", "angry"];
 
+async function serializeSharedPost(post) {
+  if (!post) return null;
+  const { data: author } = await supabase
+    .from("users")
+    .select("id, name, avatar_url")
+    .eq("id", post.author_id)
+    .maybeSingle();
+  return {
+    id: post.id,
+    authorId: post.author_id,
+    author: author?.name || "Unknown",
+    authorAvatar: author?.avatar_url || null,
+    content: post.content || "",
+    imageUrl: post.image_url || null,
+    createdAt: post.created_at
+  };
+}
+
 async function serializePost(post, viewerId) {
-  const [{ data: reactions }, { data: comments }, { data: author }] = await Promise.all([
+  const [{ data: reactions }, { data: comments }, { data: author }, { data: sharedPost }] = await Promise.all([
     supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
-    supabase.from("users").select("id, name, avatar_url").eq("id", post.author_id).maybeSingle()
+    supabase.from("users").select("id, name, avatar_url").eq("id", post.author_id).maybeSingle(),
+    post.shared_post_id
+      ? supabase.from("posts").select("*").eq("id", post.shared_post_id).maybeSingle()
+      : Promise.resolve({ data: null })
   ]);
 
   const reactionBreakdown = {};
@@ -416,6 +437,8 @@ async function serializePost(post, viewerId) {
     authorAvatar: author?.avatar_url || null,
     content: post.content || "",
     imageUrl: post.image_url || null,
+    sharedPostId: post.shared_post_id || null,
+    sharedPost: await serializeSharedPost(sharedPost),
     reactionCount: (reactions || []).length,
     reactedByMe: Boolean(myReaction),
     myReaction,
@@ -2000,6 +2023,45 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("post.created", { id: post.id });
     await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
+    res.status(201).json(await serializePost(post, req.user.id));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/community/posts/:id/share", authenticate, async (req, res) => {
+  try {
+    const sourceId = String(req.params.id || "");
+    const content = String(req.body?.content || "").trim().slice(0, 2000);
+    const { data: source } = await supabase.from("posts").select("*").eq("id", sourceId).maybeSingle();
+    if (!source) return res.status(404).json({ error: "Post not found" });
+
+    const shared_post_id = source.shared_post_id || source.id;
+    const id = `p${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data: post, error } = await supabase
+      .from("posts")
+      .insert({
+        id,
+        author_id: req.user.id,
+        content,
+        image_url: null,
+        shared_post_id
+      })
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+
+    await broker.publish("post.created", { id: post.id, sharedPostId: shared_post_id });
+    await notifyMentions(content, `a shared post by ${req.user.name}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
+    if (source.author_id && source.author_id !== req.user.id) {
+      await insertNotification({
+        userId: source.author_id,
+        text: `${req.user.name} shared your post`,
+        kind: "share_post",
+        linkPath: `/community?post=${encodeURIComponent(id)}`
+      });
+    }
+
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });

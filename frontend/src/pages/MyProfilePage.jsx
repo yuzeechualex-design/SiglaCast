@@ -1,5 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
+import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
+import MentionInput from "../components/MentionInput.jsx";
+import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
+import { PostCardBody, REACTIONS } from "./CommunityPage.jsx";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { listeningStatusLine } from "../utils/displayStatus.js";
 
@@ -25,37 +30,89 @@ function dateLabel(value) {
   }
 }
 
-function ProfilePostPreview({ post, liteMode = false }) {
+function ProfileComposer({ user, avatarSrc, onPost }) {
+  const [content, setContent] = useState("");
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState("");
+
+  function onFileChange(e) {
+    const file = e.target.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setImageFile(file);
+    setPreviewUrl(URL.createObjectURL(file));
+  }
+
+  function clearImage() {
+    setImageFile(null);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    setPreviewUrl("");
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!content.trim() && !imageFile) return;
+    await onPost?.({ content, imageFile });
+    setContent("");
+    clearImage();
+  }
+
   return (
-    <article className="my-profile-post-card">
-      <div className="my-profile-post-head">
-        {post.authorAvatar ? (
-          <img className="my-profile-post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-        ) : (
-          <span className="my-profile-post-avatar my-profile-post-avatar--empty">{post.author?.charAt(0) || "?"}</span>
-        )}
-        <div>
-          <strong>{post.author}</strong>
-          <span>{dateLabel(post.createdAt) || "Campus post"}</span>
+    <form className="my-profile-composer-card profile-inline-composer" onSubmit={submit}>
+      <div className="my-profile-composer-line">
+        {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{user.name?.charAt(0) || "?"}</span>}
+        <MentionInput
+          as="textarea"
+          rows={2}
+          value={content}
+          onChange={setContent}
+          placeholder="What's on your mind?"
+        />
+      </div>
+      {previewUrl ? (
+        <div className="image-preview-wrap">
+          <img className="image-preview" src={previewUrl} alt="Preview" />
+          <button type="button" className="btn btn-ghost btn-sm" onClick={clearImage}>Remove image</button>
         </div>
+      ) : null}
+      <div className="composer-toolbar profile-composer-toolbar">
+        <label className="btn btn-icon" title="Add image">
+          <span className="ui-icon ui-icon-image" aria-hidden="true" />
+          <input type="file" accept="image/*" hidden onChange={onFileChange} />
+        </label>
+        <EmojiPickerButton onPick={(emoji) => setContent((text) => text + emoji)} />
+        <button type="submit" className="btn btn-primary" disabled={!content.trim() && !imageFile}>
+          <span className="ui-icon ui-icon-send" aria-hidden="true" />
+          <span>Publish</span>
+        </button>
       </div>
-      {post.content ? <p className="my-profile-post-text">{post.content}</p> : null}
-      {post.imageUrl && !liteMode ? <img className="my-profile-post-image" src={mediaUrl(post.imageUrl)} alt="" loading="lazy" /> : null}
-      <div className="my-profile-post-stats">
-        <span>{formatCount(post.reactionCount, "reaction")}</span>
-        <span>{formatCount(post.commentCount, "comment")}</span>
-      </div>
-    </article>
+    </form>
   );
 }
 
-export default function MyProfilePage({ user, posts = [], liteMode = false, isOwnProfile = true, backHref = "" }) {
+export default function MyProfilePage({
+  user,
+  posts = [],
+  currentUser = user,
+  liteMode = false,
+  isOwnProfile = true,
+  backHref = "",
+  onPost,
+  onReact,
+  onComment,
+  onReactComment,
+  onDeleteComment,
+  onDeletePost,
+  onShare,
+  onOpenUserProfile
+}) {
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
   const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
   const coverIsGif = coverSrc && publicUrlLooksLikeGif(coverSrc);
   const myPosts = posts.filter((post) => post.authorId === user.id);
   const statusLine = [user.statusEmoji, user.statusNote].filter(Boolean).join(" ");
   const musicLine = listeningStatusLine(user);
+  const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
 
   return (
     <section className="my-profile-page">
@@ -125,12 +182,7 @@ export default function MyProfilePage({ user, posts = [], liteMode = false, isOw
             </Link>
           ) : null}
           {isOwnProfile ? (
-          <div className="my-profile-composer-card">
-            <div className="my-profile-composer-line">
-              {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{user.name?.charAt(0) || "?"}</span>}
-              <Link to="/community">What's on your mind?</Link>
-            </div>
-          </div>
+            <ProfileComposer user={user} avatarSrc={avatarSrc} onPost={onPost} />
           ) : null}
 
           <div className="my-profile-section-head">
@@ -139,7 +191,36 @@ export default function MyProfilePage({ user, posts = [], liteMode = false, isOw
           </div>
 
           {myPosts.length ? (
-            myPosts.map((post) => <ProfilePostPreview key={post.id} post={post} liteMode={liteMode} />)
+            myPosts.map((post) => (
+              <article key={post.id} id={`post-${post.id}`} className="tile post-card my-profile-post-card">
+                <PostCardBody
+                  post={post}
+                  canModerateDelete={(currentUser?.role === "admin" || post.authorId === currentUser?.id) && !!onDeletePost}
+                  forceExpandedBody={false}
+                  currentUser={currentUser}
+                  onDeletePost={() => onDeletePost?.(post)}
+                  onReact={onReact}
+                  onComment={onComment}
+                  onReactComment={onReactComment}
+                  onDeleteComment={onDeleteComment}
+                  onShare={onShare}
+                  onOpenUserProfile={onOpenUserProfile}
+                  openPostReactors={() =>
+                    setRxModal({
+                      open: true,
+                      title: "Post reactions",
+                      path: `/community/posts/${post.id}/reactors`
+                    })}
+                  openCommentReactors={(commentId) =>
+                    setRxModal({
+                      open: true,
+                      title: "Comment reactions",
+                      path: `/community/comments/${commentId}/reactors`
+                    })}
+                  liteMode={liteMode}
+                />
+              </article>
+            ))
           ) : (
             <div className="my-profile-empty-posts">
               <strong>No posts yet</strong>
@@ -151,6 +232,14 @@ export default function MyProfilePage({ user, posts = [], liteMode = false, isOw
           )}
         </main>
       </div>
+      {rxModal.open ? (
+        <ReactionActorsModal
+          title={rxModal.title}
+          path={rxModal.path}
+          reactionTypes={REACTIONS}
+          onClose={() => setRxModal({ open: false, path: "", title: "" })}
+        />
+      ) : null}
     </section>
   );
 }

@@ -12,7 +12,7 @@ import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 /** Narrow layout: fullscreen post threads + tap targets (keep in sync with CSS). */
 const COMMUNITY_MOBILE_MAX_PX = 720;
 
-const REACTIONS = [
+export const REACTIONS = [
   { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
   { type: "love", emoji: "❤️", label: "Love", color: "#e11d48" },
   { type: "haha", emoji: "😂", label: "Haha", color: "#f59e0b" },
@@ -39,6 +39,7 @@ export default function CommunityPage({
   onComment,
   onDeletePost,
   onDeleteComment,
+  onShare,
   onOpenUserProfile,
   onUnauthorizedRetry,
   liteMode = false
@@ -269,6 +270,7 @@ export default function CommunityPage({
               onComment={onComment}
               onReactComment={onReactComment}
               onDeleteComment={onDeleteComment}
+              onShare={onShare}
               onOpenUserProfile={onOpenUserProfile}
               openPostReactors={() =>
                 setRxModal({
@@ -316,6 +318,7 @@ export default function CommunityPage({
                   onComment={onComment}
                   onReactComment={onReactComment}
                   onDeleteComment={onDeleteComment}
+                  onShare={onShare}
                   onOpenUserProfile={onOpenUserProfile}
                   liteMode={liteMode}
                       openPostReactors={() =>
@@ -355,7 +358,7 @@ export default function CommunityPage({
 }
 
 /** Shared markup for feed cards and fullscreen mobile thread overlay (see `thread` URL param). */
-function PostCardBody({
+export function PostCardBody({
   post,
   canModerateDelete,
   forceExpandedBody,
@@ -365,6 +368,7 @@ function PostCardBody({
   onComment,
   onReactComment,
   onDeleteComment,
+  onShare,
   openPostReactors,
   openCommentReactors,
   onOpenUserProfile,
@@ -423,8 +427,17 @@ function PostCardBody({
           <img className="post-image" src={mediaUrl(post.imageUrl)} alt="" decoding="async" loading="lazy" />
         </button>
       ) : null}
+      {post.sharedPost ? (
+        <SharedPostEmbed
+          post={post.sharedPost}
+          liteMode={liteMode}
+          onOpenUserProfile={onOpenUserProfile}
+        />
+      ) : post.sharedPostId ? (
+        <div className="shared-post-embed shared-post-embed--missing">Original post is no longer available.</div>
+      ) : null}
 
-      <ReactionsRow post={post} onReact={onReact} onShowReactors={openPostReactors} />
+      <ReactionsRow post={post} onReact={onReact} onShare={onShare} onShowReactors={openPostReactors} />
 
       <CommentsBlock
         post={post}
@@ -437,6 +450,43 @@ function PostCardBody({
         liteMode={liteMode}
       />
     </>
+  );
+}
+
+function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
+  return (
+    <article className="shared-post-embed">
+      <div className="shared-post-header">
+        <button
+          type="button"
+          className="post-profile-avatar-btn"
+          aria-label={`View ${post.author || "user"} profile`}
+          title="View profile"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenUserProfile?.(post.authorId, {
+              name: post.author,
+              avatarUrl: post.authorAvatar,
+              authorAvatar: post.authorAvatar
+            });
+          }}
+        >
+          {post.authorAvatar ? (
+            <img className="post-avatar shared-post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+          ) : (
+            <div className="post-avatar shared-post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+          )}
+        </button>
+        <div>
+          <strong>{post.author}</strong>
+          <span>Original post</span>
+        </div>
+      </div>
+      {post.content ? <PostText text={post.content} forceExpanded={false} /> : null}
+      {post.imageUrl && !liteMode ? (
+        <img className="shared-post-image" src={mediaUrl(post.imageUrl)} alt="" loading="lazy" decoding="async" />
+      ) : null}
+    </article>
   );
 }
 
@@ -759,7 +809,7 @@ function PostText({ text, forceExpanded }) {
 // Facebook-style reactions bar. Hovering the trigger reveals a floating picker
 // with animated emoji buttons. Click picks; clicking the active emoji
 // removes it; clicking a different emoji switches the reaction.
-function ReactionsRow({ post, onReact, onShowReactors }) {
+function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
 
@@ -857,6 +907,20 @@ function ReactionsRow({ post, onReact, onShowReactors }) {
           </button>
         ) : null}
       </div>
+      {onShare ? (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm post-share-btn"
+          onClick={(e) => {
+            e.stopPropagation();
+            onShare(post);
+          }}
+          title="Share post"
+        >
+          <span className="ui-icon ui-icon-share" aria-hidden="true" />
+          <span>Share</span>
+        </button>
+      ) : null}
     </div>
   );
 }

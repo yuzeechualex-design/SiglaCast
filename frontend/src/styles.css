@@ -1079,6 +1079,32 @@ label.btn-secondary:hover {
   opacity: 0.9;
 }
 
+.ui-icon-share::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 8px;
+  width: 11px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-28deg);
+  transform-origin: right center;
+}
+
+.ui-icon-share::after {
+  content: "";
+  position: absolute;
+  right: 2px;
+  top: 4px;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(45deg);
+  border-radius: 1px;
+}
+
 /* label.btn defaults fight .btn-icon sizing — match square icon tiles */
 label.btn.btn-icon {
   padding: 0;
@@ -2609,6 +2635,58 @@ body.community-thread-overlay-open {
   margin-top: 0;
 }
 
+.post-share-btn {
+  color: var(--text);
+}
+
+.shared-post-embed {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
+}
+
+.shared-post-embed--missing {
+  color: var(--ink-600);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.shared-post-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.shared-post-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.shared-post-header span {
+  color: var(--ink-600);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.shared-post-avatar {
+  width: 34px;
+  height: 34px;
+}
+
+.shared-post-image {
+  width: 100%;
+  max-height: 280px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  margin-top: 8px;
+  display: block;
+}
+
 .my-profile-page {
   grid-column: 1 / -1;
   display: flex;
@@ -2908,15 +2986,33 @@ body.community-thread-overlay-open {
   font-weight: 900;
 }
 
-.my-profile-composer-line a {
+.my-profile-composer-line a,
+.my-profile-composer-line .mention-input-wrap {
   min-height: 42px;
   border-radius: 999px;
-  padding: 11px 16px;
   background: var(--surface);
   color: var(--ink-600);
+  border: 1px solid var(--line);
+}
+
+.my-profile-composer-line a {
+  padding: 11px 16px;
   text-decoration: none;
   font-weight: 700;
-  border: 1px solid var(--line);
+}
+
+.profile-inline-composer .mention-input-wrap {
+  border-radius: 18px;
+}
+
+.profile-inline-composer textarea {
+  min-height: 50px;
+  resize: vertical;
+}
+
+.profile-composer-toolbar {
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 .my-profile-section-head {

@@ -40,6 +40,7 @@ function cacheablePost(post) {
   return {
     ...post,
     imageUrl: null,
+    sharedPost: post.sharedPost ? { ...post.sharedPost, imageUrl: null } : null,
     comments: (post.comments || []).map((comment) => ({
       ...comment,
       imageUrl: null,
@@ -778,6 +779,22 @@ export default function App() {
     const res = await apiForm("/community/posts", formData);
     setNotice(res.error || "Post published");
     if (!res.error) await loadCore();
+  }
+
+  async function sharePost(post) {
+    if (!post?.id) return;
+    const content = window.prompt("Add something to your share?", "") ?? null;
+    if (content === null) return;
+    const res = await api(`/community/posts/${post.id}/share`, {
+      method: "POST",
+      body: { content }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Post shared");
+    setPosts((prev) => [res, ...prev.filter((p) => p.id !== res.id)]);
   }
 
   async function reactToPost(postId, reaction) {
@@ -1558,6 +1575,7 @@ export default function App() {
               onDeletePost={deletePost}
               onReactComment={reactToComment}
               onDeleteComment={deleteComment}
+              onShare={sharePost}
               onOpenUserProfile={openUserProfileModal}
               onUnauthorizedRetry={onUnauthorizedRetry}
               liteMode={liteMode}
@@ -1566,11 +1584,40 @@ export default function App() {
         />
         <Route
           path="/profile"
-          element={<MyProfilePage user={user} posts={posts} liteMode={liteMode} />}
+          element={
+            <MyProfilePage
+              user={user}
+              posts={posts}
+              currentUser={user}
+              liteMode={liteMode}
+              onPost={postCommunityPost}
+              onReact={reactToPost}
+              onComment={commentOnPost}
+              onReactComment={reactToComment}
+              onDeleteComment={deleteComment}
+              onDeletePost={deletePost}
+              onShare={sharePost}
+              onOpenUserProfile={openUserProfileModal}
+            />
+          }
         />
         <Route
           path="/users/:userId"
-          element={<PublicProfilePage api={api} liteMode={liteMode} />}
+          element={
+            <PublicProfilePage
+              api={api}
+              posts={posts}
+              currentUser={user}
+              liteMode={liteMode}
+              onReact={reactToPost}
+              onComment={commentOnPost}
+              onReactComment={reactToComment}
+              onDeleteComment={deleteComment}
+              onDeletePost={deletePost}
+              onShare={sharePost}
+              onOpenUserProfile={openUserProfileModal}
+            />
+          }
         />
         <Route
           path="/settings"
