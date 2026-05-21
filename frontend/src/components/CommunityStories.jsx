@@ -206,49 +206,12 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
   const [sending, setSending] = useState(false);
   const [err, setErr] = useState("");
-  const [attachTrack, setAttachTrack] = useState(null);
-  const [songQ, setSongQ] = useState("");
-  const [songHits, setSongHits] = useState([]);
-  const [songBusy, setSongBusy] = useState(false);
-  const [songSearchErr, setSongSearchErr] = useState("");
-
-  useEffect(() => {
-    const k = songQ.trim();
-    if (k.length < 2 || !token) {
-      setSongHits([]);
-      setSongSearchErr("");
-      return undefined;
-    }
-    let cancelled = false;
-    const tid = window.setTimeout(async () => {
-      setSongBusy(true);
-      setSongSearchErr("");
-      try {
-        const data = await request(`/music/search?q=${encodeURIComponent(k)}`, { token, onUnauthorizedRetry });
-        if (cancelled) return;
-        if (data?.error) {
-          const msg = typeof data.error === "string" ? data.error : "Song search failed.";
-          setSongSearchErr(msg.includes("configured") ? "Spotify isn’t configured on this server yet — admins need SPOTIFY_CLIENT_ID/SECRET." : msg);
-          setSongHits([]);
-          return;
-        }
-        const tracks = Array.isArray(data?.tracks) ? data.tracks : [];
-        setSongHits(tracks);
-      } finally {
-        if (!cancelled) setSongBusy(false);
-      }
-    }, 420);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(tid);
-    };
-  }, [songQ, token, onUnauthorizedRetry]);
 
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
-    if (!t && !file && !attachTrack?.spotifyTrackId) {
-      setErr("Add text, a photo, or attach a song.");
+    if (!t && !file) {
+      setErr("Add text or a photo.");
       return;
     }
     setSending(true);
@@ -256,14 +219,6 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
     const fd = new FormData();
     fd.append("text", t);
     if (file) fd.append("image", file);
-    if (attachTrack?.spotifyTrackId) {
-      fd.append("spotifyTrackId", attachTrack.spotifyTrackId || "");
-      fd.append("musicTitle", attachTrack.title || "");
-      fd.append("musicArtist", attachTrack.artist || "");
-      fd.append("musicImageUrl", attachTrack.imageUrl || "");
-      fd.append("musicPreviewUrl", attachTrack.previewUrl || "");
-      fd.append("musicExternalUrl", attachTrack.externalUrl || "");
-    }
     const data = await requestForm("/stories", { token, method: "POST", formData: fd, onUnauthorizedRetry });
     setSending(false);
     if (data.error) {
@@ -271,13 +226,6 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
       return;
     }
     onPosted?.();
-  }
-
-  function clearAttachedSong() {
-    setAttachTrack(null);
-    setSongQ("");
-    setSongHits([]);
-    setSongSearchErr("");
   }
 
   return (
@@ -292,45 +240,6 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
           </div>
           <form className="modal-body stories-create-form" onSubmit={submit}>
             <p className="muted small">Stories disappear after 24 hours. Friends can view them.</p>
-
-            <div className="stories-create-sound-panel">
-              <label className="field-label stories-create-sound-label">Story sound (optional)</label>
-              <p className="muted small">Search Spotify — attached tracks render on the viewer with snippet controls.</p>
-              {attachTrack?.title ? (
-                <div className="stories-attach-chip">
-                  <strong>{attachTrack.title}</strong>
-                  <span className="muted small">{attachTrack.artist}</span>
-                  <button type="button" className="btn btn-ghost btn-sm" onClick={clearAttachedSong}>
-                    Remove
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    className="stories-create-sound-search"
-                    placeholder="Song or artist…"
-                    value={songQ}
-                    onChange={(e) => setSongQ(e.target.value)}
-                    aria-label="Search Spotify for story sound"
-                  />
-                  <span className="muted small">{songBusy ? "Searching Spotify…" : "Type at least 2 characters"}</span>
-                  {songSearchErr ? <p className="small stories-create-sound-search-err">{songSearchErr}</p> : null}
-                  <div className="stories-create-sound-hits">
-                    {songHits.slice(0, 6).map((tr) => (
-                      <button
-                        key={tr.spotifyTrackId}
-                        type="button"
-                        className="btn btn-secondary btn-sm stories-create-hit"
-                        onClick={() => setAttachTrack(tr)}
-                      >
-                        ♪ {tr.title} · {tr.artist}
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
-            </div>
 
             <textarea
               className="stories-create-textarea"

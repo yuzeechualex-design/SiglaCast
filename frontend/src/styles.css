@@ -6470,53 +6470,6 @@ body.music-mini-player-open.floating-quick-nav-open main.grid {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
 }
 
-.stories-create-sound-panel {
-  margin-bottom: 12px;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px dashed var(--line);
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.stories-create-sound-search {
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  background: var(--input-bg);
-}
-
-.stories-create-sound-search-err {
-  margin: 4px 0 0;
-  color: var(--danger, #dc2626);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
-.stories-create-sound-hits {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.stories-create-hit {
-  text-align: left;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.stories-attach-chip {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 8px;
-  border-radius: 10px;
-  background: var(--surface);
-}
-
 .story-viewer-music-visual {
   position: relative;
   flex: 1;

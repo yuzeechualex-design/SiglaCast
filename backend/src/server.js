@@ -2001,16 +2001,8 @@ app.post("/api/stories", authenticate, (req, res, next) => {
 }, async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
-    const spotifyTrackId = req.body.spotifyTrackId != null ? String(req.body.spotifyTrackId).trim() : "";
-    const musicTitle = req.body.musicTitle != null ? String(req.body.musicTitle).trim().slice(0, 512) : "";
-    const musicArtist = req.body.musicArtist != null ? String(req.body.musicArtist).trim().slice(0, 512) : "";
-    const musicImageUrl = req.body.musicImageUrl != null ? String(req.body.musicImageUrl).trim().slice(0, 2048) : "";
-    const musicPreviewUrl = req.body.musicPreviewUrl != null ? String(req.body.musicPreviewUrl).trim().slice(0, 2048) : "";
-    const musicExternalUrl = req.body.musicExternalUrl != null ? String(req.body.musicExternalUrl).trim().slice(0, 2048) : "";
-
-    const hasMusic = Boolean(spotifyTrackId);
-    if (!text && !req.file && !hasMusic) {
-      return res.status(400).json({ error: "Add text, a photo, or attach a Spotify track to your story" });
+    if (!text && !req.file) {
+      return res.status(400).json({ error: "Add text or a photo to your story" });
     }
     let media_url = null;
     if (req.file) media_url = await uploadToBucket("posts", req.file);
@@ -2021,13 +2013,7 @@ app.post("/api/stories", authenticate, (req, res, next) => {
       id,
       user_id: req.user.id,
       body_text: text || "",
-      media_url,
-      spotify_track_id: hasMusic ? spotifyTrackId : null,
-      music_title: hasMusic ? musicTitle || null : null,
-      music_artist: hasMusic ? musicArtist || null : null,
-      music_image_url: hasMusic ? musicImageUrl || null : null,
-      music_preview_url: hasMusic ? musicPreviewUrl || null : null,
-      music_external_url: hasMusic ? musicExternalUrl || null : null
+      media_url
     };
 
     const { data: row, error } = await supabase.from("user_stories").insert(insertRow).select().maybeSingle();
@@ -2038,12 +2024,12 @@ app.post("/api/stories", authenticate, (req, res, next) => {
       id: row.id,
       text: row.body_text || "",
       imageUrl: row.media_url || null,
-      spotifyTrackId: row.spotify_track_id || null,
-      musicTitle: row.music_title || null,
-      musicArtist: row.music_artist || null,
-      musicImageUrl: row.music_image_url || null,
-      musicPreviewUrl: row.music_preview_url || null,
-      musicExternalUrl: row.music_external_url || null,
+      spotifyTrackId: null,
+      musicTitle: null,
+      musicArtist: null,
+      musicImageUrl: null,
+      musicPreviewUrl: null,
+      musicExternalUrl: null,
       createdAt: row.created_at,
       viewed: true,
       reactionBreakdown: {},
