@@ -24,6 +24,42 @@ function StoryPresenceDot({ presence, isOnline }) {
             : "story-presence-dot story-presence-dot--offline";
   return <span className={cls} title={presence || "offline"} aria-hidden />;
 }
+function FriendsIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="story-filter-toggle-svg"
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+    </svg>
+  );
+}
+
+function GlobeIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="story-filter-toggle-svg"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <line x1="2" y1="12" x2="22" y2="12" />
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+    </svg>
+  );
+}
 
 /**
  * Stories rail: horizontal (Community / Messages mobile) or vertical (Messages desktop sidebar).
@@ -117,9 +153,15 @@ export default function CommunityStoriesRail({
           >
             <span className="story-filter-toggle-label">{filterMode === "public" ? "PUBLIC" : "ALL"}</span>
             <span className="story-filter-toggle-track">
-              <span className="story-filter-toggle-icon left" aria-hidden>👥</span>
-              <span className="story-filter-toggle-icon right" aria-hidden>🌐</span>
-              <span className="story-filter-toggle-thumb">{filterMode === "public" ? "🌐" : "👥"}</span>
+              <span className="story-filter-toggle-icon left" aria-hidden>
+                <FriendsIcon />
+              </span>
+              <span className="story-filter-toggle-icon right" aria-hidden>
+                <GlobeIcon />
+              </span>
+              <span className="story-filter-toggle-thumb">
+                {filterMode === "public" ? <GlobeIcon /> : <FriendsIcon />}
+              </span>
             </span>
           </button>
         </div>

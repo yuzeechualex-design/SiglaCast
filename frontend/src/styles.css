@@ -7037,8 +7037,8 @@ button.comment-profile-avatar-btn:focus-visible {
   position: absolute;
   top: 50%;
   transform: translateY(-50%);
-  font-size: 10px;
-  opacity: 0.5;
+  color: #fff;
+  opacity: 0.45;
   pointer-events: none;
 }
 
@@ -7048,6 +7048,12 @@ button.comment-profile-avatar-btn:focus-visible {
 
 .story-filter-toggle-icon.right {
   right: 6px;
+}
+
+.story-filter-toggle-svg {
+  display: block;
+  width: 11px;
+  height: 11px;
 }
 
 .story-filter-toggle-active-public .story-filter-toggle-thumb {
