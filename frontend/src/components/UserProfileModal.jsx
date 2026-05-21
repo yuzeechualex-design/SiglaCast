@@ -66,12 +66,17 @@ export default function UserProfileModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [profilePosts, setProfilePosts] = useState([]);
+  const [postsLoading, setPostsLoading] = useState(false);
 
   const userId = peek?.userId;
   const prefetch = peek?.prefetch;
 
   useEffect(() => {
     if (!userId) return undefined;
+    setDetailOpen(false);
+    setProfilePosts([]);
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -95,6 +100,18 @@ export default function UserProfileModal({
     if (!userId) return;
     const data = await api(`/users/${userId}`);
     if (!data.error) setProfile(data);
+  }
+
+  async function loadProfilePosts() {
+    if (!userId) return;
+    setDetailOpen(true);
+    if (profilePosts.length || postsLoading) return;
+    setPostsLoading(true);
+    const rows = await api("/community/posts");
+    setPostsLoading(false);
+    if (Array.isArray(rows)) {
+      setProfilePosts(rows.filter((post) => post.authorId === userId));
+    }
   }
 
   useEffect(() => {
@@ -306,6 +323,14 @@ export default function UserProfileModal({
                 <>
                   <button
                     type="button"
+                    className="btn btn-secondary btn-sm wide"
+                    onClick={() => void loadProfilePosts()}
+                    disabled={postsLoading}
+                  >
+                    View profile
+                  </button>
+                  <button
+                    type="button"
                     className="btn btn-primary btn-sm wide"
                     onClick={() => void handleMessage()}
                     disabled={busy}
@@ -350,6 +375,49 @@ export default function UserProfileModal({
               )}
             </aside>
           </div>
+          {detailOpen ? (
+            <div className="user-profile-detail-panel">
+              <div className="user-profile-detail-head">
+                <h4>{isSelf ? "Your posts" : `${merged.name || "User"}'s posts`}</h4>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDetailOpen(false)}>
+                  Hide
+                </button>
+              </div>
+              {postsLoading ? (
+                <p className="muted small">Loading posts...</p>
+              ) : profilePosts.length ? (
+                <div className="user-profile-post-list">
+                  {profilePosts.map((post) => (
+                    <article key={post.id} className="user-profile-post-preview">
+                      <div className="user-profile-post-preview-head">
+                        {post.authorAvatar ? (
+                          <img src={mediaUrl(post.authorAvatar)} alt="" />
+                        ) : (
+                          <span>{post.author?.charAt(0) || "?"}</span>
+                        )}
+                        <div>
+                          <strong>{post.author || merged.name || "User"}</strong>
+                          <small className="muted">
+                            {post.createdAt ? new Date(post.createdAt).toLocaleString() : "Campus post"}
+                          </small>
+                        </div>
+                      </div>
+                      {post.content ? <p className="user-profile-post-preview-text">{post.content}</p> : null}
+                      {post.imageUrl ? (
+                        <img className="user-profile-post-preview-img" src={mediaUrl(post.imageUrl)} alt="" loading="lazy" />
+                      ) : null}
+                      <div className="user-profile-post-preview-stats muted small">
+                        <span>{post.reactionCount || 0} reactions</span>
+                        <span>{post.commentCount || 0} comments</span>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">No posts yet.</p>
+              )}
+            </div>
+          ) : null}
         </div>
       </div>
     </ModalPortal>

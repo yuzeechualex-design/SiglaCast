@@ -4769,6 +4769,82 @@ textarea.profile-bio-input::placeholder {
   margin: 4px 0 0;
 }
 
+.user-profile-detail-panel {
+  border-top: 1px solid var(--line);
+  padding: 16px 18px 18px;
+  max-height: min(46vh, 420px);
+  overflow: auto;
+}
+
+.user-profile-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.user-profile-detail-head h4 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.user-profile-post-list {
+  display: grid;
+  gap: 12px;
+}
+
+.user-profile-post-preview {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.user-profile-post-preview-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-profile-post-preview-head img,
+.user-profile-post-preview-head span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--surface-2);
+  font-weight: 800;
+}
+
+.user-profile-post-preview-head div {
+  min-width: 0;
+  display: grid;
+}
+
+.user-profile-post-preview-text {
+  margin: 10px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+.user-profile-post-preview-img {
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.user-profile-post-preview-stats {
+  display: flex;
+  gap: 12px;
+  margin-top: 10px;
+}
+
 button.avatar-profile-hit {
   border: none;
   background: none;
