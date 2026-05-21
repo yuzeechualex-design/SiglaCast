@@ -55,9 +55,16 @@ export default function AuthPage({
   }
 
   return (
-    <div className="app auth-wrap">
+    <div className="auth-page-container">
+      <div className="auth-bg-grid" />
+      <img className="auth-bg-mark auth-bg-mark-one" src="/assets/siglacast-splash.png" alt="" />
+      <img className="auth-bg-mark auth-bg-mark-two" src="/assets/siglacast-icon.png" alt="" />
+      
       <form className="auth-card" onSubmit={onSubmit} noValidate>
-        <h1>SiglaCast</h1>
+        <div className="auth-brand">
+          <img src="/assets/siglacast-icon.png" alt="" />
+          <h1>SiglaCast</h1>
+        </div>
         <div className="auth-tabs">
           <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
             Login
