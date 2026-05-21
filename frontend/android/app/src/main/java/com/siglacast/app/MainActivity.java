@@ -1,6 +1,8 @@
 package com.siglacast.app;
 
+import android.annotation.SuppressLint;
 import android.graphics.Color;
+import android.content.Intent;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -15,7 +17,16 @@ public class MainActivity extends BridgeActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        registerOverlayBridge();
         enableFullscreen();
+        handleRouteIntent(getIntent());
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        handleRouteIntent(intent);
     }
 
     @Override
@@ -58,6 +69,32 @@ public class MainActivity extends BridgeActivity {
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+        );
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private void registerOverlayBridge() {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        getBridge().getWebView().addJavascriptInterface(new SiglaOverlayBridge(this), "AndroidSiglaOverlay");
+    }
+
+    private void handleRouteIntent(Intent intent) {
+        if (intent == null) return;
+        String route = intent.getStringExtra("route");
+        if (route == null || route.trim().isEmpty()) return;
+        dispatchRoute(route);
+    }
+
+    private void dispatchRoute(String route) {
+        if (getBridge() == null || getBridge().getWebView() == null) return;
+        String safeRoute = route.replace("\\", "\\\\").replace("'", "\\'");
+        getBridge().getWebView().postDelayed(() ->
+            getBridge().getWebView().evaluateJavascript(
+                "window.__siglacastPendingNativeRoute='" + safeRoute + "';"
+                    + "window.dispatchEvent(new CustomEvent('siglacast:native-navigate',{detail:{path:'" + safeRoute + "'}}));",
+                null
+            ),
+            250
         );
     }
 }

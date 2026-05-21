@@ -1877,7 +1877,7 @@ function CreateGroupModal({ currentUser, onClose, onCreate }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), runSearch())}
-              placeholder="Search by name, email, course…"
+              placeholder="Search by name or email…"
             />
             <button type="button" className="btn btn-secondary btn-sm" onClick={runSearch} disabled={searching}>
               {searching ? "…" : "🔍"}
@@ -2092,7 +2092,7 @@ function GroupSettingsModal({
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), runSearch())}
-                  placeholder="Search by name, email, course…"
+                  placeholder="Search by name or email…"
                 />
                 <button type="button" className="btn btn-secondary btn-sm" onClick={runSearch} disabled={searching}>
                   {searching ? "…" : "🔍"}

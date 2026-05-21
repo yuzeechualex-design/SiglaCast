@@ -199,7 +199,7 @@ export default function CommunityPage({
     <section className="panel single">
       <div className="panel-head">
         <h2>💬 Community Feed</h2>
-        <p>Share updates, photos, and reactions with campus users.</p>
+        <p>Share updates, photos, and reactions with the community.</p>
       </div>
       <div
         className={
@@ -396,7 +396,7 @@ export function PostCardBody({
         </button>
         <div className="post-header-meta">
           <strong className="author">{post.author}</strong>
-          <div className="post-meta">Campus post</div>
+          <div className="post-meta">Community post</div>
         </div>
         {canModerateDelete ? (
           <button
@@ -408,7 +408,7 @@ export function PostCardBody({
             }}
             title="Delete post"
           >
-            <span className="ui-icon ui-icon-trash" aria-hidden="true" />
+            <span className="delete-glyph" aria-hidden="true">⌦</span>
           </button>
         ) : null}
       </div>
@@ -812,10 +812,14 @@ function PostText({ text, forceExpanded }) {
 function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
+  const longPressTimer = useRef(null);
+  const longPressOpened = useRef(false);
+  const suppressNextClick = useRef(false);
 
   useEffect(() => {
     return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current);
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
     };
   }, []);
 
@@ -845,9 +849,41 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
   }
 
   async function handleTriggerClick() {
+    if (suppressNextClick.current) {
+      suppressNextClick.current = false;
+      return;
+    }
     setPickerOpen(false);
     // Click on trigger: if no reaction yet, set "like"; otherwise remove current
     await onReact(post.id, post.myReaction ? null : "like");
+  }
+
+  function handleTriggerPointerDown(e) {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    e.preventDefault();
+    longPressOpened.current = false;
+    suppressNextClick.current = true;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressTimer.current = setTimeout(() => {
+      longPressOpened.current = true;
+      openPicker();
+    }, 320);
+  }
+
+  async function handleTriggerPointerUp(e) {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    e.preventDefault();
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (!longPressOpened.current) {
+      await onReact(post.id, post.myReaction ? null : "like");
+    }
+    longPressOpened.current = false;
+  }
+
+  function cancelTriggerLongPress(e) {
+    if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
+    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    longPressOpened.current = false;
   }
 
   return (
@@ -856,11 +892,17 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
         className="reaction-host"
         onMouseEnter={openPicker}
         onMouseLeave={deferClose}
+        onContextMenu={(e) => e.preventDefault()}
       >
         <button
           type="button"
           className={`btn btn-ghost btn-sm reaction-trigger ${myReaction ? "reacted" : ""}`}
           onClick={handleTriggerClick}
+          onContextMenu={(e) => e.preventDefault()}
+          onPointerDown={handleTriggerPointerDown}
+          onPointerUp={handleTriggerPointerUp}
+          onPointerCancel={cancelTriggerLongPress}
+          onPointerLeave={cancelTriggerLongPress}
           style={myReaction ? { color: triggerColor } : undefined}
         >
           <span className="reaction-trigger-emoji">{triggerEmoji}</span>
@@ -872,6 +914,7 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
             className="reaction-picker"
             onMouseEnter={openPicker}
             onMouseLeave={deferClose}
+            onContextMenu={(e) => e.preventDefault()}
           >
             {REACTIONS.map((r, idx) => (
               <button
@@ -917,7 +960,7 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
           }}
           title="Share post"
         >
-          <span className="ui-icon ui-icon-share" aria-hidden="true" />
+          <span className="share-glyph" aria-hidden="true">➦</span>
           <span>Share</span>
         </button>
       ) : null}

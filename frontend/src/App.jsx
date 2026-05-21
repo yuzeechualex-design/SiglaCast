@@ -15,6 +15,7 @@ import MusicPage from "./pages/MusicPage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
+import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
 import { ImageLightboxProvider } from "./components/ImageLightboxContext.jsx";
@@ -24,6 +25,7 @@ import { readLiteModePreference, writeLiteModePreference } from "./utils/network
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
+const STORAGE_ANDROID_OVERLAY_ASKED = "siglacast_android_overlay_permission_asked";
 
 /** Offline / overloaded server — do not wipe login; user stays signed in until explicit logout or real auth failure. */
 function isTransientSessionCheckFailure(result) {
@@ -66,6 +68,22 @@ function writeCachedPosts(rows) {
   }
 }
 
+function isAndroidNativeApp() {
+  if (typeof window === "undefined") return false;
+  const nativeProtocol = ["capacitor:", "ionic:"].includes(window.location.protocol);
+  return nativeProtocol && /Android/i.test(navigator.userAgent || "");
+}
+
+function callAndroidOverlay(method, ...args) {
+  try {
+    const bridge = typeof window !== "undefined" ? window.AndroidSiglaOverlay : null;
+    if (!bridge || typeof bridge[method] !== "function") return null;
+    return bridge[method](...args);
+  } catch (_) {
+    return null;
+  }
+}
+
 export default function App() {
   const navigate = useNavigate();
   const navigateRef = useRef(navigate);
@@ -75,7 +93,6 @@ export default function App() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [course, setCourse] = useState("BSIT");
   const [token, setToken] = useState(() => localStorage.getItem("siglacast_token") || "");
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem("siglacast_user");
@@ -89,6 +106,8 @@ export default function App() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
   const [notifications, setNotifications] = useState([]);
+  const [shareTargetPost, setShareTargetPost] = useState(null);
+  const [shareSubmitting, setShareSubmitting] = useState(false);
   const [newAnnouncementTitle, setNewAnnouncementTitle] = useState("");
   const [newAnnouncementMessage, setNewAnnouncementMessage] = useState("");
   const [newEventTitle, setNewEventTitle] = useState("");
@@ -449,6 +468,81 @@ export default function App() {
     };
   }, [announcements, notifications, conversations, events, navBadgeTick]);
 
+  useEffect(() => {
+    function onNativeNavigate(event) {
+      const path = event?.detail?.path;
+      if (typeof path === "string" && path.startsWith("/")) navigate(path);
+    }
+    window.addEventListener("siglacast:native-navigate", onNativeNavigate);
+    const pendingPath = window.__siglacastPendingNativeRoute;
+    if (typeof pendingPath === "string" && pendingPath.startsWith("/")) {
+      window.__siglacastPendingNativeRoute = "";
+      navigate(pendingPath);
+    }
+    return () => window.removeEventListener("siglacast:native-navigate", onNativeNavigate);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (!token || !user || !isAndroidNativeApp()) return undefined;
+    const bridge = typeof window !== "undefined" ? window.AndroidSiglaOverlay : null;
+    if (!bridge) return undefined;
+
+    const timer = setTimeout(() => {
+      const canOverlay = callAndroidOverlay("canDrawOverlays");
+      if (canOverlay === true) return;
+      try {
+        if (localStorage.getItem(STORAGE_ANDROID_OVERLAY_ASKED)) return;
+        localStorage.setItem(STORAGE_ANDROID_OVERLAY_ASKED, "1");
+      } catch (_) {
+        // If storage fails, still ask once for this session.
+      }
+      callAndroidOverlay("requestPermission");
+    }, 1800);
+
+    return () => clearTimeout(timer);
+  }, [token, user?.id]);
+
+  useEffect(() => {
+    if (!isAndroidNativeApp()) return;
+    if (!token || !user) {
+      callAndroidOverlay("stop");
+      return;
+    }
+
+    const seenAnnouncements = (() => {
+      try {
+        return new Set(JSON.parse(localStorage.getItem(STORAGE_SEEN_ANNOUNCEMENT_IDS) || "[]"));
+      } catch (_) {
+        return new Set();
+      }
+    })();
+    const latestMessages = (conversations || [])
+      .filter((c) => Number(c.unreadCount) > 0)
+      .slice(0, 3)
+      .map((c) => ({
+        title: c.kind === "group" ? c.group?.name || "Group chat" : c.user?.name || "Message",
+        subtitle: c.lastMessage?.text || `${c.unreadCount} unread`
+      }));
+    const latestAnnouncements = (announcements || [])
+      .filter((a) => a.id && !seenAnnouncements.has(a.id))
+      .slice(0, 3)
+      .map((a) => ({
+        title: a.title || "Announcement",
+        subtitle: a.message || ""
+      }));
+    const payload = {
+      messages: navBadges.messages,
+      announcements: navBadges.announcements,
+      latestMessages,
+      latestAnnouncements
+    };
+    if (payload.messages + payload.announcements > 0) {
+      callAndroidOverlay("update", JSON.stringify(payload));
+    } else {
+      callAndroidOverlay("stop");
+    }
+  }, [token, user, navBadges.messages, navBadges.announcements, conversations, announcements, navBadgeTick]);
+
   // ---------- Desktop / mobile push notifications ----------
   // We use the browser Notifications API. On first sign-in we politely request
   // permission; afterwards, every time the polled notifications list grows we
@@ -732,7 +826,7 @@ export default function App() {
 
   async function register(registrationPayload) {
     if (loadingAuth) return;
-    const source = registrationPayload ?? { name, email, password, course };
+    const source = registrationPayload ?? { name, email, password };
     const v = validateRegisterForm(source);
     if (!v.ok) {
       setNotice([...new Set(Object.values(v.fieldErrors))].join(" "));
@@ -742,7 +836,7 @@ export default function App() {
     const { name: regName, email: regEmail, password: regPassword, course: regCourse } = v.normalized;
     const res = await api("/auth/register", {
       method: "POST",
-      body: { name: regName, email: regEmail, password: regPassword, course: regCourse }
+      body: { name: regName, email: regEmail, password: regPassword, course: regCourse || "" }
     });
     setNotice(res.error || "Registration successful. Please login.");
     if (!res.error) setMode("login");
@@ -781,18 +875,24 @@ export default function App() {
     if (!res.error) await loadCore();
   }
 
-  async function sharePost(post) {
+  function sharePost(post) {
     if (!post?.id) return;
-    const content = window.prompt("Add something to your share?", "") ?? null;
-    if (content === null) return;
-    const res = await api(`/community/posts/${post.id}/share`, {
+    setShareTargetPost(post);
+  }
+
+  async function submitSharePost(content) {
+    if (!shareTargetPost?.id || shareSubmitting) return;
+    setShareSubmitting(true);
+    const res = await api(`/community/posts/${shareTargetPost.id}/share`, {
       method: "POST",
       body: { content }
     });
+    setShareSubmitting(false);
     if (res.error) {
       setNotice(res.error);
       return;
     }
+    setShareTargetPost(null);
     setNotice("Post shared");
     setPosts((prev) => [res, ...prev.filter((p) => p.id !== res.id)]);
   }
@@ -1490,8 +1590,6 @@ export default function App() {
         setPassword={setPassword}
         name={name}
         setName={setName}
-        course={course}
-        setCourse={setCourse}
         notice={notice}
         clearNotice={() => setNotice("")}
         loading={loadingAuth}
@@ -1738,6 +1836,14 @@ export default function App() {
         onAddFriend={addFriend}
         onAcceptFriendRequest={acceptFriendRequest}
         onRejectFriendRequest={rejectFriendRequest}
+      />
+      <SharePostModal
+        post={shareTargetPost}
+        currentUser={user}
+        liteMode={liteMode}
+        submitting={shareSubmitting}
+        onClose={() => (shareSubmitting ? null : setShareTargetPost(null))}
+        onSubmit={submitSharePost}
       />
       </MusicPlayerProvider>
       </ImageLightboxProvider>

@@ -31,7 +31,7 @@ export default function AppShell({
     <div className="app">
       <header ref={dashboardHeaderRef} className="hero">
         <div className="hero-main">
-          <p className="eyebrow">Davao Oriental State University</p>
+          <p className="eyebrow">Community Platform</p>
           <div className="hero-title-row">
             <h1>SiglaCast</h1>
             <div className="hero-mode-actions">

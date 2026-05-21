@@ -16,8 +16,6 @@ export default function AuthPage({
   setPassword,
   name,
   setName,
-  course,
-  setCourse,
   notice,
   clearNotice,
   loading,
@@ -27,7 +25,7 @@ export default function AuthPage({
   /** @type {Record<string, string>} */
   const [fieldErrors, setFieldErrors] = useState({});
 
-  const campusDomain = registrationEmailDomainFromEnv();
+  const emailDomain = registrationEmailDomainFromEnv();
   const passwordChecks = passwordRequirementStatus(password);
 
   useEffect(() => {
@@ -47,7 +45,7 @@ export default function AuthPage({
       return;
     }
     clearNotice?.();
-    const v = validateRegisterForm({ name, email, password, course });
+    const v = validateRegisterForm({ name, email, password });
     if (!v.ok) {
       setFieldErrors(v.fieldErrors);
       return;
@@ -60,9 +58,6 @@ export default function AuthPage({
     <div className="app auth-wrap">
       <form className="auth-card" onSubmit={onSubmit} noValidate>
         <h1>SiglaCast</h1>
-        <p className="auth-tagline">
-          A voting community for SiglaCast — campus events, polls, and updates in one place.
-        </p>
         <div className="auth-tabs">
           <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
             Login
@@ -91,20 +86,6 @@ export default function AuthPage({
                 {fieldErrors.name}
               </p>
             ) : null}
-            <input
-              value={course}
-              onChange={(e) => setCourse(e.target.value)}
-              placeholder="Course (e.g. BSIT)"
-              name="course"
-              autoComplete="organization-title"
-              aria-invalid={!!fieldErrors.course}
-              aria-describedby={fieldErrors.course ? "err-course" : undefined}
-            />
-            {fieldErrors.course ? (
-              <p id="err-course" className="auth-field-error" role="alert">
-                {fieldErrors.course}
-              </p>
-            ) : null}
           </>
         )}
         <input
@@ -112,7 +93,7 @@ export default function AuthPage({
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onBlur={(e) => setEmail(normalizeRegistrationEmail(e.target.value))}
-          placeholder="University email"
+          placeholder="Gmail address"
           name="email"
           inputMode="email"
           autoComplete={mode === "login" ? "email" : "username"}
@@ -120,7 +101,7 @@ export default function AuthPage({
           aria-describedby={fieldErrors.email ? "hint-email err-email" : "hint-email"}
         />
         <p id="hint-email" className="auth-field-hint">
-          {campusDomain ? <>Use your <strong>@{campusDomain}</strong> campus email.</> : "Enter a valid email address."}
+          {emailDomain ? <>Use an email ending in <strong>@{emailDomain}</strong>.</> : "Enter a valid email address."}
         </p>
         {fieldErrors.email ? (
           <p id="err-email" className="auth-field-error" role="alert">

@@ -227,7 +227,11 @@ export default function MyProfilePage({
               <p className="muted small">
                 {isOwnProfile ? "Share something in Community and it will show up here." : "This user has not posted yet."}
               </p>
-              {isOwnProfile ? <Link to="/community" className="btn btn-secondary btn-sm">Create post</Link> : null}
+              {isOwnProfile ? (
+                <Link to="/community" className="btn btn-secondary btn-sm my-profile-create-post-btn">
+                  Create post
+                </Link>
+              ) : null}
             </div>
           )}
         </main>

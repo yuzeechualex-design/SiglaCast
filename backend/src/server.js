@@ -1379,10 +1379,10 @@ async function seedIfEmpty() {
   if (count && count > 0) return;
   const adminHash = await bcrypt.hash("admin123", 10);
   await supabase.from("users").insert([
-    { id: "a1", role: "admin", name: "System Admin", email: "admin@dorsu.edu.ph", password_hash: adminHash, permissions: ["all"] }
+    { id: "a1", role: "admin", name: "System Admin", email: "admin@gmail.com", password_hash: adminHash, permissions: ["all"] }
   ]);
   await supabase.from("events").insert([
-    { id: "e1", title: "Student Election 2026", description: "Campus-wide election for student council officers.", status: "open", strategy: "single", max_votes_per_user: 1 }
+    { id: "e1", title: "Community Election 2026", description: "Community-wide election for group officers.", status: "open", strategy: "single", max_votes_per_user: 1 }
   ]);
   await supabase.from("candidates").insert([
     { id: "c1", event_id: "e1", name: "Team Sigla", position: 0 },

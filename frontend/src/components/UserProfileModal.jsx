@@ -402,7 +402,7 @@ export default function UserProfileModal({
                         <div>
                           <strong>{post.author || merged.name || "User"}</strong>
                           <small className="muted">
-                            {post.createdAt ? new Date(post.createdAt).toLocaleString() : "Campus post"}
+                            {post.createdAt ? new Date(post.createdAt).toLocaleString() : "Community post"}
                           </small>
                         </div>
                       </div>
