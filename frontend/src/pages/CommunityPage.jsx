@@ -961,7 +961,6 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
           title="Share post"
         >
           <span className="share-glyph" aria-hidden="true">➦</span>
-          <span>Share</span>
         </button>
       ) : null}
     </div>
