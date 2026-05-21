@@ -131,7 +131,7 @@ export default function EmojiPickerButton({ onPick, title = "Insert emoji", clas
         aria-haspopup="dialog"
         onClick={() => setOpen((o) => !o)}
       >
-        😊
+        <span className="ui-icon ui-icon-smile" aria-hidden="true" />
       </button>
       {panel}
     </>

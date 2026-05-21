@@ -236,9 +236,14 @@ export default function CommunityPage({
         ) : null}
         <div className="composer-toolbar">
           <input ref={fileInputRef} type="file" accept="image/*" className="sr-only" onChange={onFileChange} />
-          <button type="button" className="btn btn-icon" title="Add image" onClick={pickImage}>＋</button>
+          <button type="button" className="btn btn-icon" title="Add image" onClick={pickImage}>
+            <span className="ui-icon ui-icon-plus" aria-hidden="true" />
+          </button>
           <EmojiPickerButton onPick={(emoji) => setContent((c) => c + emoji)} />
-          <button type="button" className="btn btn-primary" onClick={handlePublish}>📤 Publish</button>
+          <button type="button" className="btn btn-primary" onClick={handlePublish}>
+            <span className="ui-icon ui-icon-send" aria-hidden="true" />
+            <span>Publish</span>
+          </button>
         </div>
       </div>
 
@@ -399,7 +404,7 @@ function PostCardBody({
             }}
             title="Delete post"
           >
-            🗑️
+            <span className="ui-icon ui-icon-trash" aria-hidden="true" />
           </button>
         ) : null}
       </div>
@@ -690,7 +695,7 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
         autoFocus
       />
       <label className="btn btn-icon photo-pick-btn" title="Attach a photo">
-        📷
+        <span className="ui-icon ui-icon-image" aria-hidden="true" />
         <input
           type="file"
           accept="image/*"
@@ -877,7 +882,7 @@ function CommentBox({ postId, onComment, currentUser }) {
         placeholder={`Comment as ${currentUser.name}… use @ to mention`}
       />
       <label className="btn btn-icon photo-pick-btn" title="Attach a photo">
-        📷
+        <span className="ui-icon ui-icon-image" aria-hidden="true" />
         <input
           type="file"
           accept="image/*"

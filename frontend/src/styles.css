@@ -934,6 +934,151 @@ label.btn-secondary:hover {
   outline-offset: 2px;
 }
 
+.ui-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-block;
+  position: relative;
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+.btn .ui-icon + span {
+  margin-left: 7px;
+}
+
+.ui-icon-plus::before,
+.ui-icon-plus::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+}
+
+.ui-icon-plus::after {
+  transform: rotate(90deg);
+}
+
+.ui-icon-smile {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+}
+
+.ui-icon-smile::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 5px;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 6px 0 0 currentColor;
+}
+
+.ui-icon-smile::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 9px;
+  width: 7px;
+  height: 4px;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+}
+
+.ui-icon-send::before {
+  content: "";
+  position: absolute;
+  inset: 3px 2px 2px 4px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  transform: rotate(45deg);
+}
+
+.ui-icon-send::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 12px;
+  height: 2px;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(-20deg);
+}
+
+.ui-icon-trash::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 8px;
+  height: 3px;
+  border-top: 2px solid currentColor;
+  border-radius: 2px 2px 0 0;
+}
+
+.ui-icon-trash::after {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 7px;
+  width: 10px;
+  height: 9px;
+  border: 2px solid currentColor;
+  border-top: 0;
+  border-radius: 0 0 3px 3px;
+}
+
+.ui-icon-image {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.ui-icon-image::before {
+  content: "";
+  position: absolute;
+  right: 3px;
+  top: 3px;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.ui-icon-image::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  bottom: 3px;
+  width: 9px;
+  height: 7px;
+  clip-path: polygon(0 100%, 42% 35%, 62% 58%, 78% 25%, 100% 100%);
+  background: currentColor;
+}
+
+.ui-icon-box {
+  border: 2px solid currentColor;
+  border-radius: 4px;
+}
+
+.ui-icon-box::before {
+  content: "";
+  position: absolute;
+  left: 3px;
+  right: 3px;
+  top: 7px;
+  height: 2px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
 /* label.btn defaults fight .btn-icon sizing — match square icon tiles */
 label.btn.btn-icon {
   padding: 0;

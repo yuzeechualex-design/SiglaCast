@@ -771,20 +771,12 @@ export default function MessagesPage({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            if (
-                              window.confirm(
-                                c.kind === "group"
-                                  ? "Archive this group? It hides from Active until restored from Archived."
-                                  : "Archive this chat? It hides from Active until restored from Archived."
-                              )
-                            ) {
-                              void (c.kind === "group"
-                                ? onArchiveConversation?.({ conversationId: c.group.id })
-                                : onArchiveConversation?.({ dmPeerId: c.user.id }));
-                            }
+                            void (c.kind === "group"
+                              ? onArchiveConversation?.({ conversationId: c.group.id })
+                              : onArchiveConversation?.({ dmPeerId: c.user.id }));
                           }}
                         >
-                          📦
+                          <span className="ui-icon ui-icon-box" aria-hidden="true" />
                         </button>
                       ) : messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
                         <button
@@ -800,7 +792,7 @@ export default function MessagesPage({
                               : onUnarchiveConversation?.({ dmPeerId: c.user.id }));
                           }}
                         >
-                          📤
+                          <span className="ui-icon ui-icon-box" aria-hidden="true" />
                         </button>
                       ) : null}
                       {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
@@ -1768,7 +1760,7 @@ function MessageBubble({
                     onUnsend?.(m);
                   }}
                 >
-                  🗑
+                  <span className="ui-icon ui-icon-trash" aria-hidden="true" />
                 </button>
               ) : null}
             </div>
