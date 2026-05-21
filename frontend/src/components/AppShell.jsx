@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle.jsx";
 import FloatingQuickNav from "./FloatingQuickNav.jsx";
@@ -26,6 +26,32 @@ export default function AppShell({
   const ann = formatNavPing(navBadges.announcements);
   const bell = formatNavPing(navBadges.notifications);
   const addFriends = formatNavPing(navBadges.addFriends);
+
+  const [toastMsg, setToastMsg] = useState("");
+  const [toastVisible, setToastVisible] = useState(false);
+  const toastTimerRef = useRef(null);
+
+  useEffect(() => {
+    if (notice) {
+      setToastMsg(notice);
+      setToastVisible(true);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+      toastTimerRef.current = setTimeout(() => {
+        setToastVisible(false);
+      }, 4000);
+    }
+  }, [notice]);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
+  const handleCloseToast = () => {
+    setToastVisible(false);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+  };
 
   /** Observed so the floating quick-nav dock appears after this block scrolls out of view (long feeds / threads). */
   const dashboardHeaderRef = useRef(null);
@@ -156,10 +182,18 @@ export default function AppShell({
           </NavLink>
           <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
-        {notice ? <span className="badge hero-badge">{notice}</span> : null}
       </header>
       <main className="grid">{children}</main>
       <FloatingQuickNav headerRef={dashboardHeaderRef} navBadges={navBadges} />
+
+      {toastVisible && toastMsg && (
+        <div className="toast-notification">
+          <span className="toast-text">{toastMsg}</span>
+          <button className="toast-close-btn" onClick={handleCloseToast} aria-label="Close notification">
+            &times;
+          </button>
+        </div>
+      )}
     </div>
   );
 }

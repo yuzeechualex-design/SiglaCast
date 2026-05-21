@@ -845,7 +845,6 @@ export default function App() {
       localStorage.setItem("siglacast_token", res.token);
       localStorage.setItem("siglacast_refresh_token", res.refreshToken);
       localStorage.setItem("siglacast_user", JSON.stringify(res.user));
-      setNotice(`Logged in as ${res.user.role}`);
       navigate("/community");
     }
     setLoadingAuth(false);
