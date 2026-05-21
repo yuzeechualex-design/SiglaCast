@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:4000";
+import { API_ORIGIN, mediaUrl } from "../services/api.js";
 
 // MentionInput
 // Wraps a single-line <input> or <textarea> and provides Facebook-style
@@ -51,7 +50,7 @@ export default function MentionInput({
     try {
       const token = localStorage.getItem("siglacast_token") || "";
       const res = await fetch(
-        `${API_BASE}/api/users/search?q=${encodeURIComponent(q)}`,
+        `${API_ORIGIN}/api/users/search?q=${encodeURIComponent(q)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
@@ -176,10 +175,4 @@ export default function MentionInput({
       ) : null}
     </div>
   );
-}
-
-function mediaUrl(url) {
-  if (!url) return null;
-  if (/^https?:\/\//i.test(url)) return url;
-  return `${API_BASE.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
 }

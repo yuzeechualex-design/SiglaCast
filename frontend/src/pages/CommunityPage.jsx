@@ -40,7 +40,8 @@ export default function CommunityPage({
   onDeletePost,
   onDeleteComment,
   onOpenUserProfile,
-  onUnauthorizedRetry
+  onUnauthorizedRetry,
+  liteMode = false
 }) {
   const isAdmin = currentUser?.role === "admin";
   const [params, setSearchParams] = useSearchParams();
@@ -206,12 +207,14 @@ export default function CommunityPage({
             : "community-stories-shell"
         }
       >
-        <CommunityStoriesRail
-          token={token}
-          currentUser={currentUser}
-          onOpenUserProfile={onOpenUserProfile}
-          onUnauthorizedRetry={onUnauthorizedRetry}
-        />
+        {!liteMode ? (
+          <CommunityStoriesRail
+            token={token}
+            currentUser={currentUser}
+            onOpenUserProfile={onOpenUserProfile}
+            onUnauthorizedRetry={onUnauthorizedRetry}
+          />
+        ) : null}
       </div>
       <div
         className={`composer community-composer${
@@ -274,6 +277,7 @@ export default function CommunityPage({
                   title: "Comment reactions",
                   path: `/community/comments/${commentId}/reactors`
                 })}
+              liteMode={liteMode}
             />
           </article>
         );
@@ -308,6 +312,7 @@ export default function CommunityPage({
                   onReactComment={onReactComment}
                   onDeleteComment={onDeleteComment}
                   onOpenUserProfile={onOpenUserProfile}
+                  liteMode={liteMode}
                       openPostReactors={() =>
                         setRxModal({
                           open: true,
@@ -357,7 +362,8 @@ function PostCardBody({
   onDeleteComment,
   openPostReactors,
   openCommentReactors,
-  onOpenUserProfile
+  onOpenUserProfile,
+  liteMode = false
 }) {
   const { openLightbox } = useImageLightbox();
   return (
@@ -399,7 +405,7 @@ function PostCardBody({
       </div>
 
       {post.content ? <PostText text={post.content} forceExpanded={forceExpandedBody} /> : null}
-      {post.imageUrl ? (
+      {post.imageUrl && !liteMode ? (
         <button
           type="button"
           className="post-image-lightbox-trigger"
@@ -423,12 +429,13 @@ function PostCardBody({
         onDeleteComment={onDeleteComment}
         onShowCommentReactors={openCommentReactors}
         onOpenUserProfile={onOpenUserProfile}
+        liteMode={liteMode}
       />
     </>
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile }) {
+function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, liteMode = false }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const comments = post.comments || [];
 
@@ -460,6 +467,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
               onDeleteComment={onDeleteComment}
               onShowCommentReactors={onShowCommentReactors}
               onOpenUserProfile={onOpenUserProfile}
+              liteMode={liteMode}
             />
             {c.replies?.length ? (
               <ul className="reply-list">
@@ -477,6 +485,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
                       onDeleteComment={onDeleteComment}
                       onShowCommentReactors={onShowCommentReactors}
                       onOpenUserProfile={onOpenUserProfile}
+                      liteMode={liteMode}
                     />
                   </li>
                 ))}
@@ -577,7 +586,8 @@ function CommentRow({
   onReactComment,
   onDeleteComment,
   onShowCommentReactors,
-  onOpenUserProfile
+  onOpenUserProfile,
+  liteMode = false
 }) {
   const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
   const { openLightbox } = useImageLightbox();
@@ -616,7 +626,7 @@ function CommentRow({
             <span className="reply-mention">@{comment.replyToAuthor}</span>
           ) : null}{" "}
           {comment.text ? <MentionText text={comment.text} /> : null}
-          {comment.imageUrl ? (
+          {comment.imageUrl && !liteMode ? (
             <button
               type="button"
               className="comment-image-lightbox-trigger"

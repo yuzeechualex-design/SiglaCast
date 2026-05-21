@@ -1,6 +1,6 @@
 import { mediaUrl } from "../services/api.js";
 
-export default function EventDetailPage({ selectedEvent, onVote }) {
+export default function EventDetailPage({ selectedEvent, onVote, liteMode = false }) {
   if (!selectedEvent) {
     return (
       <section className="panel single">
@@ -35,7 +35,7 @@ export default function EventDetailPage({ selectedEvent, onVote }) {
         <p className="event-detail-title">{title}</p>
       </div>
 
-      {coverImageUrl ? (
+      {coverImageUrl && !liteMode ? (
         <div className="event-cover-wrap">
           <img className="event-cover" src={mediaUrl(coverImageUrl)} alt="" />
         </div>
@@ -76,7 +76,7 @@ export default function EventDetailPage({ selectedEvent, onVote }) {
           <article key={candidate.id} className={`tile tally-card ${votedThis ? "tally-card-voted" : ""}`}>
             <div className="tally-card-top">
               <div className="tally-candidate">
-                {candidate.imageUrl ? (
+                {candidate.imageUrl && !liteMode ? (
                   <img className="tally-cand-img" src={mediaUrl(candidate.imageUrl)} alt="" />
                 ) : (
                   <div className="tally-cand-img placeholder">{candidate.name?.charAt(0) || "?"}</div>

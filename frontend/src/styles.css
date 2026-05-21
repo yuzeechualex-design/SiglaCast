@@ -219,6 +219,33 @@ p {
   flex-shrink: 0;
 }
 
+.hero-mode-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.lite-toggle {
+  border: 1px solid rgba(148, 163, 184, 0.38);
+  background: rgba(15, 23, 42, 0.08);
+  color: var(--text);
+  min-height: 38px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.lite-toggle.active {
+  background: #facc15;
+  border-color: #facc15;
+  color: #111827;
+}
+
+.bubble-file-lite {
+  cursor: default;
+}
+
 .eyebrow {
   margin-bottom: 8px;
   text-transform: uppercase;

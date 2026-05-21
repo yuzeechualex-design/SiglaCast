@@ -24,7 +24,8 @@ export default function EventsPage({
   setNewEventCoverFile,
   onCreateEvent,
   adminUsers = [],
-  onDeleteUser
+  onDeleteUser,
+  liteMode = false
 }) {
   const isAdmin = currentUser?.role === "admin";
   const showAdminTools =
@@ -147,7 +148,7 @@ export default function EventsPage({
         return (
           <article key={event.id} className="tile event-list-card">
             <div className="event-list-grid">
-              {event.coverImageUrl ? (
+              {event.coverImageUrl && !liteMode ? (
                 <img className="event-list-thumb" src={mediaUrl(event.coverImageUrl)} alt="" />
               ) : (
                 <div className="event-list-thumb placeholder">📅</div>

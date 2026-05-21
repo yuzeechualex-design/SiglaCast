@@ -34,6 +34,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-refresh-secret";
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "365d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
+const MOBILE_APP_ORIGINS = ["capacitor://localhost", "http://localhost", "https://localhost"];
 
 /** Sigla Assistant (Groq) — key must be supplied via environment only, never committed. */
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
@@ -1371,7 +1372,29 @@ async function seedIfEmpty() {
 }
 
 const app = express();
-app.use(cors({ origin: FRONTEND_ORIGIN === "*" ? true : FRONTEND_ORIGIN.split(","), credentials: false }));
+app.use(cors({
+  origin(origin, cb) {
+    if (!origin || FRONTEND_ORIGIN === "*") return cb(null, true);
+    if (MOBILE_APP_ORIGINS.includes(origin)) return cb(null, true);
+    try {
+      const url = new URL(origin);
+      if (
+        (url.hostname === "localhost" || url.hostname === "127.0.0.1") &&
+        ["http:", "https:", "capacitor:"].includes(url.protocol)
+      ) {
+        return cb(null, true);
+      }
+    } catch {
+      // Fall through to the explicit allow-list below.
+    }
+    const allowed = new Set([
+      ...FRONTEND_ORIGIN.split(",").map((o) => o.trim()).filter(Boolean),
+      ...MOBILE_APP_ORIGINS
+    ]);
+    return cb(null, allowed.has(origin));
+  },
+  credentials: false
+}));
 app.use(express.json({ limit: "30mb" }));
 
 await seedIfEmpty();

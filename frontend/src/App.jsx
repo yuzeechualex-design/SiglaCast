@@ -19,6 +19,7 @@ import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/regist
 import { ImageLightboxProvider } from "./components/ImageLightboxContext.jsx";
 import { MusicPlayerProvider } from "./components/MusicPlayerContext.jsx";
 import { notificationTargetPath } from "./utils/notificationTargetPath.js";
+import { readLiteModePreference, writeLiteModePreference } from "./utils/networkLite.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 
@@ -51,6 +52,7 @@ export default function App() {
   const [events, setEvents] = useState([]);
   const [posts, setPosts] = useState([]);
   const [notice, setNotice] = useState("");
+  const [liteMode, setLiteMode] = useState(readLiteModePreference);
   const [selectedEventId, setSelectedEventId] = useState("");
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [announcements, setAnnouncements] = useState([]);
@@ -123,6 +125,15 @@ export default function App() {
 
   function toggleTheme() {
     setTheme((t) => (t === "dark" ? "light" : "dark"));
+  }
+
+  function toggleLiteMode() {
+    setLiteMode((current) => {
+      const next = !current;
+      writeLiteModePreference(next);
+      setNotice(next ? "Lite mode on: heavy images are hidden." : "Lite mode off.");
+      return next;
+    });
   }
 
   async function refreshSession() {
@@ -1442,6 +1453,8 @@ export default function App() {
       notice={notice || ""}
       theme={theme}
       onToggleTheme={toggleTheme}
+      liteMode={liteMode}
+      onToggleLiteMode={toggleLiteMode}
       navBadges={{
         events: navBadges.events,
         messages: navBadges.messages,
@@ -1484,10 +1497,11 @@ export default function App() {
                     onDeleteUser: deleteUser
                   }
                 : {})}
+              liteMode={liteMode}
             />
           }
         />
-        <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} />} />
+        <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} liteMode={liteMode} />} />
         <Route
           path="/assistant"
           element={
@@ -1509,12 +1523,13 @@ export default function App() {
               onDeleteComment={deleteComment}
               onOpenUserProfile={openUserProfileModal}
               onUnauthorizedRetry={onUnauthorizedRetry}
+              liteMode={liteMode}
             />
           }
         />
         <Route
           path="/profile"
-          element={<MyProfilePage user={user} posts={posts} />}
+          element={<MyProfilePage user={user} posts={posts} liteMode={liteMode} />}
         />
         <Route
           path="/settings"
@@ -1567,6 +1582,7 @@ export default function App() {
               setNotice={setNotice}
               refreshUser={refreshUserFromAuthMe}
               onOpenDmWithUser={(friendId) => void openDmAndFocusUser(friendId)}
+              liteMode={liteMode}
             />
           }
         />
@@ -1618,6 +1634,7 @@ export default function App() {
               onOpenUserProfile={openUserProfileModal}
               onUnauthorizedRetry={onUnauthorizedRetry}
               token={token}
+              liteMode={liteMode}
             />
           }
         />

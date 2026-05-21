@@ -55,7 +55,7 @@ function buildListenTogetherDm(headline, myLine, peerLine) {
 /**
  * Friends listening hub + Spotify OAuth / sync (no Spotify Web catalogue search UI).
  */
-export default function MusicPage({ api, apiForm, token, user, setNotice, refreshUser, onOpenDmWithUser }) {
+export default function MusicPage({ api, apiForm, token, user, setNotice, refreshUser, onOpenDmWithUser, liteMode = false }) {
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -431,7 +431,7 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
 
             {np?.title ? (
               <section className="music-hub-banner">
-                <div className="music-hub-banner-visual">{np.imageUrl ? <img src={np.imageUrl} alt="" decoding="async" /> : null}</div>
+                <div className="music-hub-banner-visual">{np.imageUrl && !liteMode ? <img src={np.imageUrl} alt="" decoding="async" /> : null}</div>
                 <div className="music-hub-banner-text">
                   <span className="music-hub-banner-eyebrow">Your Spotify session</span>
                   <strong className="music-hub-banner-title">{np.title}</strong>
@@ -519,7 +519,7 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
           {focusTrack?.title ? (
             <>
               <div className="music-hub-np-art">
-                {focusTrack.imageUrl ? <img src={focusTrack.imageUrl} alt="" decoding="async" /> : <div className="music-hub-np-art-ph" />}
+                {focusTrack.imageUrl && !liteMode ? <img src={focusTrack.imageUrl} alt="" decoding="async" /> : <div className="music-hub-np-art-ph" />}
               </div>
               {eyebrow ? <span className="music-hub-banner-eyebrow">{eyebrow}</span> : null}
               <h3 className="music-hub-np-title">{focusTrack.title}</h3>
@@ -577,7 +577,7 @@ export default function MusicPage({ api, apiForm, token, user, setNotice, refres
       <footer className={`music-hub-footer${playingTrack?.previewUrl ? " visible" : ""}`}>
         <div className="music-hub-footer-inner">
           <div className="music-hub-ft-left">
-            {playingTrack?.imageUrl ? (
+            {playingTrack?.imageUrl && !liteMode ? (
               <img className="music-hub-ft-thumb" src={playingTrack.imageUrl} alt="" decoding="async" />
             ) : (
               <div className="music-hub-ft-thumb-ph" />

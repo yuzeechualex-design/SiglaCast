@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { mediaUrl } from "../services/api.js";
+import { API_ORIGIN, mediaUrl } from "../services/api.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 import MentionInput from "../components/MentionInput.jsx";
 import MentionText from "../components/MentionText.jsx";
@@ -108,7 +108,8 @@ export default function MessagesPage({
   setUserPhoneAutoReconnect,
   onSendSiglaInActiveThread = async () => {},
   onOpenUserProfile,
-  onUnauthorizedRetry
+  onUnauthorizedRetry,
+  liteMode = false
 }) {
   const navigate = useNavigate();
   const [draft, setDraft] = useState("");
@@ -402,7 +403,7 @@ export default function MessagesPage({
       </div>
 
       <div className="messages-layout">
-        {isNarrowViewport && token ? (
+        {isNarrowViewport && token && !liteMode ? (
           <div
             className={`messages-mobile-stories${
               mobileThreadFullscreen ? " messages-mobile-stories--hidden-fullscreen" : ""
@@ -1113,6 +1114,7 @@ export default function MessagesPage({
                       onUnsend={handleUnsend}
                       onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
                       onOpenUserProfile={onOpenUserProfile}
+                      liteMode={liteMode}
                     />
                     ))}
                     {isGroup && groupUserphoneWaiting ? (
@@ -1298,7 +1300,7 @@ export default function MessagesPage({
           )}
         </div>
 
-        {!isNarrowViewport && token ? (
+        {!isNarrowViewport && token && !liteMode ? (
           <aside className="messages-stories-sidebar" aria-label="Stories">
             <CommunityStoriesRail
               token={token}
@@ -1355,6 +1357,7 @@ export default function MessagesPage({
         <AttachmentsModal
           loader={onLoadAttachments}
           onClose={() => setShowAttachments(false)}
+          liteMode={liteMode}
         />
       ) : null}
 
@@ -1370,9 +1373,17 @@ export default function MessagesPage({
   );
 }
 
-function MessageAttachment({ att }) {
+function MessageAttachment({ att, liteMode = false }) {
   const { openLightbox } = useImageLightbox();
   if (att.isImage) {
+    if (liteMode) {
+      return (
+        <div className="bubble-file bubble-file-lite">
+          Image hidden in Lite mode
+          {att.size ? <small>{formatBytes(att.size)}</small> : null}
+        </div>
+      );
+    }
     const src = mediaUrl(att.url);
     return (
       <button
@@ -1452,7 +1463,8 @@ function MessageBubble({
   onReply,
   onUnsend,
   onOpenReactors,
-  onOpenUserProfile
+  onOpenUserProfile,
+  liteMode = false
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const closeTimer = useRef(null);
@@ -1708,7 +1720,7 @@ function MessageBubble({
               <p className="bubble-unsent-text">🚫 This message was unsent</p>
             ) : (
               <>
-                {m.attachment ? <MessageAttachment att={m.attachment} /> : null}
+                {m.attachment ? <MessageAttachment att={m.attachment} liteMode={liteMode} /> : null}
                 {m.text ? <p><MentionText text={m.text} /></p> : null}
               </>
             )}
@@ -1811,7 +1823,7 @@ function CreateGroupModal({ currentUser, onClose, onCreate }) {
     setSearching(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"}/api/users/search?q=${encodeURIComponent(q)}`,
+        `${API_ORIGIN}/api/users/search?q=${encodeURIComponent(q)}`,
         { headers: { Authorization: `Bearer ${localStorage.getItem("siglacast_token") || ""}` } }
       );
       const list = await res.json();
@@ -1992,7 +2004,7 @@ function GroupSettingsModal({
     setSearching(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || "http://localhost:4000"}/api/users/search?q=${encodeURIComponent(q)}`,
+        `${API_ORIGIN}/api/users/search?q=${encodeURIComponent(q)}`,
         { headers: { Authorization: `Bearer ${localStorage.getItem("siglacast_token") || ""}` } }
       );
       const list = await res.json();
@@ -2253,7 +2265,7 @@ function GroupSettingsModal({
 
 // ---------------- Attachments Modal ----------------
 
-function AttachmentsModal({ loader, onClose }) {
+function AttachmentsModal({ loader, onClose, liteMode = false }) {
   const { openLightbox } = useImageLightbox();
   const [list, setList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2311,6 +2323,8 @@ function AttachmentsModal({ loader, onClose }) {
         <div className="modal-body">
           {loading ? (
             <p>Loading…</p>
+          ) : tab === "images" && liteMode ? (
+            <p className="muted">Images are hidden in Lite mode.</p>
           ) : tab === "images" ? (
             images.length === 0 ? (
               <p className="muted">No images shared yet.</p>

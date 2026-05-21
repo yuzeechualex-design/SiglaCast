@@ -5,6 +5,7 @@ import {
   registrationEmailDomainFromEnv,
   validateRegisterForm
 } from "../utils/registerValidation.js";
+import { DEFAULT_API_BASE_URL } from "../services/api.js";
 
 export default function AuthPage({
   mode,
@@ -32,6 +33,12 @@ export default function AuthPage({
   useEffect(() => {
     setFieldErrors({});
   }, [mode]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch(`${DEFAULT_API_BASE_URL}/api/health`, { signal: controller.signal }).catch(() => {});
+    return () => controller.abort();
+  }, []);
 
   function onSubmit(event) {
     event.preventDefault();

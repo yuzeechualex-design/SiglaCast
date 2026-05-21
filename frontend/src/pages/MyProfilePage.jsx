@@ -25,7 +25,7 @@ function dateLabel(value) {
   }
 }
 
-function ProfilePostPreview({ post }) {
+function ProfilePostPreview({ post, liteMode = false }) {
   return (
     <article className="my-profile-post-card">
       <div className="my-profile-post-head">
@@ -40,7 +40,7 @@ function ProfilePostPreview({ post }) {
         </div>
       </div>
       {post.content ? <p className="my-profile-post-text">{post.content}</p> : null}
-      {post.imageUrl ? <img className="my-profile-post-image" src={mediaUrl(post.imageUrl)} alt="" loading="lazy" /> : null}
+      {post.imageUrl && !liteMode ? <img className="my-profile-post-image" src={mediaUrl(post.imageUrl)} alt="" loading="lazy" /> : null}
       <div className="my-profile-post-stats">
         <span>{formatCount(post.reactionCount, "reaction")}</span>
         <span>{formatCount(post.commentCount, "comment")}</span>
@@ -49,7 +49,7 @@ function ProfilePostPreview({ post }) {
   );
 }
 
-export default function MyProfilePage({ user, posts = [] }) {
+export default function MyProfilePage({ user, posts = [], liteMode = false }) {
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
   const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
   const coverIsGif = coverSrc && publicUrlLooksLikeGif(coverSrc);
@@ -61,7 +61,7 @@ export default function MyProfilePage({ user, posts = [] }) {
     <section className="my-profile-page">
       <div className="my-profile-hero-card">
         <div className="my-profile-cover">
-          {coverSrc ? (
+          {coverSrc && !liteMode ? (
             coverIsGif ? (
               <img src={coverSrc} alt="" className="my-profile-cover-gif" />
             ) : (
@@ -130,7 +130,7 @@ export default function MyProfilePage({ user, posts = [] }) {
           </div>
 
           {myPosts.length ? (
-            myPosts.map((post) => <ProfilePostPreview key={post.id} post={post} />)
+            myPosts.map((post) => <ProfilePostPreview key={post.id} post={post} liteMode={liteMode} />)
           ) : (
             <div className="my-profile-empty-posts">
               <strong>No posts yet</strong>

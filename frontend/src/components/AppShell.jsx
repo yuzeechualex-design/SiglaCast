@@ -14,6 +14,8 @@ export default function AppShell({
   notice,
   theme,
   onToggleTheme,
+  liteMode = false,
+  onToggleLiteMode,
   children,
   navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0 }
 }) {
@@ -32,7 +34,17 @@ export default function AppShell({
           <p className="eyebrow">Davao Oriental State University</p>
           <div className="hero-title-row">
             <h1>SiglaCast</h1>
-            <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+            <div className="hero-mode-actions">
+              <button
+                type="button"
+                className={`lite-toggle ${liteMode ? "active" : ""}`}
+                onClick={onToggleLiteMode}
+                title={liteMode ? "Lite mode is on" : "Turn on Lite mode"}
+              >
+                Lite
+              </button>
+              <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+            </div>
           </div>
           <p className="hero-subtitle">
             {user.role === "admin" ? "Administrator" : "Student"}{" \u2014 "}{user.name}
