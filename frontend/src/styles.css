@@ -311,6 +311,25 @@ p {
   border-color: #fff;
 }
 
+.nav-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 1.08em;
+  height: 1.08em;
+  color: currentColor;
+  flex: 0 0 auto;
+}
+
+.nav-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nav-btn .nav-icon {
+  margin-right: 6px;
+}
+
 button.nav-logout {
   background: rgba(255, 255, 255, 0.16);
   color: #fff;
@@ -464,6 +483,11 @@ body.floating-quick-nav-open main.grid {
 .fq-link.fq-active {
   background: linear-gradient(140deg, var(--yellow-300), var(--yellow-500));
   color: #172238;
+}
+
+.fq-link .nav-icon {
+  width: 1.18rem;
+  height: 1.18rem;
 }
 
 [data-theme="dark"] .fq-link.fq-active {

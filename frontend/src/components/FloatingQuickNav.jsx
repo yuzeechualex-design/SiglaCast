@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
+import NavIcon from "./NavIcon.jsx";
 
 function formatNavPing(n) {
   if (typeof n !== "number" || n <= 0) return null;
   return n > 99 ? "99+" : String(n);
 }
 
-/** Fixed dock that mirrors primary nav once the dashboard header scrolls off-screen — no replacement of the hero nav. */
+/** Fixed dock that mirrors primary nav once the dashboard header scrolls off-screen - no replacement of the hero nav. */
 export default function FloatingQuickNav({
   headerRef,
   navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0 }
@@ -15,11 +16,11 @@ export default function FloatingQuickNav({
   const [reducedMotion, setReducedMotion] = useState(false);
   const location = useLocation();
 
-  /** Re-evaluate when route changes — header intersection may stay stale otherwise. */
+  /** Re-evaluate when route changes - header intersection may stay stale otherwise. */
   useEffect(() => {
     const hdr = headerRef?.current;
     if (!hdr || typeof window === "undefined") return undefined;
-    // Next frame — layout after route transition may shift scroll.
+    // Next frame - layout after route transition may shift scroll.
     const id = window.requestAnimationFrame(() => {
       try {
         const rect = hdr.getBoundingClientRect();
@@ -82,43 +83,43 @@ export default function FloatingQuickNav({
       <nav className="floating-quick-nav" role="navigation">
         <div className="floating-quick-nav-inner">
           <button type="button" className="floating-quick-top" onClick={scrollToTop} title="Scroll to top">
-            ↑ Top
+            {"\u2191"} Top
           </button>
           <div className="floating-quick-links">
             <NavLink to="/community" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              💬
+              <NavIcon name="community" />
               <span className="fq-label">Community</span>
             </NavLink>
             <NavLink to="/messages" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              ✉️
+              <NavIcon name="messages" />
               {msg ? <span className="fq-ping">{msg}</span> : null}
               <span className="fq-label">Messages</span>
             </NavLink>
             <NavLink to="/music" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              🎵
+              <NavIcon name="music" />
               <span className="fq-label">Music</span>
             </NavLink>
             <NavLink to="/notifications" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              🔔
+              <NavIcon name="notifications" />
               {bell ? <span className="fq-ping">{bell}</span> : null}
               <span className="fq-label">Alerts</span>
             </NavLink>
             <NavLink to="/announcements" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              📣
+              <NavIcon name="announcements" />
               {ann ? <span className="fq-ping">{ann}</span> : null}
               <span className="fq-label">News</span>
             </NavLink>
             <NavLink to="/events" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              📅
+              <NavIcon name="events" />
               {ev ? <span className="fq-ping">{ev}</span> : null}
               <span className="fq-label">Events</span>
             </NavLink>
             <NavLink to="/assistant" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              ✨
+              <NavIcon name="assistant" />
               <span className="fq-label">Assistant</span>
             </NavLink>
             <NavLink to="/profile" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              👤
+              <NavIcon name="profile" />
               <span className="fq-label">Profile</span>
             </NavLink>
           </div>

@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { NavLink } from "react-router-dom";
 import ThemeToggle from "./ThemeToggle.jsx";
 import FloatingQuickNav from "./FloatingQuickNav.jsx";
+import NavIcon from "./NavIcon.jsx";
 
 function formatNavPing(n) {
   if (typeof n !== "number" || n <= 0) return null;
@@ -34,15 +35,15 @@ export default function AppShell({
             <ThemeToggle theme={theme} onToggle={onToggleTheme} />
           </div>
           <p className="hero-subtitle">
-            {user.role === "admin" ? "Administrator" : "Student"} — {user.name}
+            {user.role === "admin" ? "Administrator" : "Student"}{" \u2014 "}{user.name}
           </p>
         </div>
         <div className="nav-row">
           <NavLink to="/community" className="nav-btn">
-            💬 Community
+            <NavIcon name="community" /> Community
           </NavLink>
           <NavLink to="/messages" className="nav-btn">
-            ✉️ Messages
+            <NavIcon name="messages" /> Messages
             {msg ? (
               <span className="nav-ping" aria-label={`${navBadges.messages} unread messages`}>
                 {msg}
@@ -50,10 +51,10 @@ export default function AppShell({
             ) : null}
           </NavLink>
           <NavLink to="/music" className="nav-btn">
-            🎵 Music
+            <NavIcon name="music" /> Music
           </NavLink>
           <NavLink to="/notifications" className="nav-btn">
-            🔔 Notifications
+            <NavIcon name="notifications" /> Notifications
             {bell ? (
               <span className="nav-ping" aria-label={`${navBadges.notifications} unread notifications`}>
                 {bell}
@@ -61,7 +62,7 @@ export default function AppShell({
             ) : null}
           </NavLink>
           <NavLink to="/announcements" className="nav-btn">
-            📣 Announcements
+            <NavIcon name="announcements" /> Announcements
             {ann ? (
               <span className="nav-ping" aria-label={`${navBadges.announcements} new announcements`}>
                 {ann}
@@ -69,7 +70,7 @@ export default function AppShell({
             ) : null}
           </NavLink>
           <NavLink to="/events" className="nav-btn">
-            📅 Events
+            <NavIcon name="events" /> Events
             {ev ? (
               <span className="nav-ping" aria-label={`${navBadges.events} open events`}>
                 {ev}
@@ -77,10 +78,10 @@ export default function AppShell({
             ) : null}
           </NavLink>
           <NavLink to="/assistant" className="nav-btn">
-            ✨ Assistant
+            <NavIcon name="assistant" /> Assistant
           </NavLink>
           <NavLink to="/profile" className="nav-btn">
-            👤 Profile
+            <NavIcon name="profile" /> Profile
           </NavLink>
         </div>
         {notice ? <span className="badge hero-badge">{notice}</span> : null}
