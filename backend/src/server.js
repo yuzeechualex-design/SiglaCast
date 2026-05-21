@@ -708,6 +708,8 @@ async function storyFriendAccess(storyId, viewerId) {
   const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
   if (story.created_at < cutoff) return { ok: false, status: 410, msg: "Story expired" };
   if (story.user_id === viewerId) return { ok: true, story };
+  if (story.visibility === "only me") return { ok: false, status: 403, msg: "Not allowed" };
+  if (story.visibility === "public") return { ok: true, story };
   const okFriend = await areFriends(viewerId, story.user_id);
   if (!okFriend) return { ok: false, status: 403, msg: "Not allowed" };
   return { ok: true, story };
@@ -717,13 +719,19 @@ async function storyFriendAccess(storyId, viewerId) {
 async function buildStoryRings(viewerId) {
   const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
   const friendIds = await friendIdsForUser(viewerId);
-  const scopeIds = Array.from(new Set([viewerId, ...friendIds]));
-  const { data: rows } = await supabase
+  const { data: allRows } = await supabase
     .from("user_stories")
     .select("*")
-    .in("user_id", scopeIds)
     .gte("created_at", cutoff)
     .order("created_at", { ascending: true });
+
+  const rows = (allRows || []).filter((r) => {
+    if (r.user_id === viewerId) return true;
+    if (r.visibility === "only me") return false;
+    if (r.visibility === "public") return true;
+    // Default or "friends" visibility
+    return friendIds.includes(r.user_id);
+  });
 
   if (!rows?.length) return { rings: [] };
 
@@ -781,6 +789,7 @@ async function buildStoryRings(viewerId) {
       id: r.id,
       text: r.body_text || "",
       imageUrl: r.media_url || null,
+      visibility: r.visibility || "friends",
       spotifyTrackId: r.spotify_track_id || null,
       musicTitle: r.music_title || null,
       musicArtist: r.music_artist || null,
@@ -2086,6 +2095,9 @@ app.post("/api/stories", authenticate, (req, res, next) => {
 }, async (req, res) => {
   try {
     const text = String(req.body?.text || "").trim();
+    const rawVisibility = String(req.body?.visibility || "friends").trim();
+    const visibility = ["public", "friends", "only me"].includes(rawVisibility) ? rawVisibility : "friends";
+
     if (!text && !req.file) {
       return res.status(400).json({ error: "Add text or a photo to your story" });
     }
@@ -2098,10 +2110,25 @@ app.post("/api/stories", authenticate, (req, res, next) => {
       id,
       user_id: req.user.id,
       body_text: text || "",
-      media_url
+      media_url,
+      visibility
     };
 
-    const { data: row, error } = await supabase.from("user_stories").insert(insertRow).select().maybeSingle();
+    let row = null;
+    let error = null;
+
+    const firstTry = await supabase.from("user_stories").insert(insertRow).select().maybeSingle();
+    if (firstTry.error && (firstTry.error.message.includes("visibility") || firstTry.error.code === "P0002" || String(firstTry.error.message).includes("does not exist"))) {
+      // Fallback for database migration lag
+      const { visibility: _, ...fallbackRow } = insertRow;
+      const fallbackResult = await supabase.from("user_stories").insert(fallbackRow).select().maybeSingle();
+      row = fallbackResult.data;
+      error = fallbackResult.error;
+    } else {
+      row = firstTry.data;
+      error = firstTry.error;
+    }
+
     if (error) return res.status(400).json({ error: error.message });
 
     /** @type {Record<string, unknown>} */
@@ -2109,6 +2136,7 @@ app.post("/api/stories", authenticate, (req, res, next) => {
       id: row.id,
       text: row.body_text || "",
       imageUrl: row.media_url || null,
+      visibility: row.visibility || "friends",
       spotifyTrackId: null,
       musicTitle: null,
       musicArtist: null,

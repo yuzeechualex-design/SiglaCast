@@ -38,7 +38,23 @@ export default function CommunityStoriesRail({
 }) {
   const [rings, setRings] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [filterMode, setFilterMode] = useState("friends"); // "friends" or "public"
   const scrollerRef = useRef(null);
+
+  const filteredRings = useMemo(() => {
+    if (filterMode === "friends") return rings;
+    return rings
+      .map((ring) => {
+        const publicStories = ring.stories.filter((s) => s.visibility === "public");
+        if (publicStories.length === 0) return null;
+        return {
+          ...ring,
+          stories: publicStories,
+          hasUnviewed: publicStories.some((s) => !s.viewed)
+        };
+      })
+      .filter(Boolean);
+  }, [rings, filterMode]);
 
   const loadStories = useCallback(async () => {
     if (!token) return;
@@ -75,22 +91,38 @@ export default function CommunityStoriesRail({
   const [viewer, setViewer] = useState(null);
 
   const openRing = useCallback((ringIndex, storyIndex = 0) => {
-    const ring = rings[ringIndex];
+    const ring = filteredRings[ringIndex];
     if (!ring?.stories?.length) return;
     const idx = Math.max(0, Math.min(storyIndex, ring.stories.length - 1));
     setViewer({ ringIndex, storyIndex: idx });
-  }, [rings]);
+  }, [filteredRings]);
 
   const isVertical = variant === "vertical";
 
-  const hasStoryNotes = useMemo(() => rings.some((ring) => Boolean(listeningStatusLine(ring.user))), [rings]);
+  const hasStoryNotes = useMemo(() => filteredRings.some((ring) => Boolean(listeningStatusLine(ring.user))), [filteredRings]);
 
   return (
     <div
       className={`community-stories-rail ${isVertical ? "community-stories-rail--vertical" : ""}${hasStoryNotes ? " community-stories-rail--has-notes" : ""} ${className}`.trim()}
     >
       <div className="community-stories-head">
-        <h3 className="community-stories-title">Stories</h3>
+        <div className="community-stories-title-group">
+          <h3 className="community-stories-title">Stories</h3>
+          <button
+            type="button"
+            className={`story-filter-toggle ${filterMode === "public" ? "story-filter-toggle-active-public" : ""}`.trim()}
+            onClick={() => setFilterMode((m) => (m === "friends" ? "public" : "friends"))}
+            title={`Showing ${filterMode === "public" ? "public stories only" : "all stories"}`}
+            aria-label={`Showing ${filterMode === "public" ? "public stories only" : "all stories"}`}
+          >
+            <span className="story-filter-toggle-label">{filterMode === "public" ? "PUBLIC" : "ALL"}</span>
+            <span className="story-filter-toggle-track">
+              <span className="story-filter-toggle-icon left" aria-hidden>👥</span>
+              <span className="story-filter-toggle-icon right" aria-hidden>🌐</span>
+              <span className="story-filter-toggle-thumb">{filterMode === "public" ? "🌐" : "👥"}</span>
+            </span>
+          </button>
+        </div>
         {loading ? <span className="muted small stories-loading-label">Updating…</span> : null}
       </div>
 
@@ -123,7 +155,7 @@ export default function CommunityStoriesRail({
             </button>
           </div>
 
-          {rings.map((ring, ri) => {
+          {filteredRings.map((ring, ri) => {
             const statusLine = listeningStatusLine(ring.user);
             return (
               <div key={ring.user.id} className="story-ring-slot">
@@ -182,7 +214,7 @@ export default function CommunityStoriesRail({
       {viewer ? (
         <StoryViewerModal
           token={token}
-          rings={rings}
+          rings={filteredRings}
           currentUser={currentUser}
           ringIndex={viewer.ringIndex}
           storyIndex={viewer.storyIndex}
@@ -205,6 +237,7 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
   const preview = file ? URL.createObjectURL(file) : null;
   useEffect(() => () => preview && URL.revokeObjectURL(preview), [preview]);
   const [sending, setSending] = useState(false);
+  const [visibility, setVisibility] = useState("friends");
   const [err, setErr] = useState("");
 
   async function submit(e) {
@@ -218,6 +251,7 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
     setErr("");
     const fd = new FormData();
     fd.append("text", t);
+    fd.append("visibility", visibility);
     if (file) fd.append("image", file);
     const data = await requestForm("/stories", { token, method: "POST", formData: fd, onUnauthorizedRetry });
     setSending(false);
@@ -239,7 +273,7 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
             </button>
           </div>
           <form className="modal-body stories-create-form" onSubmit={submit}>
-            <p className="muted small">Stories disappear after 24 hours. Friends can view them.</p>
+            <p className="muted small">Stories disappear after 24 hours. Choose who can view them below.</p>
 
             <textarea
               className="stories-create-textarea"
@@ -248,10 +282,27 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
               value={text}
               onChange={(e) => setText(e.target.value)}
             />
-            <label className="btn btn-secondary btn-sm stories-photo-pick">
-              📷 Add photo
-              <input type="file" accept="image/*" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
-            </label>
+
+            <div className="stories-create-options-row">
+              <label className="btn btn-secondary btn-sm stories-photo-pick">
+                📷 Add photo
+                <input type="file" accept="image/*" hidden onChange={(e) => setFile(e.target.files?.[0] || null)} />
+              </label>
+
+              <div className="stories-visibility-selector">
+                <span className="stories-visibility-label muted small">Visible to:</span>
+                <select
+                  className="stories-visibility-select"
+                  value={visibility}
+                  onChange={(e) => setVisibility(e.target.value)}
+                >
+                  <option value="friends">👥 Friends</option>
+                  <option value="public">🌐 Public</option>
+                  <option value="only me">🔒 Only me</option>
+                </select>
+              </div>
+            </div>
+
             {preview ? (
               <div className="stories-create-preview">
                 <img src={preview} alt="" />
