@@ -966,6 +966,13 @@ label.btn.btn-icon {
   padding-inline: 4px;
 }
 
+.community-stories-rail:not(.community-stories-rail--vertical).community-stories-rail--has-notes
+  .story-ring-slot:not(.story-ring-slot--add),
+.community-stories-rail:not(.community-stories-rail--vertical):has(.story-note-bubble)
+  .story-ring-slot:not(.story-ring-slot--add) {
+  width: 132px;
+}
+
 .community-stories-strip::-webkit-scrollbar {
   height: 6px;
 }
@@ -1202,7 +1209,7 @@ label.btn.btn-icon {
   align-items: center;
   justify-content: center;
   bottom: calc(100% - 14px);
-  width: clamp(106px, 30vw, 138px);
+  width: min(118px, calc(100% - 8px));
   max-width: none;
   height: 28px;
   padding: 0 8px;
