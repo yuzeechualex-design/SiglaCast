@@ -114,6 +114,11 @@ export default function UserProfileModal({
     }
   }
 
+  function openFullProfile() {
+    onClose?.();
+    navigate?.(`/users/${encodeURIComponent(userId)}`);
+  }
+
   useEffect(() => {
     if (!peek) return undefined;
     function onKey(e) {
@@ -324,8 +329,7 @@ export default function UserProfileModal({
                   <button
                     type="button"
                     className="btn btn-secondary btn-sm wide"
-                    onClick={() => void loadProfilePosts()}
-                    disabled={postsLoading}
+                    onClick={openFullProfile}
                   >
                     View profile
                   </button>

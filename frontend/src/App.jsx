@@ -10,6 +10,7 @@ import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MyProfilePage from "./pages/MyProfilePage.jsx";
+import PublicProfilePage from "./pages/PublicProfilePage.jsx";
 import MusicPage from "./pages/MusicPage.jsx";
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
@@ -22,6 +23,7 @@ import { notificationTargetPath } from "./utils/notificationTargetPath.js";
 import { readLiteModePreference, writeLiteModePreference } from "./utils/networkLite.js";
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
+const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
 
 /** Offline / overloaded server — do not wipe login; user stays signed in until explicit logout or real auth failure. */
 function isTransientSessionCheckFailure(result) {
@@ -32,6 +34,35 @@ function isTransientSessionCheckFailure(result) {
   if (/Request failed \(408\)/.test(msg)) return true;
   if (/Request failed \(429\)/.test(msg)) return true;
   return false;
+}
+
+function cacheablePost(post) {
+  return {
+    ...post,
+    imageUrl: null,
+    comments: (post.comments || []).map((comment) => ({
+      ...comment,
+      imageUrl: null,
+      replies: (comment.replies || []).map((reply) => ({ ...reply, imageUrl: null }))
+    }))
+  };
+}
+
+function readCachedPosts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_CACHED_POSTS) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeCachedPosts(rows) {
+  try {
+    localStorage.setItem(STORAGE_CACHED_POSTS, JSON.stringify(rows.map(cacheablePost).slice(0, 80)));
+  } catch (_) {
+    // Ignore storage quota or private-mode failures.
+  }
 }
 
 export default function App() {
@@ -331,7 +362,13 @@ export default function App() {
       api("/community/posts")
     ]);
     setEvents(Array.isArray(ev) ? ev : []);
-    setPosts(Array.isArray(po) ? po : []);
+    if (Array.isArray(po)) {
+      setPosts(po);
+      writeCachedPosts(po);
+    } else {
+      const cached = readCachedPosts();
+      if (cached.length) setPosts(cached);
+    }
   }
 
   async function loadAdminUsers() {
@@ -1530,6 +1567,10 @@ export default function App() {
         <Route
           path="/profile"
           element={<MyProfilePage user={user} posts={posts} liteMode={liteMode} />}
+        />
+        <Route
+          path="/users/:userId"
+          element={<PublicProfilePage api={api} liteMode={liteMode} />}
         />
         <Route
           path="/settings"

@@ -49,7 +49,7 @@ function ProfilePostPreview({ post, liteMode = false }) {
   );
 }
 
-export default function MyProfilePage({ user, posts = [], liteMode = false }) {
+export default function MyProfilePage({ user, posts = [], liteMode = false, isOwnProfile = true, backHref = "" }) {
   const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
   const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
   const coverIsGif = coverSrc && publicUrlLooksLikeGif(coverSrc);
@@ -70,9 +70,11 @@ export default function MyProfilePage({ user, posts = [], liteMode = false }) {
           ) : (
             <div className="my-profile-cover-fallback" />
           )}
-          <Link to="/settings" className="my-profile-cover-edit">
-            Edit profile
-          </Link>
+          {isOwnProfile ? (
+            <Link to="/settings" className="my-profile-cover-edit">
+              Edit profile
+            </Link>
+          ) : null}
         </div>
 
         <div className="my-profile-identity">
@@ -113,16 +115,23 @@ export default function MyProfilePage({ user, posts = [], liteMode = false }) {
             {statusLine ? <span id="profile-status">{statusLine}</span> : null}
             {musicLine ? <span>{musicLine}</span> : null}
           </div>
-          <Link to="/settings" className="my-profile-edit-wide">Edit details</Link>
+          {isOwnProfile ? <Link to="/settings" className="my-profile-edit-wide">Edit details</Link> : null}
         </aside>
 
         <main className="my-profile-posts" id="profile-posts">
+          {backHref ? (
+            <Link to={backHref} className="my-profile-back-link">
+              ← Back to Community
+            </Link>
+          ) : null}
+          {isOwnProfile ? (
           <div className="my-profile-composer-card">
             <div className="my-profile-composer-line">
               {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{user.name?.charAt(0) || "?"}</span>}
               <Link to="/community">What's on your mind?</Link>
             </div>
           </div>
+          ) : null}
 
           <div className="my-profile-section-head">
             <h3>Posts</h3>
@@ -134,8 +143,10 @@ export default function MyProfilePage({ user, posts = [], liteMode = false }) {
           ) : (
             <div className="my-profile-empty-posts">
               <strong>No posts yet</strong>
-              <p className="muted small">Share something in Community and it will show up here.</p>
-              <Link to="/community" className="btn btn-secondary btn-sm">Create post</Link>
+              <p className="muted small">
+                {isOwnProfile ? "Share something in Community and it will show up here." : "This user has not posted yet."}
+              </p>
+              {isOwnProfile ? <Link to="/community" className="btn btn-secondary btn-sm">Create post</Link> : null}
             </div>
           )}
         </main>
