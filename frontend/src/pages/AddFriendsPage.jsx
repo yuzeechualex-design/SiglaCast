@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { mediaUrl } from "../services/api.js";
 
 export default function AddFriendsPage({
@@ -15,6 +15,8 @@ export default function AddFriendsPage({
   const [discoverData, setDiscoverData] = useState({ online: [], others: [] });
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [showOnlyActive, setShowOnlyActive] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(4);
   const [submittingAction, setSubmittingAction] = useState(null); // track user id undergoing action
 
   const fetchDiscover = useCallback(async () => {
@@ -68,18 +70,34 @@ export default function AddFriendsPage({
     }
   };
 
-  // Filter lists
-  const filterUsers = (list) => {
-    if (!searchQuery.trim()) return list;
-    const q = searchQuery.toLowerCase();
-    return list.filter(
-      (u) =>
-        u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
-    );
-  };
+  // Combine online and other users for unified display
+  const allUsers = useMemo(() => {
+    return [...(discoverData.online || []), ...(discoverData.others || [])];
+  }, [discoverData]);
 
-  const onlineFiltered = filterUsers(discoverData.online || []);
-  const othersFiltered = filterUsers(discoverData.others || []);
+  // Filter users based on query and active filter status
+  const filteredUsers = useMemo(() => {
+    let list = allUsers;
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(
+        (u) =>
+          u.name?.toLowerCase().includes(q) || u.email?.toLowerCase().includes(q)
+      );
+    }
+
+    // Filter by Active Now status (availability is online, idle, or dnd)
+    if (showOnlyActive) {
+      list = list.filter((u) => {
+        const presence = u.presence?.presence || (u.presence?.online ? "online" : "offline");
+        return presence === "online" || presence === "idle" || presence === "dnd";
+      });
+    }
+
+    return list;
+  }, [allUsers, searchQuery, showOnlyActive]);
 
   return (
     <section className="panel single add-friends-container">
@@ -87,19 +105,40 @@ export default function AddFriendsPage({
       <div className="add-friends-header tile">
         <h2>Discover Friends</h2>
         <p className="muted small">Add friends to chat, start calls, or share media.</p>
-        <div className="search-box-wrap">
-          <input
-            type="text"
-            className="search-box-input"
-            placeholder="Search by name or email..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-          />
-          {searchQuery && (
-            <button className="search-clear-btn" onClick={() => setSearchQuery("")}>
-              ✕
-            </button>
-          )}
+        <div className="search-box-row">
+          <div className="search-box-wrap">
+            <input
+              type="text"
+              className="search-box-input"
+              placeholder="Search by name or email..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setVisibleCount(4);
+              }}
+            />
+            {searchQuery && (
+              <button
+                className="search-clear-btn"
+                onClick={() => {
+                  setSearchQuery("");
+                  setVisibleCount(4);
+                }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <button
+            type="button"
+            className={`filter-active-btn ${showOnlyActive ? "active" : ""}`}
+            onClick={() => {
+              setShowOnlyActive(!showOnlyActive);
+              setVisibleCount(4);
+            }}
+          >
+            🟢 Active Now
+          </button>
         </div>
       </div>
 
@@ -151,142 +190,118 @@ export default function AddFriendsPage({
         </section>
       )}
 
-      {/* Main grids */}
-      {loading ? (
-        <div className="friends-loading tile">
-          <div className="spinner" />
-          <p>Finding people nearby...</p>
-        </div>
-      ) : (
-        <>
-          {/* People Online */}
-          <section className="friends-section online-section">
-            <h3 className="section-title">Active Now ({onlineFiltered.length})</h3>
-            {onlineFiltered.length > 0 ? (
-              <div className="friends-grid">
-                {onlineFiltered.map((u) => {
-                  const avatarSrc = u.avatarUrl ? mediaUrl(u.avatarUrl) : null;
-                  return (
-                    <div key={u.id} className="friend-card tile">
-                      <div className="friend-info" onClick={() => onOpenUserProfile?.(u.id)}>
-                        <div className="avatar-container">
-                          {avatarSrc ? (
-                            <img className="friend-avatar" src={avatarSrc} alt={u.name} />
-                          ) : (
-                            <div className="friend-avatar-empty">{u.name?.charAt(0) || "?"}</div>
-                          )}
-                          <span className="online-badge-dot" />
-                        </div>
-                        <div className="friend-details">
-                          <h4>{u.name}</h4>
-                          <span className="presence-label">Online</span>
-                        </div>
-                      </div>
-                      <div className="friend-actions">
-                        {u.isFriend ? (
-                          <button
-                            className="btn btn-secondary btn-sm msg-btn"
-                            onClick={() => onOpenDmWithUser?.(u.id)}
-                          >
-                            Chat
-                          </button>
-                        ) : u.incomingRequestId ? (
-                          <button
-                            className="btn btn-primary btn-sm accept-btn"
-                            onClick={() => handleAccept(u.incomingRequestId, u.id)}
-                            disabled={submittingAction === u.id}
-                          >
-                            Confirm
-                          </button>
-                        ) : u.outgoingRequestPending ? (
-                          <button className="btn btn-secondary btn-sm requested-btn" disabled>
-                            Requested
-                          </button>
+      {/* Discover Section */}
+      <section className="friends-section discover-section">
+        <h3 className="section-title">People to Discover ({filteredUsers.length})</h3>
+        {loading ? (
+          <div className="friends-loading tile">
+            <div className="spinner" />
+            <p>Finding people nearby...</p>
+          </div>
+        ) : filteredUsers.length > 0 ? (
+          <>
+            <div className="discover-list">
+              {filteredUsers.slice(0, visibleCount).map((u) => {
+                const avatarSrc = u.avatarUrl ? mediaUrl(u.avatarUrl) : null;
+                const userPresence = u.presence?.presence || (u.presence?.online ? "online" : "offline");
+                return (
+                  <div key={u.id} className="friend-card discover-list-card tile">
+                    <div className="friend-info" onClick={() => onOpenUserProfile?.(u.id)}>
+                      <div className="avatar-container">
+                        {avatarSrc ? (
+                          <img className="friend-avatar" src={avatarSrc} alt={u.name} />
                         ) : (
-                          <button
-                            className="btn btn-primary btn-sm add-btn"
-                            onClick={() => handleAddFriend(u.id)}
-                            disabled={submittingAction === u.id}
-                          >
-                            Add Friend
-                          </button>
+                          <div className="friend-avatar-empty">{u.name?.charAt(0) || "?"}</div>
                         )}
+                        <span className={`presence-dot-indicator presence-${userPresence}`} />
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-section tile">
-                <p className="muted small">No active users found.</p>
-              </div>
-            )}
-          </section>
 
-          {/* Offline / Others */}
-          <section className="friends-section offline-section">
-            <h3 className="section-title">Others ({othersFiltered.length})</h3>
-            {othersFiltered.length > 0 ? (
-              <div className="friends-grid">
-                {othersFiltered.map((u) => {
-                  const avatarSrc = u.avatarUrl ? mediaUrl(u.avatarUrl) : null;
-                  return (
-                    <div key={u.id} className="friend-card tile">
-                      <div className="friend-info" onClick={() => onOpenUserProfile?.(u.id)}>
-                        <div className="avatar-container">
-                          {avatarSrc ? (
-                            <img className="friend-avatar" src={avatarSrc} alt={u.name} />
-                          ) : (
-                            <div className="friend-avatar-empty">{u.name?.charAt(0) || "?"}</div>
-                          )}
+                      <div className="friend-card-main-content">
+                        <div className="friend-card-top-row">
+                          <h4 className="friend-card-name">{u.name}</h4>
+                          <span className="friend-card-email muted">{u.email}</span>
+
+                          {/* Availability Badge */}
+                          <span className={`availability-badge availability-${userPresence}`}>
+                            {userPresence.toUpperCase()}
+                          </span>
                         </div>
-                        <div className="friend-details">
-                          <h4>{u.name}</h4>
-                          <span className="presence-label offline">Offline</span>
-                        </div>
-                      </div>
-                      <div className="friend-actions">
-                        {u.isFriend ? (
-                          <button
-                            className="btn btn-secondary btn-sm msg-btn"
-                            onClick={() => onOpenDmWithUser?.(u.id)}
-                          >
-                            Chat
-                          </button>
-                        ) : u.incomingRequestId ? (
-                          <button
-                            className="btn btn-primary btn-sm accept-btn"
-                            onClick={() => handleAccept(u.incomingRequestId, u.id)}
-                            disabled={submittingAction === u.id}
-                          >
-                            Confirm
-                          </button>
-                        ) : u.outgoingRequestPending ? (
-                          <button className="btn btn-secondary btn-sm requested-btn" disabled>
-                            Requested
-                          </button>
-                        ) : (
-                          <button
-                            className="btn btn-primary btn-sm add-btn"
-                            onClick={() => handleAddFriend(u.id)}
-                            disabled={submittingAction === u.id}
-                          >
-                            Add Friend
-                          </button>
+
+                        {/* Status Note */}
+                        {(u.statusEmoji || u.statusNote) && (
+                          <div className="friend-card-status-note">
+                            <span className="status-emoji">{u.statusEmoji || "💬"}</span>
+                            <span className="status-text">{u.statusNote || "No status message"}</span>
+                          </div>
                         )}
+
+                        {/* Bio */}
+                        {u.bio && <p className="friend-card-bio">{u.bio}</p>}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-section tile">
-                <p className="muted small">No users found.</p>
+
+                    <div className="friend-card-actions-wrapper">
+                      {u.isFriend ? (
+                        <button className="btn btn-secondary btn-sm friend-status-btn" disabled>
+                          ✓ Friends
+                        </button>
+                      ) : u.incomingRequestId ? (
+                        <button
+                          className="btn btn-primary btn-sm accept-btn"
+                          onClick={() => handleAccept(u.incomingRequestId, u.id)}
+                          disabled={submittingAction === u.id}
+                        >
+                          Confirm
+                        </button>
+                      ) : u.outgoingRequestPending ? (
+                        <button className="btn btn-secondary btn-sm requested-btn" disabled>
+                          Requested
+                        </button>
+                      ) : (
+                        <button
+                          className="btn btn-primary btn-sm add-btn"
+                          onClick={() => handleAddFriend(u.id)}
+                          disabled={submittingAction === u.id}
+                        >
+                          Add as Friend
+                        </button>
+                      )}
+
+                      {/* Chat Emoji Button next to it */}
+                      <button
+                        type="button"
+                        className="chat-emoji-btn"
+                        onClick={() => onOpenDmWithUser?.(u.id)}
+                        title={`Chat with ${u.name}`}
+                        aria-label={`Chat with ${u.name}`}
+                      >
+                        💬
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* See More Button */}
+            {filteredUsers.length > visibleCount && (
+              <div className="see-more-wrapper">
+                <button
+                  type="button"
+                  className="btn btn-secondary see-more-btn"
+                  onClick={() => setVisibleCount((prev) => prev + 4)}
+                >
+                  See More
+                </button>
               </div>
             )}
-          </section>
-        </>
-      )}
+          </>
+        ) : (
+          <div className="empty-section tile">
+            <p className="muted small">No users found.</p>
+          </div>
+        )}
+      </section>
     </section>
   );
 }
