@@ -11,7 +11,7 @@ import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MyProfilePage from "./pages/MyProfilePage.jsx";
 import PublicProfilePage from "./pages/PublicProfilePage.jsx";
-import MusicPage from "./pages/MusicPage.jsx";
+
 import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
 import DownloadPage from "./pages/DownloadPage.jsx";
@@ -834,6 +834,24 @@ export default function App() {
     }, 2000);
     return () => clearInterval(interval);
   }, [token, selectedEventId, location.pathname]);
+
+  // Background Spotify syncing interval
+  useEffect(() => {
+    if (!token || !user?.spotifyLinked || !user?.musicShareNowPlaying) return undefined;
+
+    async function ping() {
+      try {
+        await api("/music/spotify/sync-now-playing", { method: "POST", body: {} });
+        await refreshUserFromAuthMe();
+      } catch (e) {
+        console.error("[spotify-bg-sync]", e);
+      }
+    }
+
+    void ping();
+    const iv = setInterval(() => void ping(), 22000);
+    return () => clearInterval(iv);
+  }, [token, user?.spotifyLinked, user?.musicShareNowPlaying, api]);
 
   async function login() {
     if (loadingAuth) return;
@@ -1883,6 +1901,9 @@ export default function App() {
               onLogout={logout}
               liteMode={liteMode}
               onToggleLiteMode={toggleLiteMode}
+              api={api}
+              token={token}
+              refreshUser={refreshUserFromAuthMe}
             />
           }
         />
@@ -1913,21 +1934,7 @@ export default function App() {
             />
           }
         />
-        <Route
-          path="/music"
-          element={
-            <MusicPage
-              api={api}
-              apiForm={apiForm}
-              token={token}
-              user={user}
-              setNotice={setNotice}
-              refreshUser={refreshUserFromAuthMe}
-              onOpenDmWithUser={(friendId) => void openDmAndFocusUser(friendId)}
-              liteMode={liteMode}
-            />
-          }
-        />
+
         <Route
           path="/messages"
           element={

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { mediaUrl } from "../services/api.js";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import AvatarEditModal from "../components/AvatarEditModal.jsx";
@@ -43,10 +44,59 @@ const AVAILABILITY_CHOICES = [
   }
 ];
 
-export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout, liteMode, onToggleLiteMode }) {
+export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout, liteMode, onToggleLiteMode, api, token, refreshUser }) {
+  const navigate = useNavigate();
   const spotifyLinked = Boolean(user.spotifyLinked);
   const [musicShareNowPlaying, setMusicShareNowPlaying] = useState(() => Boolean(user.musicShareNowPlaying));
   const np = user.musicNowPlaying;
+  const [connectBusy, setConnectBusy] = useState(false);
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const s = p.get("spotify");
+    if (!s) return;
+    if (s === "connected") {
+      setNotice?.("Spotify linked. Enable sharing under Profile → Spotify.");
+    } else if (s === "error") {
+      setNotice?.("Spotify link didn’t finish. Try connecting again.");
+    }
+    navigate("/settings", { replace: true });
+    refreshUser?.();
+  }, [navigate, refreshUser, setNotice]);
+
+  async function handleConnectSpotify() {
+    if (!token || !api) return;
+    setConnectBusy(true);
+    try {
+      const data = await api("/music/spotify/connect", { method: "POST", body: {} });
+      if (data?.authorizeUrl && typeof window !== "undefined") {
+        window.location.href = data.authorizeUrl;
+        return;
+      }
+      setNotice?.(typeof data?.error === "string" ? data.error : "Could not start Spotify link");
+    } catch (e) {
+      console.error("[connect-spotify]", e);
+      setNotice?.("Error starting Spotify integration");
+    } finally {
+      setConnectBusy(false);
+    }
+  }
+
+  async function handleDisconnectSpotify() {
+    if (!token || !api || !window.confirm("Disconnect Spotify from SiglaCast?")) return;
+    try {
+      const data = await api("/music/spotify", { method: "DELETE" });
+      if (data?.error) {
+        setNotice?.(typeof data.error === "string" ? data.error : "Could not disconnect.");
+        return;
+      }
+      await refreshUser?.();
+      setNotice?.("Spotify disconnected");
+    } catch (e) {
+      console.error("[disconnect-spotify]", e);
+      setNotice?.("Error disconnecting Spotify");
+    }
+  }
 
   useEffect(() => {
     setMusicShareNowPlaying(Boolean(user.musicShareNowPlaying));
@@ -291,13 +341,31 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
 
         <label className="field-label">Spotify activity</label>
         <p className="muted small profile-field-hint">
-          Link Spotify on the Music page first. Friends only see tracks while Spotify reports you as actively listening.
+          Connect your Spotify account to show what you're listening to in real-time. Friends only see tracks while Spotify reports you as actively listening.
         </p>
         {!spotifyLinked ? (
-          <p className="muted small profile-music-muted">
-            Connect Spotify under <strong>Music</strong> to enable listening status on your bio.
-          </p>
-        ) : null}
+          <div style={{ marginBottom: "12px" }}>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              disabled={connectBusy}
+              onClick={() => void handleConnectSpotify()}
+            >
+              {connectBusy ? "Connecting..." : "Link Spotify account →"}
+            </button>
+          </div>
+        ) : (
+          <div style={{ marginBottom: "12px" }}>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ color: "#ff4d4d", borderColor: "rgba(255, 77, 77, 0.4)" }}
+              onClick={() => void handleDisconnectSpotify()}
+            >
+              Disconnect Spotify
+            </button>
+          </div>
+        )}
 
         <label className={`profile-checkbox-row${!spotifyLinked ? " disabled" : ""}`}>
           <input
@@ -310,7 +378,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
         </label>
 
         {spotifyLinked && np?.title ? (
-          <div className="profile-music-snippet-muted muted small">
+          <div className="profile-music-snippet-muted muted small" style={{ marginTop: "8px" }}>
             Last Spotify sync{np.isPlaying ? " (currently playing)" : " (paused or idle)"}: <strong>{np.title}</strong>
             {np.artist ? <span>{` · ${np.artist}`}</span> : null}
           </div>

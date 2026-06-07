@@ -101,10 +101,7 @@ export default function FloatingQuickNav({
               {addFriends ? <span className="fq-ping">{addFriends}</span> : null}
               <span className="fq-label">Add Friends</span>
             </NavLink>
-            <NavLink to="/music" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
-              <NavIcon name="music" />
-              <span className="fq-label">Music</span>
-            </NavLink>
+
             <NavLink to="/notifications" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               <NavIcon name="notifications" />
               {bell ? <span className="fq-ping">{bell}</span> : null}

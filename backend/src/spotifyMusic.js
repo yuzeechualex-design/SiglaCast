@@ -10,7 +10,7 @@ export const SPOTIFY_FRONTEND_AFTER_LINK =
   process.env.SPOTIFY_FRONTEND_AFTER_LINK?.trim() ||
   process.env.SPOTIFY_FRONTEND_REDIRECT?.trim() ||
   process.env.SPOTIFY_FRONTEND_RETURN?.trim() ||
-  "http://localhost:5173/music";
+  "http://localhost:5173/settings";
 
 const SCOPES = ["user-read-currently-playing", "user-read-playback-state"].join(" ");
 
