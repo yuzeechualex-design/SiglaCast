@@ -826,12 +826,14 @@ export default function App() {
     return () => clearInterval(iv);
   }, [token, user?.spotifyLinked, user?.musicShareNowPlaying, api]);
 
-  async function login() {
+  async function login(overrideEmail, overridePassword) {
     if (loadingAuth) return;
     setLoadingAuth(true);
+    const targetEmail = overrideEmail !== undefined ? overrideEmail : email;
+    const targetPassword = overridePassword !== undefined ? overridePassword : password;
     const res = await api("/auth/login", {
       method: "POST",
-      body: { email: normalizeRegistrationEmail(email), password }
+      body: { email: normalizeRegistrationEmail(targetEmail), password: targetPassword }
     });
     if (res.error) {
       setNotice(res.error);
@@ -846,7 +848,7 @@ export default function App() {
     setLoadingAuth(false);
   }
 
-  async function register(registrationPayload) {
+  async function register(registrationPayload, autoLogin = false) {
     if (loadingAuth) return;
     const source = registrationPayload ?? { name, email, password };
     const v = validateRegisterForm(source);
@@ -860,9 +862,33 @@ export default function App() {
       method: "POST",
       body: { name: regName, email: regEmail, password: regPassword, course: regCourse || "" }
     });
-    setNotice(res.error || "Registration successful. Please login.");
-    if (!res.error) setMode("login");
-    setLoadingAuth(false);
+    if (res.error) {
+      setNotice(res.error);
+      setLoadingAuth(false);
+    } else {
+      if (autoLogin) {
+        // Automatically login the newly registered user
+        const loginRes = await api("/auth/login", {
+          method: "POST",
+          body: { email: normalizeRegistrationEmail(regEmail), password: regPassword }
+        });
+        if (loginRes.error) {
+          setNotice(loginRes.error);
+        } else {
+          setToken(loginRes.token);
+          setUser(loginRes.user);
+          localStorage.setItem("siglacast_token", loginRes.token);
+          localStorage.setItem("siglacast_refresh_token", loginRes.refreshToken);
+          localStorage.setItem("siglacast_user", JSON.stringify(loginRes.user));
+          navigate("/community");
+        }
+        setLoadingAuth(false);
+      } else {
+        setNotice("Registration successful. Please login.");
+        setMode("login");
+        setLoadingAuth(false);
+      }
+    }
   }
 
   async function vote(eventId, candidateId) {
