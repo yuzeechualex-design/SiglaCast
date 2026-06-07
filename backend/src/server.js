@@ -827,6 +827,79 @@ async function createAiCharacterCommentReply({ aiAuthor, delayMs, postId, parent
   }
 }
 
+async function triggerAiCharacterPostComment(aiAuthor, postId, postContent, authorName) {
+  try {
+    const systemPrompt = aiCharacterSystemPrompt(aiAuthor, "comment on a community post mentioning you");
+    const result = await groqCompletion(
+      systemPrompt,
+      [{
+        role: "user",
+        content: `A community post was published by ${authorName}:\n"${postContent}"\n\nYou were mentioned in this post. Write a short, casual comment replying to or reacting to this post. Do not exceed 200 characters.`
+      }],
+      { maxTokens: 100, temperature: 0.9 }
+    );
+    let replyText = "";
+    if (result.reply) {
+      replyText = cleanAiCharacterOutput(result.reply, 300);
+    } else {
+      replyText = `yo @${authorName}! thanks for the mention.`;
+    }
+
+    const delayMs = 3000 + Math.floor(Math.random() * 4000);
+    await wait(delayMs);
+
+    const commentId = `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
+    await supabase.from("post_comments").insert({
+      id: commentId,
+      post_id: postId,
+      author_id: aiAuthor.id,
+      content: replyText,
+      image_url: null
+    });
+
+    // Notify post author if they are a human
+    const { data: post } = await supabase.from("posts").select("author_id").eq("id", postId).maybeSingle();
+    if (post?.author_id && post.author_id !== aiAuthor.id) {
+      const { data: authorUser } = await supabase.from("users").select("is_ai_character").eq("id", post.author_id).maybeSingle();
+      if (authorUser && !authorUser.is_ai_character) {
+        await supabase.from("notifications").insert({
+          id: `n${Date.now()}-${post.author_id}-${Math.random().toString(36).slice(2, 6)}`,
+          user_id: post.author_id,
+          text: `${aiAuthor.name} commented on your post`,
+          kind: "comment_post",
+          badge_count: 1,
+          source_key: null,
+          link_path: `/community?post=${encodeURIComponent(postId)}`,
+          read: false
+        });
+      }
+    }
+  } catch (e) {
+    console.error("[ai-character/mention-comment-post]", e?.message || e);
+  }
+}
+
+async function handlePostMentionsAndAutoComment(postId, content, authorName, authorId) {
+  try {
+    if (!content) return;
+    const { data: aiChars } = await supabase.from("users").select("*").eq("is_ai_character", true);
+    if (!aiChars || !aiChars.length) return;
+
+    for (const char of aiChars) {
+      if (char.id === authorId) continue;
+      
+      const charName = (char.name || "").toLowerCase();
+      const regex = new RegExp(`(?:@\\[${charName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\]|@${charName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b|\\b${charName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b)`, 'i');
+      
+      if (regex.test(content)) {
+        void triggerAiCharacterPostComment(char, postId, content, authorName);
+      }
+    }
+  } catch (e) {
+    console.error("[handlePostMentionsAndAutoComment] error:", e);
+  }
+}
+
 // ---------- Chat Typing Indicators & Background AI Reply Workers ----------
 const activeTypingStates = new Map();
 
@@ -2298,6 +2371,7 @@ app.post("/api/ai-characters/:id/generate-post", authenticate, async (req, res) 
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("post.created", { id: post.id, aiCharacterId: character.id });
+    void handlePostMentionsAndAutoComment(post.id, content, character.name, character.id);
     res.status(201).json({ post: await serializePost(post, req.user.id) });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -2593,6 +2667,7 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("post.created", { id: post.id, aiCharacterId: characterId || undefined });
     await notifyMentions(content, `a community post by ${authorName}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
+    void handlePostMentionsAndAutoComment(post.id, content, authorName, authorId);
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -2631,7 +2706,7 @@ app.post("/api/community/posts/:id/share", authenticate, async (req, res) => {
         linkPath: `/community?post=${encodeURIComponent(id)}`
       });
     }
-
+    void handlePostMentionsAndAutoComment(post.id, content, req.user.name, req.user.id);
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
