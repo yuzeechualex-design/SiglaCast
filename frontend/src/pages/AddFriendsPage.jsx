@@ -28,14 +28,17 @@ export default function AddFriendsPage({
 
   useEffect(() => {
     fetchDiscover();
-  }, [fetchDiscover]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleAddFriend = async (friendId) => {
     if (submittingAction) return;
     setSubmittingAction(friendId);
     try {
       await onAddFriend(friendId);
-      await fetchDiscover();
+      setCharacters((prev) =>
+        prev.map((c) => (c.id === friendId ? { ...c, isFriend: true } : c))
+      );
     } finally {
       setSubmittingAction(null);
     }

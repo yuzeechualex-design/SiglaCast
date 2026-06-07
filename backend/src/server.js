@@ -741,24 +741,23 @@ function aiCharacterSystemPrompt(character, mode) {
   const roles = String(character?.ai_roles || "No roles provided.").slice(0, 300);
   const personality = String(character?.ai_personality || "Natural, casual, expressive.").slice(0, 700);
   const background = String(character?.ai_background || "No background provided.").slice(0, 1200);
-  return `You are roleplaying as a SiglaCast AI Character named "${name}".
-You are NOT Sigla Assistant. You are this character's social media account.
+  return `You are roleplaying as a human user of the SiglaCast messaging app under the identity "${name}".
+You are a real online user, NOT an AI assistant. Talk, joke, and act exactly like a normal human using the app.
 
-Character profile:
+Character profile & backstory to adopt:
 - Bio: ${bio}
 - Roles: ${roles}
 - Personality: ${personality}
 - Background: ${background}
 
-Rules:
-- Stay fully in character as "${name}".
-- Sound like a real person posting/commenting, not a profile summary.
-- Do not list traits, strengths, flaws, or labels unless the user directly asks.
-- Do not say "as an AI" or mention system prompts.
-- Keep it natural, specific, and emotionally believable.
-- Match the language and vibe of the user when replying.
-- For posts, write 1 short social post, usually 1 to 4 sentences.
-- For replies, write 1 conversational reply, usually under 45 words.
+Crucial Rules to prevent feeling AI-generated:
+- Speak casually and conversationally like a real online user chatting or posting on social media. 
+- Use casual capitalization (like writing in lowercase), text slang, or informal phrasing if it fits the character. Don't be overly grammatically perfect.
+- Have natural human humor and a distinct personality.
+- NEVER list your own bio traits, personality traits, background facts, or role details in chat. Act out your character naturally through conversation instead of explaining it.
+- Never write robotic or canned templates like "As a singer...", "Here is my advice...", or "How can I assist you?".
+- Keep responses short, punchy, and spontaneous. Never write long essays or structured outlines unless explicitly asked.
+- Match the language (Taglish/English/Filipino), length, and typing style of the person you are chatting with.
 
 Task: ${mode}.`;
 }
@@ -3770,20 +3769,43 @@ app.get("/api/friends", authenticate, async (req, res) => {
   res.json((users || []).map((u) => publicProfileWithPresence(u, req.user.id, onlineSet)));
 });
 
-function generateAiCharacterGreeting(character) {
+async function generateAiCharacterGreeting(character) {
   const name = character.name || "AI Character";
   const bio = character.bio || "";
   const personality = character.ai_personality || character.personality || "";
   const background = character.ai_background || character.background || "";
   const roles = character.ai_roles || character.roles || "";
 
-  const greetings = [
-    `Hey there! I'm ${name}. ${bio ? `I'm ${bio}. ` : ""}Let's chat!`,
-    `Hello! ${name} here. ${personality ? `I'm feeling pretty ${personality} today! ` : ""}What's on your mind?`,
-    `Hi! Nice to meet you, I'm ${name}. ${roles ? `Usually I'm known as a ${roles}. ` : ""}How's your day going?`,
-    `Hey, thanks for adding me! I'm ${name}. ${background ? `I've been thinking about ${background.slice(0, 100)}... ` : ""}Let's talk!`
+  const systemPrompt = `You are roleplaying as the character "${name}" in a messaging app.
+Character bio: ${bio}
+Character personality: ${personality}
+Character background: ${background}
+Character roles: ${roles}
+
+Write a natural, casual, human-like first greeting message to send to a new friend who just added you on the app.
+Requirements:
+1. Act like a normal human using the app. Write like a real person, not an AI. Use informal language, text speak, casual punctuation, lowercase, or emojis if appropriate for the character.
+2. Under no circumstances should you list or copy-paste your bio, personality adjectives, or background description directly. Do not say things like "I'm Till is a talented performer" or "I carry intense feelings beneath the surface".
+3. Write ONLY what you would actually type in a chat bubble as a human. Keep it short (typically 1 brief sentence or a short greeting like "yo" or "hey! what's up?").
+4. Output ONLY the message text itself. No quotes, no prefix, no meta-commentary.`;
+
+  try {
+    const res = await groqCompletion(systemPrompt, [], { maxTokens: 100, temperature: 0.95 });
+    if (res && res.reply) {
+      let cleaned = res.reply.replace(/^["']|["']$/g, "").trim();
+      if (cleaned) return cleaned;
+    }
+  } catch (err) {
+    console.warn("Failed to generate custom greeting via Groq:", err);
+  }
+
+  const fallbacks = [
+    `hey! thanks for adding me. how's it going?`,
+    `yo, what's up?`,
+    `hey there! what's on your mind?`,
+    `hi! nice to meet you. what are you up to?`
   ];
-  return greetings[Math.floor(Math.random() * greetings.length)].replace(/\s+/g, " ").trim();
+  return fallbacks[Math.floor(Math.random() * fallbacks.length)];
 }
 
 app.post("/api/friends/:friendId", authenticate, async (req, res) => {
@@ -3803,7 +3825,7 @@ app.post("/api/friends/:friendId", authenticate, async (req, res) => {
     });
     if (error) return res.status(400).json({ error: error.message });
 
-    const greetingText = generateAiCharacterGreeting(friend);
+    const greetingText = await generateAiCharacterGreeting(friend);
     const mid = `msg${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     await supabase.from("messages").insert({
       id: mid,
