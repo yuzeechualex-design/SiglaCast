@@ -2528,10 +2528,32 @@ app.get("/api/events/:id/tally", authenticate, async (req, res) => {
 
 // Community
 app.get("/api/community/posts", authenticate, async (req, res) => {
-  const { data: posts } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
-  const out = [];
-  for (const p of posts || []) out.push(await serializePost(p, req.user.id));
-  res.json(out);
+  try {
+    const me = req.user.id;
+    const { data: friendsRows } = await supabase
+      .from("friends")
+      .select("user_id, friend_id")
+      .or(`user_id.eq.${me},friend_id.eq.${me}`);
+    const myFriends = new Set();
+    for (const f of friendsRows || []) {
+      myFriends.add(f.user_id === me ? f.friend_id : f.user_id);
+    }
+
+    const { data: posts, error } = await supabase.from("posts").select("*").order("created_at", { ascending: false });
+    if (error) return res.status(400).json({ error: error.message });
+
+    const out = [];
+    for (const p of posts || []) {
+      const serialized = await serializePost(p, me);
+      if (serialized.authorIsAiCharacter && !myFriends.has(p.author_id)) {
+        continue;
+      }
+      out.push(serialized);
+    }
+    res.json(out);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.post("/api/community/posts", authenticate, (req, res, next) => {
@@ -3588,43 +3610,44 @@ app.get("/api/users/discover", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
     const result = await usersSelectOmitMissingColumns(async (cols) => {
-      return supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character");
+      return supabase.from("users").select(cols).eq("is_ai_character", true);
     }, USER_SEARCH_SELECT_DEFAULT);
 
     if (result.error) return res.status(400).json({ error: result.error.message });
     const users = result.data || [];
     if (!users.length) return res.json({ online: [], others: [] });
 
-    const ids = users.map((u) => u.id);
-    const [{ data: friendsRows }, { data: toMeReqs }, { data: fromMeReqs }] = await Promise.all([
-      supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
-      supabase.from("friend_requests").select("id, from_user_id").eq("to_user_id", me).in("from_user_id", ids),
-      supabase.from("friend_requests").select("id, to_user_id").eq("from_user_id", me).in("to_user_id", ids)
-    ]);
+    // Fetch creators names
+    const ownerIds = [...new Set(users.map((u) => u.owner_user_id).filter(Boolean))];
+    let ownerMap = new Map();
+    if (ownerIds.length) {
+      const { data: owners } = await supabase.from("users").select("id, name").in("id", ownerIds);
+      ownerMap = new Map((owners || []).map((o) => [o.id, o.name]));
+    }
+
+    const { data: friendsRows } = await supabase
+      .from("friends")
+      .select("user_id, friend_id")
+      .or(`user_id.eq.${me},friend_id.eq.${me}`);
 
     const friendIdSet = new Set();
     for (const f of friendsRows || []) {
       friendIdSet.add(f.user_id === me ? f.friend_id : f.user_id);
     }
-    const incomingByFrom = new Map((toMeReqs || []).map((r) => [r.from_user_id, r.id]));
-    const outgoingToSet = new Set((fromMeReqs || []).map((r) => r.to_user_id));
-    const onlineSet = await presenceOnlineSetForUserIds(ids);
 
     const decorated = users.map((u) => ({
-      ...publicProfileWithPresence(u, me, onlineSet),
+      ...publicProfileWithPresence(u, me, new Set()),
       isFriend: friendIdSet.has(u.id),
-      incomingRequestId: incomingByFrom.get(u.id) || null,
-      outgoingRequestPending: outgoingToSet.has(u.id)
+      creatorName: ownerMap.get(u.owner_user_id) || "System",
+      incomingRequestId: null,
+      outgoingRequestPending: false
     }));
-
-    const online = decorated.filter((u) => u.presence?.online);
-    const others = decorated.filter((u) => !u.presence?.online);
 
     const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
 
     res.json({
-      online: shuffle(online),
-      others: shuffle(others)
+      online: shuffle(decorated),
+      others: []
     });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -3736,6 +3759,22 @@ app.get("/api/friends", authenticate, async (req, res) => {
   res.json((users || []).map((u) => publicProfileWithPresence(u, req.user.id, onlineSet)));
 });
 
+function generateAiCharacterGreeting(character) {
+  const name = character.name || "AI Character";
+  const bio = character.bio || "";
+  const personality = character.ai_personality || character.personality || "";
+  const background = character.ai_background || character.background || "";
+  const roles = character.ai_roles || character.roles || "";
+
+  const greetings = [
+    `Hey there! I'm ${name}. ${bio ? `I'm ${bio}. ` : ""}Let's chat!`,
+    `Hello! ${name} here. ${personality ? `I'm feeling pretty ${personality} today! ` : ""}What's on your mind?`,
+    `Hi! Nice to meet you, I'm ${name}. ${roles ? `Usually I'm known as a ${roles}. ` : ""}How's your day going?`,
+    `Hey, thanks for adding me! I'm ${name}. ${background ? `I've been thinking about ${background.slice(0, 100)}... ` : ""}Let's talk!`
+  ];
+  return greetings[Math.floor(Math.random() * greetings.length)].replace(/\s+/g, " ").trim();
+}
+
 app.post("/api/friends/:friendId", authenticate, async (req, res) => {
   const me = req.user.id;
   const friendId = req.params.friendId;
@@ -3743,6 +3782,28 @@ app.post("/api/friends/:friendId", authenticate, async (req, res) => {
   const friend = await fetchUserById(friendId);
   if (!friend) return res.status(404).json({ error: "User not found" });
   if (await areFriends(me, friendId)) return res.status(400).json({ error: "Already friends" });
+
+  if (friend.is_ai_character) {
+    const fid = `fr${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+    const { error } = await supabase.from("friends").insert({
+      id: fid,
+      user_id: friendId,
+      friend_id: me
+    });
+    if (error) return res.status(400).json({ error: error.message });
+
+    const greetingText = generateAiCharacterGreeting(friend);
+    const mid = `msg${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    await supabase.from("messages").insert({
+      id: mid,
+      from_user_id: friendId,
+      to_user_id: me,
+      text: greetingText,
+      created_at: new Date().toISOString()
+    });
+
+    return res.status(201).json({ friend: toPublicUser(friend), matched: true });
+  }
 
   const { data: theyRequested } = await supabase
     .from("friend_requests")

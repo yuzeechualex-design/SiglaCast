@@ -156,22 +156,7 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
-          <NavLink to="/announcements" className="nav-btn" title="Announcements">
-            <NavIcon name="announcements" />
-            {ann ? (
-              <span className="nav-ping" aria-label={`${navBadges.announcements} new announcements`}>
-                {ann}
-              </span>
-            ) : null}
-          </NavLink>
-          <NavLink to="/events" className="nav-btn" title="Events">
-            <NavIcon name="events" />
-            {ev ? (
-              <span className="nav-ping" aria-label={`${navBadges.events} open events`}>
-                {ev}
-              </span>
-            ) : null}
-          </NavLink>
+
           <NavLink to="/characters" className="nav-btn" title="Create AI Character">
             <NavIcon name="plus" />
           </NavLink>

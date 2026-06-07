@@ -3,10 +3,7 @@ import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-
 import { request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
-import EventsPage from "./pages/EventsPage.jsx";
-import EventDetailPage from "./pages/EventDetailPage.jsx";
 import CommunityPage from "./pages/CommunityPage.jsx";
-import AnnouncementsPage from "./pages/AnnouncementsPage.jsx";
 import NotificationsPage from "./pages/NotificationsPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 import MyProfilePage from "./pages/MyProfilePage.jsx";
@@ -1767,42 +1764,7 @@ export default function App() {
       <MusicPlayerProvider>
       <Routes>
         <Route path="/" element={<Navigate to="/community" replace />} />
-        <Route
-          path="/events"
-          element={
-            <EventsPage
-              events={events}
-              onOpenEvent={openEvent}
-              currentUser={user}
-              onDeleteEvent={deleteEvent}
-              {...(user.role === "admin"
-                ? {
-                    newEventTitle,
-                    setNewEventTitle,
-                    newEventDesc,
-                    setNewEventDesc,
-                    newEventRules,
-                    setNewEventRules,
-                    newEventMaxVotes,
-                    setNewEventMaxVotes,
-                    newEventStrategy,
-                    setNewEventStrategy,
-                    newEventCandidates,
-                    setNewEventCandidates,
-                    newCandidateImageUrls,
-                    setNewCandidateImageUrls,
-                    newEventCoverFile,
-                    setNewEventCoverFile,
-                    onCreateEvent: createEvent,
-                    adminUsers,
-                    onDeleteUser: deleteUser
-                  }
-                : {})}
-              liteMode={liteMode}
-            />
-          }
-        />
-        <Route path="/events/detail" element={<EventDetailPage selectedEvent={selectedEvent} onVote={vote} liteMode={liteMode} />} />
+
         <Route path="/assistant" element={<Navigate to="/messages" replace />} />
         <Route
           path="/community"
@@ -1907,22 +1869,7 @@ export default function App() {
             />
           }
         />
-        <Route
-          path="/announcements"
-          element={
-            <AnnouncementsPage
-              user={user}
-              announcements={announcements}
-              newAnnouncementTitle={newAnnouncementTitle}
-              setNewAnnouncementTitle={setNewAnnouncementTitle}
-              newAnnouncementMessage={newAnnouncementMessage}
-              setNewAnnouncementMessage={setNewAnnouncementMessage}
-              onCreateAnnouncement={createAnnouncement}
-              onDeleteAnnouncement={deleteAnnouncement}
-              onVisited={markAnnouncementsSeen}
-            />
-          }
-        />
+
         <Route
           path="/notifications"
           element={

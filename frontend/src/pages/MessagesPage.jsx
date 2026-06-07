@@ -381,11 +381,6 @@ export default function MessagesPage({
     <section
       className={`panel single messages-panel ${mobileThreadFullscreen ? "messages-mobile-fullscreen" : ""}`}
     >
-      <div className="panel-head">
-        <h2>✉️ Messages</h2>
-        <p>Direct messages, group chats, and shared files.</p>
-      </div>
-
       <div className="messages-layout">
         {isNarrowViewport && token && !liteMode ? (
           <div
