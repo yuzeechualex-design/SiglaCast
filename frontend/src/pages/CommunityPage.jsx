@@ -495,11 +495,29 @@ function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
 
 function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, liteMode = false }) {
   const [replyingTo, setReplyingTo] = useState(null);
+  const [aiTyping, setAiTyping] = useState(false);
   const comments = post.comments || [];
+  const aiWillReply =
+    Boolean(post.authorIsAiCharacter && post.authorAiAutoReply) &&
+    post.authorId !== currentUser?.id;
 
   async function submitReply(parentId, payload) {
-    await onComment(post.id, payload, parentId);
-    setReplyingTo(null);
+    if (aiWillReply) setAiTyping(true);
+    try {
+      await onComment(post.id, payload, parentId);
+      setReplyingTo(null);
+    } finally {
+      if (aiWillReply) setAiTyping(false);
+    }
+  }
+
+  async function submitTopLevel(postId, payload) {
+    if (aiWillReply) setAiTyping(true);
+    try {
+      await onComment(postId, payload, null);
+    } finally {
+      if (aiWillReply) setAiTyping(false);
+    }
   }
 
   return (
@@ -553,9 +571,32 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
         ))}
       </ul>
 
+      {aiTyping ? (
+        <div className="comment-row ai-typing-row">
+          <div className="comment-profile-avatar-btn ai-typing-avatar" aria-hidden>
+            {post.authorAvatar ? (
+              <img className="comment-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+            ) : (
+              <div className="comment-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+            )}
+          </div>
+          <div className="comment-body">
+            <div className="comment-bubble ai-typing-bubble">
+              <strong>{post.author}</strong>{" "}
+              <span className="ai-character-badge comment-ai-character-badge">AI Character</span>
+              <span className="typing-dots" aria-label={`${post.author} is replying`}>
+                <span />
+                <span />
+                <span />
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <CommentBox
         postId={post.id}
-        onComment={(postId, payload) => onComment(postId, payload, null)}
+        onComment={submitTopLevel}
         currentUser={currentUser}
       />
     </div>

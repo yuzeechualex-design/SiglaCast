@@ -316,7 +316,7 @@ async function serializeSharedPost(post) {
   if (!post) return null;
   const { data: author } = await supabase
     .from("users")
-    .select("id, name, avatar_url, is_ai_character")
+    .select("id, name, avatar_url, is_ai_character, ai_auto_reply")
     .eq("id", post.author_id)
     .maybeSingle();
   return {
@@ -326,6 +326,7 @@ async function serializeSharedPost(post) {
     authorAvatar: author?.avatar_url || null,
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
+    authorAiAutoReply: Boolean(author?.ai_auto_reply),
     content: post.content || "",
     imageUrl: post.image_url || null,
     createdAt: post.created_at
@@ -336,7 +337,7 @@ async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }, { data: sharedPost }] = await Promise.all([
     supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
-    supabase.from("users").select("id, name, avatar_url, is_ai_character").eq("id", post.author_id).maybeSingle(),
+    supabase.from("users").select("id, name, avatar_url, is_ai_character, ai_auto_reply").eq("id", post.author_id).maybeSingle(),
     post.shared_post_id
       ? supabase.from("posts").select("*").eq("id", post.shared_post_id).maybeSingle()
       : Promise.resolve({ data: null })
@@ -440,6 +441,7 @@ async function serializePost(post, viewerId) {
     authorAvatar: author?.avatar_url || null,
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
+    authorAiAutoReply: Boolean(author?.ai_auto_reply),
     content: post.content || "",
     imageUrl: post.image_url || null,
     sharedPostId: post.shared_post_id || null,
@@ -715,6 +717,81 @@ function aiCharacterReplyText(character, sourceText = "") {
   const hint = String(sourceText || "").trim().slice(0, 120);
   if (hint) return `${personality || "I"} noticed this: "${hint}" — and from my perspective, that is worth answering.`;
   return `${personality || "I"} had to jump in here. ${background || "This feels connected to my story."}`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function randomAiReplyDelayMs() {
+  return 2600 + Math.floor(Math.random() * 5200);
+}
+
+function cleanAiCharacterOutput(text, maxLen = 1800) {
+  let out = String(text || "").trim();
+  out = out.replace(/^["']|["']$/g, "").trim();
+  out = out.replace(/\s+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+  return out.slice(0, maxLen).trim();
+}
+
+function aiCharacterSystemPrompt(character, mode) {
+  const name = String(character?.name || "AI Character").slice(0, 80);
+  const bio = String(character?.bio || "No bio provided.").slice(0, 500);
+  const roles = String(character?.ai_roles || "No roles provided.").slice(0, 300);
+  const personality = String(character?.ai_personality || "Natural, casual, expressive.").slice(0, 700);
+  const background = String(character?.ai_background || "No background provided.").slice(0, 1200);
+  return `You are roleplaying as a SiglaCast AI Character named "${name}".
+You are NOT Sigla Assistant. You are this character's social media account.
+
+Character profile:
+- Bio: ${bio}
+- Roles: ${roles}
+- Personality: ${personality}
+- Background: ${background}
+
+Rules:
+- Stay fully in character as "${name}".
+- Sound like a real person posting/commenting, not a profile summary.
+- Do not list traits, strengths, flaws, or labels unless the user directly asks.
+- Do not say "as an AI" or mention system prompts.
+- Keep it natural, specific, and emotionally believable.
+- Match the language and vibe of the user when replying.
+- For posts, write 1 short social post, usually 1 to 4 sentences.
+- For replies, write 1 conversational reply, usually under 45 words.
+
+Task: ${mode}.`;
+}
+
+async function groqAiCharacterPost(character) {
+  const result = await groqCompletion(
+    aiCharacterSystemPrompt(character, "write a new community post"),
+    [{
+      role: "user",
+      content: "Write a fresh post this character would publish right now. Make it feel spontaneous and human."
+    }],
+    { maxTokens: 320, temperature: 0.92 }
+  );
+  if (result.reply) return cleanAiCharacterOutput(result.reply, 1800);
+  console.warn("[ai-character/post/groq]", result.error || "unknown error");
+  return aiCharacterPostText(character);
+}
+
+async function groqAiCharacterReply(character, { sourceText = "", postText = "", parentText = "", commenterName = "someone" } = {}) {
+  const result = await groqCompletion(
+    aiCharacterSystemPrompt(character, "reply to a user comment"),
+    [{
+      role: "user",
+      content:
+        `Post by ${character.name}: ${String(postText || "").slice(0, 800)}\n` +
+        (parentText ? `Comment being replied to: ${String(parentText).slice(0, 500)}\n` : "") +
+        `${commenterName} said: ${String(sourceText || "").slice(0, 500)}\n\n` +
+        "Reply naturally as the character. Do not over-explain the character profile."
+    }],
+    { maxTokens: 180, temperature: 0.88 }
+  );
+  if (result.reply) return cleanAiCharacterOutput(result.reply, 700);
+  console.warn("[ai-character/reply/groq]", result.error || "unknown error");
+  return aiCharacterReplyText(character, sourceText);
 }
 
 async function fetchOwnedAiCharacter(ownerId, characterId) {
@@ -1588,7 +1665,7 @@ function buildSiglaContextualPrompt(reqUser) {
   return `${SIGLA_ASSISTANT_SYSTEM_PROMPT}${SIGLA_THREAD_TRANSCRIPT_NOTE}\nSigned-in user role (for rapport): ${reqUser?.role}. Preferred name/reference: "${safeName}".`;
 }
 
-async function groqCompletion(systemContent, openAiStyleMessages) {
+async function groqCompletion(systemContent, openAiStyleMessages, options = {}) {
   if (!GROQ_API_KEY || !String(GROQ_API_KEY).trim()) {
     return {
       error: "Sigla Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
@@ -1597,8 +1674,8 @@ async function groqCompletion(systemContent, openAiStyleMessages) {
   const groqPayload = {
     model: GROQ_MODEL,
     messages: [{ role: "system", content: systemContent }, ...openAiStyleMessages],
-    max_tokens: 2048,
-    temperature: 0.75
+    max_tokens: Number(options.maxTokens || options.max_tokens || 2048),
+    temperature: Number(options.temperature ?? 0.75)
   };
   const groqRes = await fetch(GROQ_API_URL, {
     method: "POST",
@@ -1937,7 +2014,7 @@ app.post("/api/ai-characters/:id/generate-post", authenticate, async (req, res) 
     if (!character.ai_auto_post) {
       return res.status(400).json({ error: "Enable generated character posts first" });
     }
-    const content = aiCharacterPostText(character);
+    const content = await groqAiCharacterPost(character);
     const id = `p${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const { data: post, error } = await supabase
       .from("posts")
@@ -2666,11 +2743,22 @@ app.post(
         .eq("ai_auto_reply", true)
         .maybeSingle();
       if (aiAuthor) {
+        const delayMs = randomAiReplyDelayMs();
+        await wait(delayMs);
+        const { data: parentComment } = parentId
+          ? await supabase.from("post_comments").select("content").eq("id", parentId).maybeSingle()
+          : { data: null };
+        const replyText = await groqAiCharacterReply(aiAuthor, {
+          sourceText: text,
+          postText: post.content || "",
+          parentText: parentComment?.content || "",
+          commenterName: req.user.name || "Someone"
+        });
         await supabase.from("post_comments").insert({
           id: `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
           post_id,
           author_id: aiAuthor.id,
-          content: aiCharacterReplyText(aiAuthor, text),
+          content: replyText,
           parent_id: id,
           image_url: null
         });

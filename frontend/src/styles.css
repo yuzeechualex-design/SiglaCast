@@ -6341,6 +6341,62 @@ button.comment-profile-avatar-btn:focus-visible {
   margin-right: 4px;
 }
 
+.ai-typing-row {
+  margin-top: 4px;
+  opacity: 0.92;
+}
+
+.ai-typing-avatar {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.ai-typing-bubble {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 38px;
+}
+
+.typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 2px;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--ink-600);
+  opacity: 0.42;
+  animation: ai-typing-dot 1s ease-in-out infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+@keyframes ai-typing-dot {
+  0%,
+  80%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.36;
+  }
+  40% {
+    transform: translateY(-4px);
+    opacity: 0.95;
+  }
+}
+
 .reply-mention {
   color: var(--blue-700);
   font-weight: 600;
