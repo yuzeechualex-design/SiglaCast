@@ -22,12 +22,16 @@ export default function DownloadPage() {
           <p className="download-eyebrow">Community, music, messages, stories</p>
           <h1>DOWNLOAD SIGLACAST WHEREVER YOU HANG OUT</h1>
           <p className="download-subtitle">
-            Bring your community feed, chats, music status, events, and profile updates into one fast Android app.
+            Bring your community feed, chats, music status, events, and profile updates into one fast Android or PC app.
           </p>
           <div className="download-actions">
             <a className="download-primary-btn" href="/downloads/siglacast.apk" download>
               <span aria-hidden="true">↓</span>
-              <span>Download app</span>
+              <span>Download Android App</span>
+            </a>
+            <a className="download-primary-btn" href="/downloads/siglacast.exe" download style={{ background: "#3b82f6", color: "#ffffff" }}>
+              <span aria-hidden="true">↓</span>
+              <span>Download PC Version</span>
             </a>
             <Link className="download-secondary-btn" to="/">
               Open web app

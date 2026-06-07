@@ -1,5 +1,9 @@
 {
   "appId": "com.siglacast.app",
   "appName": "siglacast",
-  "webDir": "dist"
+  "webDir": "dist",
+  "exclude": [
+    "downloads",
+    "downloads/**/*"
+  ]
 }

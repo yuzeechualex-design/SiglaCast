@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { request, requestForm } from "./services/api.js";
+import { API_ORIGIN, request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import CommunityPage from "./pages/CommunityPage.jsx";
@@ -121,6 +121,7 @@ export default function App() {
   const [newCandidateImageUrls, setNewCandidateImageUrls] = useState("");
   const [newEventCoverFile, setNewEventCoverFile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(false);
+  const oauthLoginBusyRef = useRef(false);
   const [appRefreshBusy, setAppRefreshBusy] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -231,6 +232,60 @@ export default function App() {
       method,
       onUnauthorizedRetry
     });
+
+  function startSocialLogin(provider) {
+    if (loadingAuth) return;
+    const callbackUrl = `${window.location.origin}/auth/callback`;
+    localStorage.setItem("siglacast_oauth_provider", provider);
+    window.location.href = `${API_ORIGIN}/api/auth/oauth/${encodeURIComponent(provider)}/start?redirectTo=${encodeURIComponent(callbackUrl)}`;
+  }
+
+  async function completeSocialLogin(provider, accessToken) {
+    if (loadingAuth || oauthLoginBusyRef.current) return;
+    oauthLoginBusyRef.current = true;
+    setLoadingAuth(true);
+    const res = await request("/auth/oauth/session", {
+      method: "POST",
+      body: { provider, accessToken }
+    });
+    if (res.error) {
+      localStorage.removeItem("siglacast_oauth_provider");
+      setNotice(res.error);
+      navigate("/login", { replace: true });
+    } else {
+      localStorage.removeItem("siglacast_oauth_provider");
+      setToken(res.token);
+      setUser(res.user);
+      localStorage.setItem("siglacast_token", res.token);
+      localStorage.setItem("siglacast_refresh_token", res.refreshToken);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+      window.history.replaceState(null, "", "/community");
+      navigate("/community", { replace: true });
+    }
+    setLoadingAuth(false);
+    oauthLoginBusyRef.current = false;
+  }
+
+  useEffect(() => {
+    if (location.pathname !== "/auth/callback") return;
+    const hashParams = new URLSearchParams((window.location.hash || "").replace(/^#/, ""));
+    const searchParams = new URLSearchParams(window.location.search || "");
+    const error = hashParams.get("error_description") || hashParams.get("error") || searchParams.get("error_description") || searchParams.get("error");
+    if (error) {
+      setNotice(error);
+      navigate("/login", { replace: true });
+      return;
+    }
+    const accessToken = hashParams.get("access_token") || searchParams.get("access_token");
+    const inferredProvider = (hashParams.get("provider") || searchParams.get("provider") || localStorage.getItem("siglacast_oauth_provider") || "").toLowerCase();
+    if (!accessToken) {
+      setNotice("Social sign-in did not return a session. Please try again.");
+      navigate("/login", { replace: true });
+      return;
+    }
+    const selectedProvider = inferredProvider === "apple" ? "apple" : "google";
+    void completeSocialLogin(selectedProvider, accessToken);
+  }, [location.pathname]);
 
   const activeChatRef = useRef(activeChat);
   activeChatRef.current = activeChat;
@@ -1740,6 +1795,7 @@ export default function App() {
         loading={loadingAuth}
         onLogin={login}
         onRegister={register}
+        onSocialLogin={startSocialLogin}
       />
     );
   }

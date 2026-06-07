@@ -9,6 +9,7 @@ import { XMLParser } from "fast-xml-parser";
 import xsltProcessor from "xslt-processor";
 import fs from "node:fs/promises";
 import path from "node:path";
+import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
@@ -34,6 +35,7 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-refresh-secret";
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "365d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
+const OAUTH_REDIRECT_ORIGIN = process.env.OAUTH_REDIRECT_ORIGIN || (FRONTEND_ORIGIN !== "*" ? FRONTEND_ORIGIN.split(",")[0].trim() : "http://localhost:5173");
 const MOBILE_APP_ORIGINS = ["capacitor://localhost", "http://localhost", "https://localhost"];
 
 /** Sigla Assistant (Groq) — key must be supplied via environment only, never committed. */
@@ -199,6 +201,12 @@ function signRefreshToken(user) {
   return jwt.sign({ sub: user.id, type: "refresh" }, REFRESH_TOKEN_SECRET, { expiresIn: REFRESH_TOKEN_EXPIRES_IN });
 }
 
+function issueAuthSession(user) {
+  const accessToken = signAccessToken(user);
+  const refreshToken = signRefreshToken(user);
+  return { accessToken, refreshToken };
+}
+
 // Data helpers
 async function fetchUserById(id) {
   const { data } = await supabase.from("users").select("*").eq("id", id).maybeSingle();
@@ -206,6 +214,72 @@ async function fetchUserById(id) {
 }
 async function fetchUserByEmail(email) {
   const { data } = await supabase.from("users").select("*").ilike("email", email).maybeSingle();
+  return data;
+}
+
+function frontendAuthCallbackUrl(rawRedirectTo) {
+  const fallback = `${OAUTH_REDIRECT_ORIGIN.replace(/\/$/, "")}/auth/callback`;
+  if (!rawRedirectTo) return fallback;
+  try {
+    const url = new URL(String(rawRedirectTo));
+    const allowedOrigins = new Set(
+      [OAUTH_REDIRECT_ORIGIN, FRONTEND_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"]
+        .flatMap((value) => String(value || "").split(","))
+        .map((value) => value.trim().replace(/\/$/, ""))
+        .filter((value) => value && value !== "*")
+    );
+    const isLocalhost = ["localhost", "127.0.0.1"].includes(url.hostname);
+    if ((url.protocol === "http:" || url.protocol === "https:") && (allowedOrigins.has(url.origin) || isLocalhost)) {
+      return url.toString();
+    }
+  } catch (_) {
+    // Fall through to the configured callback.
+  }
+  return fallback;
+}
+
+function oauthProviderFromValue(value) {
+  const provider = String(value || "").toLowerCase();
+  return provider === "google" || provider === "apple" ? provider : null;
+}
+
+function oauthUserEmailAllowed(provider, email) {
+  if (!email) return false;
+  if (provider === "google") return email.toLowerCase().endsWith("@gmail.com");
+  return true;
+}
+
+async function upsertOAuthUser({ provider, email, name, avatarUrl }) {
+  const existing = await fetchUserByEmail(email);
+  if (existing) {
+    const updates = {};
+    if (!existing.avatar_url && avatarUrl) updates.avatar_url = avatarUrl;
+    if (Object.keys(updates).length) {
+      const { data, error } = await supabase.from("users").update(updates).eq("id", existing.id).select("*").maybeSingle();
+      if (error) throw new Error(error.message);
+      return data || existing;
+    }
+    return existing;
+  }
+
+  const { count } = await supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "student");
+  const id = `s${(count || 0) + 1}-${Date.now().toString(36)}`;
+  const password_hash = await bcrypt.hash(`oauth:${provider}:${email}:${crypto.randomUUID?.() || Date.now()}`, 10);
+  const { data, error } = await supabase
+    .from("users")
+    .insert({
+      id,
+      role: "student",
+      name: name || email.split("@")[0],
+      email,
+      password_hash,
+      course: "",
+      avatar_url: avatarUrl || null,
+      permissions: []
+    })
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
   return data;
 }
 
@@ -2095,11 +2169,67 @@ app.post("/api/auth/login", async (req, res) => {
     if (!user) return res.status(401).json({ error: "Invalid credentials" });
     const valid = await bcrypt.compare(password || "", user.password_hash || "");
     if (!valid) return res.status(401).json({ error: "Invalid credentials" });
-    const accessToken = signAccessToken(user);
-    const refreshToken = signRefreshToken(user);
+    const { accessToken, refreshToken } = issueAuthSession(user);
     const refresh_token_hash = await bcrypt.hash(refreshToken, 10);
     await supabase.from("users").update({ refresh_token_hash }).eq("id", user.id);
     res.json({ token: accessToken, accessToken, refreshToken, user: authUserPayload(user) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/auth/oauth/:provider/start", async (req, res) => {
+  try {
+    const provider = oauthProviderFromValue(req.params.provider);
+    if (!provider) return res.status(400).json({ error: "Unsupported OAuth provider" });
+
+    const redirectTo = frontendAuthCallbackUrl(req.query.redirectTo);
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider,
+      options: {
+        redirectTo,
+        queryParams: provider === "google" ? { prompt: "select_account" } : undefined
+      }
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    if (!data?.url) return res.status(400).json({ error: "OAuth provider did not return an authorization URL" });
+    res.redirect(data.url);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/auth/oauth/session", async (req, res) => {
+  try {
+    const provider = oauthProviderFromValue(req.body?.provider);
+    const accessToken = String(req.body?.accessToken || "");
+    if (!provider) return res.status(400).json({ error: "Unsupported OAuth provider" });
+    if (!accessToken) return res.status(400).json({ error: "OAuth access token is required" });
+
+    const { data, error } = await supabase.auth.getUser(accessToken);
+    if (error || !data?.user) return res.status(401).json({ error: "Could not verify OAuth session" });
+
+    const supabaseUser = data.user;
+    const identities = Array.isArray(supabaseUser.identities) ? supabaseUser.identities : [];
+    const identityProvider = identities.some((identity) => identity.provider === provider) || supabaseUser.app_metadata?.provider === provider;
+    if (!identityProvider) return res.status(401).json({ error: "OAuth provider mismatch. Please try signing in again." });
+
+    const email = String(supabaseUser.email || "").trim().toLowerCase();
+    if (!oauthUserEmailAllowed(provider, email)) {
+      return res.status(400).json({ error: provider === "google" ? "Use a Gmail account to continue with Google." : "Your Apple account did not return a usable email address." });
+    }
+
+    const meta = supabaseUser.user_metadata || {};
+    const user = await upsertOAuthUser({
+      provider,
+      email,
+      name: String(meta.full_name || meta.name || meta.user_name || email.split("@")[0]).trim(),
+      avatarUrl: meta.avatar_url || meta.picture || null
+    });
+    const { accessToken: appAccessToken, refreshToken } = issueAuthSession(user);
+    const refresh_token_hash = await bcrypt.hash(refreshToken, 10);
+    await supabase.from("users").update({ refresh_token_hash }).eq("id", user.id);
+    res.json({ token: appAccessToken, accessToken: appAccessToken, refreshToken, user: authUserPayload(user) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
