@@ -213,6 +213,7 @@ export default function CommunityPage({
           <CommunityStoriesRail
             token={token}
             currentUser={currentUser}
+            characters={characters}
             onOpenUserProfile={onOpenUserProfile}
             onUnauthorizedRetry={onUnauthorizedRetry}
           />
@@ -403,7 +404,7 @@ export function PostCardBody({
             <strong className="author">{post.author}</strong>
             {post.authorIsAiCharacter || post.authorTag ? <span className="ai-character-badge">AI Character</span> : null}
           </div>
-          <div className="post-meta">{post.authorIsAiCharacter ? "Generated character post" : "Community post"}</div>
+          <div className="post-meta">{post.authorIsAiCharacter ? "AI character post" : "Community post"}</div>
         </div>
         {canModerateDelete ? (
           <button

@@ -2166,6 +2166,109 @@ label.btn.btn-icon {
   color: #e11d48;
 }
 
+.story-identity-switch {
+  display: inline-flex;
+  width: fit-content;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--card);
+  border: 1px solid var(--line);
+}
+
+.story-identity-switch button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 9px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-600);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.story-identity-switch button.active {
+  background: var(--blue-700);
+  color: #fff;
+}
+
+.story-identity-switch button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.story-character-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+}
+
+.story-character-strip button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-900);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.story-character-strip button.active {
+  border-color: rgba(31, 94, 199, 0.55);
+  background: rgba(31, 94, 199, 0.12);
+}
+
+.story-character-strip img,
+.story-character-strip span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--blue-700);
+  font-size: 0.72rem;
+  font-weight: 950;
+}
+
+.story-create-actor {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 0.92rem;
+}
+
+.story-create-actor img,
+.story-create-actor span {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--card);
+  color: var(--blue-700);
+  font-weight: 950;
+}
+
+.character-edit-back {
+  margin-top: 8px;
+}
+
 .modal-backdrop.modal-backdrop--portal.story-viewer-portal {
   z-index: 380;
 }
