@@ -42,6 +42,7 @@ export default function CommunityPage({
   onShare,
   onOpenUserProfile,
   onUnauthorizedRetry,
+  characters = [],
   liteMode = false
 }) {
   const isAdmin = currentUser?.role === "admin";
@@ -272,6 +273,7 @@ export default function CommunityPage({
               onDeleteComment={onDeleteComment}
               onShare={onShare}
               onOpenUserProfile={onOpenUserProfile}
+              characters={characters}
               openPostReactors={() =>
                 setRxModal({
                   open: true,
@@ -320,6 +322,7 @@ export default function CommunityPage({
                   onDeleteComment={onDeleteComment}
                   onShare={onShare}
                   onOpenUserProfile={onOpenUserProfile}
+                  characters={characters}
                   liteMode={liteMode}
                       openPostReactors={() =>
                         setRxModal({
@@ -372,6 +375,7 @@ export function PostCardBody({
   openPostReactors,
   openCommentReactors,
   onOpenUserProfile,
+  characters = [],
   liteMode = false
 }) {
   const { openLightbox } = useImageLightbox();
@@ -450,6 +454,7 @@ export function PostCardBody({
         onDeleteComment={onDeleteComment}
         onShowCommentReactors={openCommentReactors}
         onOpenUserProfile={onOpenUserProfile}
+        characters={characters}
         liteMode={liteMode}
       />
     </>
@@ -493,7 +498,7 @@ function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
   );
 }
 
-function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, liteMode = false }) {
+function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, characters = [], liteMode = false }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const [aiTyping, setAiTyping] = useState(false);
   const comments = post.comments || [];
@@ -543,6 +548,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
               onDeleteComment={onDeleteComment}
               onShowCommentReactors={onShowCommentReactors}
               onOpenUserProfile={onOpenUserProfile}
+              characters={characters}
               liteMode={liteMode}
             />
             {c.replies?.length ? (
@@ -561,6 +567,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
                       onDeleteComment={onDeleteComment}
                       onShowCommentReactors={onShowCommentReactors}
                       onOpenUserProfile={onOpenUserProfile}
+                      characters={characters}
                       liteMode={liteMode}
                     />
                   </li>
@@ -598,6 +605,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
         postId={post.id}
         onComment={submitTopLevel}
         currentUser={currentUser}
+        characters={characters}
       />
     </div>
   );
@@ -686,9 +694,13 @@ function CommentRow({
   onDeleteComment,
   onShowCommentReactors,
   onOpenUserProfile,
+  characters = [],
   liteMode = false
 }) {
-  const canDelete = currentUser?.role === "admin" || comment.userId === currentUser?.id;
+  const canDelete =
+    currentUser?.role === "admin" ||
+    comment.userId === currentUser?.id ||
+    characters.some((character) => character.id === comment.userId);
   const { openLightbox } = useImageLightbox();
   function handleDelete() {
     if (!onDeleteComment) return;
@@ -758,6 +770,7 @@ function CommentRow({
         {replying ? (
           <ReplyForm
             currentUser={currentUser}
+            characters={characters}
             placeholder={`Reply to ${comment.author}… use @ to mention`}
             onSubmit={onSubmitReply}
             onCancel={onCancelReply}
@@ -768,16 +781,75 @@ function CommentRow({
   );
 }
 
-function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
+function CharacterIdentityPicker({ currentUser, characters = [], selectedId, onSelect }) {
+  const [open, setOpen] = useState(false);
+  const selectedCharacter = characters.find((character) => character.id === selectedId) || null;
+  const actorName = selectedCharacter?.name || currentUser?.name || "You";
+  const actorAvatar = selectedCharacter?.avatarUrl || currentUser?.avatarUrl || null;
+  const actorInitial = actorName?.charAt(0) || "?";
+
+  function pick(id) {
+    onSelect(id || "");
+    setOpen(false);
+  }
+
+  return (
+    <div className="comment-actor-picker">
+      <button
+        type="button"
+        className={`btn btn-icon comment-actor-plus${selectedCharacter ? " active" : ""}`}
+        title={`Comment as ${actorName}`}
+        aria-label={`Comment as ${actorName}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="ui-icon ui-icon-plus" aria-hidden="true" />
+      </button>
+      <div className="comment-actor-current" title={`Commenting as ${actorName}`}>
+        {actorAvatar ? <img src={mediaUrl(actorAvatar)} alt="" /> : <span>{actorInitial}</span>}
+      </div>
+      {open ? (
+        <div className="comment-actor-menu">
+          <button type="button" className={!selectedId ? "active" : ""} onClick={() => pick("")}>
+            {currentUser?.avatarUrl ? (
+              <img src={mediaUrl(currentUser.avatarUrl)} alt="" />
+            ) : (
+              <span>{currentUser?.name?.charAt(0) || "?"}</span>
+            )}
+            <strong>Your profile</strong>
+          </button>
+          {characters.map((character) => (
+            <button
+              type="button"
+              key={character.id}
+              className={selectedId === character.id ? "active" : ""}
+              onClick={() => pick(character.id)}
+            >
+              {character.avatarUrl ? (
+                <img src={mediaUrl(character.avatarUrl)} alt="" />
+              ) : (
+                <span>{character.name?.charAt(0) || "AI"}</span>
+              )}
+              <strong>{character.name}</strong>
+              <em>AI Character</em>
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ReplyForm({ currentUser, characters = [], placeholder, onSubmit, onCancel }) {
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState(null);
+  const [characterId, setCharacterId] = useState("");
   const photoUrl = photo ? URL.createObjectURL(photo) : null;
   useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
     if (!t && !photo) return;
-    await onSubmit({ text: t, photo });
+    await onSubmit({ text: t, photo, characterId });
     setText("");
     setPhoto(null);
   }
@@ -798,6 +870,12 @@ function ReplyForm({ currentUser, placeholder, onSubmit, onCancel }) {
           onChange={(e) => setPhoto(e.target.files?.[0] || null)}
         />
       </label>
+      <CharacterIdentityPicker
+        currentUser={currentUser}
+        characters={characters}
+        selectedId={characterId}
+        onSelect={setCharacterId}
+      />
       <EmojiPickerButton onPick={(emoji) => setText((t) => t + emoji)} />
       {photoUrl ? (
         <div className="comment-photo-preview">
@@ -1012,16 +1090,17 @@ function ReactionsRow({ post, onReact, onShare, onShowReactors }) {
   );
 }
 
-function CommentBox({ postId, onComment, currentUser }) {
+function CommentBox({ postId, onComment, currentUser, characters = [] }) {
   const [text, setText] = useState("");
   const [photo, setPhoto] = useState(null);
+  const [characterId, setCharacterId] = useState("");
   const photoUrl = photo ? URL.createObjectURL(photo) : null;
   useEffect(() => () => { if (photoUrl) URL.revokeObjectURL(photoUrl); }, [photoUrl]);
   async function submit(e) {
     e.preventDefault();
     const t = text.trim();
     if (!t && !photo) return;
-    await onComment(postId, { text: t, photo });
+    await onComment(postId, { text: t, photo, characterId });
     setText("");
     setPhoto(null);
   }
@@ -1041,6 +1120,12 @@ function CommentBox({ postId, onComment, currentUser }) {
           onChange={(e) => setPhoto(e.target.files?.[0] || null)}
         />
       </label>
+      <CharacterIdentityPicker
+        currentUser={currentUser}
+        characters={characters}
+        selectedId={characterId}
+        onSelect={setCharacterId}
+      />
       <EmojiPickerButton onPick={(emoji) => setText((t) => t + emoji)} />
       {photoUrl ? (
         <div className="comment-photo-preview">

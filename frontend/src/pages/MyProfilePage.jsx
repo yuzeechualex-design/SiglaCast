@@ -295,6 +295,7 @@ export default function MyProfilePage({
                   onDeleteComment={onDeleteComment}
                   onShare={onShare}
                   onOpenUserProfile={onOpenUserProfile}
+                  characters={characters}
                   openPostReactors={() =>
                     setRxModal({
                       open: true,

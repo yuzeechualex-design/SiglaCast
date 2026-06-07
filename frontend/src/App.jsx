@@ -1009,12 +1009,13 @@ export default function App() {
       const formData = new FormData();
       formData.append("text", text);
       if (parentId) formData.append("parentId", parentId);
+      if (isObj && payload.characterId) formData.append("characterId", payload.characterId);
       formData.append("image", photo);
       res = await apiForm(`/community/posts/${postId}/comments`, formData);
     } else {
       res = await api(`/community/posts/${postId}/comments`, {
         method: "POST",
-        body: { text, parentId }
+        body: { text, parentId, characterId: isObj ? payload.characterId || "" : "" }
       });
     }
     if (res.error) {
@@ -1755,6 +1756,7 @@ export default function App() {
               token={token}
               posts={posts}
               currentUser={user}
+              characters={aiCharacters}
               onPost={postCommunityPost}
               onReact={reactToPost}
               onComment={commentOnPost}
@@ -1807,6 +1809,7 @@ export default function App() {
             <PublicProfilePage
               api={api}
               posts={posts}
+              characters={aiCharacters}
               currentUser={user}
               liteMode={liteMode}
               onReact={reactToPost}

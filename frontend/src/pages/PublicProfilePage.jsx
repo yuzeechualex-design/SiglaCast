@@ -5,6 +5,7 @@ import MyProfilePage from "./MyProfilePage.jsx";
 export default function PublicProfilePage({
   api,
   posts: livePosts = [],
+  characters = [],
   currentUser,
   liteMode = false,
   onReact,
@@ -69,6 +70,7 @@ export default function PublicProfilePage({
     <MyProfilePage
       user={profile}
       posts={profilePosts}
+      characters={characters}
       currentUser={currentUser}
       liteMode={liteMode}
       isOwnProfile={false}

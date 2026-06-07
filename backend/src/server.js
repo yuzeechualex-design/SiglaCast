@@ -2709,6 +2709,13 @@ app.post(
     const post_id = req.params.id;
     const text = String(req.body?.text || "").trim();
     const parentId = req.body?.parentId ? String(req.body.parentId) : null;
+    const characterId = req.body?.characterId ? String(req.body.characterId) : "";
+    let commentAuthor = req.user;
+    if (characterId) {
+      const ownedCharacter = await fetchOwnedAiCharacter(req.user.id, characterId);
+      if (!ownedCharacter) return res.status(403).json({ error: "You can only comment as your own AI characters" });
+      commentAuthor = ownedCharacter;
+    }
 
     let image_url = null;
     if (req.file) image_url = await uploadToBucket("posts", req.file);
@@ -2730,11 +2737,11 @@ app.post(
     const id = `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
     const { error } = await supabase
       .from("post_comments")
-      .insert({ id, post_id, author_id: req.user.id, content: text || "", parent_id: parentId, image_url });
+      .insert({ id, post_id, author_id: commentAuthor.id, content: text || "", parent_id: parentId, image_url });
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
 
-    if (post?.author_id && post.author_id !== req.user.id) {
+    if (post?.author_id && post.author_id !== commentAuthor.id) {
       const { data: aiAuthor } = await supabase
         .from("users")
         .select("*")
@@ -2752,7 +2759,7 @@ app.post(
           sourceText: text,
           postText: post.content || "",
           parentText: parentComment?.content || "",
-          commenterName: req.user.name || "Someone"
+          commenterName: commentAuthor.name || req.user.name || "Someone"
         });
         await supabase.from("post_comments").insert({
           id: `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
@@ -2774,11 +2781,11 @@ app.post(
         .select("author_id")
         .eq("id", parentId)
         .maybeSingle();
-      if (parent?.author_id && parent.author_id !== req.user.id) {
+      if (parent?.author_id && parent.author_id !== commentAuthor.id) {
         notes.push({
           id: `n${Date.now()}-${parent.author_id}-${Math.random().toString(36).slice(2, 6)}`,
           user_id: parent.author_id,
-          text: `${req.user.name} replied to your comment`,
+          text: `${commentAuthor.name} replied to your comment`,
           kind: "reply_comment",
           badge_count: 1,
           source_key: null,
@@ -2790,9 +2797,9 @@ app.post(
     if (notes.length) await supabase.from("notifications").insert(notes);
     const mentionLink =
       `/community?post=${encodeURIComponent(post_id)}${parentId ? `&comment=${encodeURIComponent(parentId)}` : ""}`;
-    await notifyMentions(text, parentId ? `a reply by ${req.user.name}` : `a comment by ${req.user.name}`, req.user.id, mentionLink);
+    await notifyMentions(text, parentId ? `a reply by ${commentAuthor.name}` : `a comment by ${commentAuthor.name}`, commentAuthor.id, mentionLink);
 
-    res.status(201).json({ comment: { id, text, author: req.user.name, parentId }, post: await serializePost(post, req.user.id) });
+    res.status(201).json({ comment: { id, text, author: commentAuthor.name, parentId }, post: await serializePost(post, req.user.id) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -2861,7 +2868,18 @@ app.delete("/api/community/comments/:id", authenticate, async (req, res) => {
     .eq("id", commentId)
     .maybeSingle();
   if (!comment) return res.status(404).json({ error: "Comment not found" });
+  let ownsCharacterComment = false;
   if (!isAdmin && comment.author_id !== me) {
+    const { data: characterAuthor } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", comment.author_id)
+      .eq("owner_user_id", me)
+      .eq("is_ai_character", true)
+      .maybeSingle();
+    ownsCharacterComment = Boolean(characterAuthor?.id);
+  }
+  if (!isAdmin && comment.author_id !== me && !ownsCharacterComment) {
     return res.status(403).json({ error: "Only the author can delete this comment" });
   }
   await supabase.from("comment_reactions").delete().eq("comment_id", commentId);
