@@ -6413,6 +6413,26 @@ button.comment-profile-avatar-btn:focus-visible {
   text-decoration: none;
 }
 
+.show-more-comments-btn {
+  width: fit-content;
+  min-height: 32px;
+  margin: 2px 0 8px 38px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--blue-700);
+  font-size: 0.8rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.show-more-comments-btn:hover,
+.show-more-comments-btn:focus-visible {
+  border-color: rgba(31, 94, 199, 0.45);
+  background: rgba(31, 94, 199, 0.1);
+}
+
 .comment-row {
   display: flex;
   gap: 8px;

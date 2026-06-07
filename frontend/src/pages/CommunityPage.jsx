@@ -502,7 +502,11 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
   const [replyingTo, setReplyingTo] = useState(null);
   const [aiTypingActor, setAiTypingActor] = useState(null);
   const [expandedReplies, setExpandedReplies] = useState(() => new Set());
+  const [commentsExpanded, setCommentsExpanded] = useState(false);
   const comments = post.comments || [];
+  const INITIAL_COMMENT_LIMIT = 3;
+  const hiddenCommentCount = Math.max(0, comments.length - INITIAL_COMMENT_LIMIT);
+  const visibleComments = commentsExpanded ? comments : comments.slice(0, INITIAL_COMMENT_LIMIT);
   const aiWillReply =
     Boolean(post.authorIsAiCharacter && post.authorAiAutoReply) &&
     post.authorId !== currentUser?.id;
@@ -599,7 +603,7 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
       ) : null}
 
       <ul className="comment-list">
-        {comments.map((c) => {
+        {visibleComments.map((c) => {
           const replyCount = c.replies?.length || 0;
           const repliesOpen = expandedReplies.has(c.id);
           return (
@@ -655,6 +659,16 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
           );
         })}
       </ul>
+
+      {hiddenCommentCount ? (
+        <button
+          type="button"
+          className="show-more-comments-btn"
+          onClick={() => setCommentsExpanded((v) => !v)}
+        >
+          {commentsExpanded ? "Show fewer comments" : `Show more comments (${hiddenCommentCount})`}
+        </button>
+      ) : null}
 
       {aiTypingActor ? (
         <div className="comment-row ai-typing-row">
