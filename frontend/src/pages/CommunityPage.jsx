@@ -500,7 +500,7 @@ function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
 
 function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, characters = [], liteMode = false }) {
   const [replyingTo, setReplyingTo] = useState(null);
-  const [aiTyping, setAiTyping] = useState(false);
+  const [aiTypingActor, setAiTypingActor] = useState(null);
   const [expandedReplies, setExpandedReplies] = useState(() => new Set());
   const comments = post.comments || [];
   const aiWillReply =
@@ -516,12 +516,22 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
     return null;
   }
 
-  function aiWillReplyToParent(parentId, payload = {}) {
+  function aiActorForParent(parentId, payload = {}) {
     const parent = commentById(parentId);
     if (parent?.authorIsAiCharacter && parent.authorAiAutoReply && parent.userId !== payload.characterId) {
-      return true;
+      return {
+        id: parent.userId,
+        name: parent.author,
+        avatarUrl: parent.authorAvatar
+      };
     }
-    return aiWillReply;
+    return aiWillReply && post.authorId !== payload.characterId
+      ? {
+          id: post.authorId,
+          name: post.author,
+          avatarUrl: post.authorAvatar
+        }
+      : null;
   }
 
   function toggleReplies(commentId) {
@@ -534,22 +544,49 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
   }
 
   async function submitReply(parentId, payload) {
-    const showTyping = aiWillReplyToParent(parentId, payload);
-    if (showTyping) setAiTyping(true);
+    const predictedActor = aiActorForParent(parentId, payload);
+    if (predictedActor) setAiTypingActor(predictedActor);
     try {
-      await onComment(post.id, payload, parentId);
+      const res = await onComment(post.id, payload, parentId);
+      if (res?.aiReplyPending) {
+        setAiTypingActor({
+          id: res.aiReplyPending.id,
+          name: res.aiReplyPending.name,
+          avatarUrl: res.aiReplyPending.avatarUrl
+        });
+        window.setTimeout(() => setAiTypingActor(null), Math.max(1200, Number(res.aiReplyPending.delayMs || 3500) + 2200));
+      }
       setReplyingTo(null);
     } finally {
-      if (showTyping) setAiTyping(false);
+      if (predictedActor) {
+        window.setTimeout(() => setAiTypingActor(null), 12000);
+      }
     }
   }
 
   async function submitTopLevel(postId, payload) {
-    if (aiWillReply) setAiTyping(true);
+    const predictedActor = aiWillReply && post.authorId !== payload.characterId
+      ? {
+          id: post.authorId,
+          name: post.author,
+          avatarUrl: post.authorAvatar
+        }
+      : null;
+    if (predictedActor) setAiTypingActor(predictedActor);
     try {
-      await onComment(postId, payload, null);
+      const res = await onComment(postId, payload, null);
+      if (res?.aiReplyPending) {
+        setAiTypingActor({
+          id: res.aiReplyPending.id,
+          name: res.aiReplyPending.name,
+          avatarUrl: res.aiReplyPending.avatarUrl
+        });
+        window.setTimeout(() => setAiTypingActor(null), Math.max(1200, Number(res.aiReplyPending.delayMs || 3500) + 2200));
+      }
     } finally {
-      if (aiWillReply) setAiTyping(false);
+      if (predictedActor) {
+        window.setTimeout(() => setAiTypingActor(null), 12000);
+      }
     }
   }
 
@@ -619,20 +656,20 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
         })}
       </ul>
 
-      {aiTyping ? (
+      {aiTypingActor ? (
         <div className="comment-row ai-typing-row">
           <div className="comment-profile-avatar-btn ai-typing-avatar" aria-hidden>
-            {post.authorAvatar ? (
-              <img className="comment-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
+            {aiTypingActor.avatarUrl ? (
+              <img className="comment-avatar" src={mediaUrl(aiTypingActor.avatarUrl)} alt="" />
             ) : (
-              <div className="comment-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
+              <div className="comment-avatar placeholder">{aiTypingActor.name?.charAt(0) || "?"}</div>
             )}
           </div>
           <div className="comment-body">
             <div className="comment-bubble ai-typing-bubble">
-              <strong>{post.author}</strong>{" "}
+              <strong>{aiTypingActor.name}</strong>{" "}
               <span className="ai-character-badge comment-ai-character-badge">AI Character</span>
-              <span className="typing-dots" aria-label={`${post.author} is replying`}>
+              <span className="typing-dots" aria-label={`${aiTypingActor.name} is replying`}>
                 <span />
                 <span />
                 <span />

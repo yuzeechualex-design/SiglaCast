@@ -1025,9 +1025,16 @@ export default function App() {
     setNotice(parentId ? "Reply posted" : "Comment added");
     if (res.post) {
       setPosts((prev) => prev.map((p) => (p.id === res.post.id ? res.post : p)));
+      if (res.aiReplyPending) {
+        const delay = Math.max(1200, Number(res.aiReplyPending.delayMs || 3500) + 2200);
+        window.setTimeout(() => {
+          void loadCore();
+        }, delay);
+      }
     } else {
       await loadCore();
     }
+    return res;
   }
 
   // Delete a comment (author + admin). Returns the updated post.

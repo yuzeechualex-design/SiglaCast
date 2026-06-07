@@ -795,6 +795,39 @@ async function groqAiCharacterReply(character, { sourceText = "", postText = "",
   return aiCharacterReplyText(character, sourceText);
 }
 
+function aiCharacterTypingPayload(character, delayMs) {
+  if (!character) return null;
+  return {
+    id: character.id,
+    name: character.name || "AI Character",
+    avatarUrl: character.avatar_url || null,
+    delayMs
+  };
+}
+
+async function createAiCharacterCommentReply({ aiAuthor, delayMs, postId, parentId, sourceText, postText, parentText, commenterName }) {
+  try {
+    await wait(delayMs);
+    const replyText = await groqAiCharacterReply(aiAuthor, {
+      sourceText,
+      postText,
+      parentText,
+      commenterName
+    });
+    const { error } = await supabase.from("post_comments").insert({
+      id: `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+      post_id: postId,
+      author_id: aiAuthor.id,
+      content: replyText,
+      parent_id: parentId,
+      image_url: null
+    });
+    if (error) console.error("[ai-character/comment-reply]", error.message);
+  } catch (e) {
+    console.error("[ai-character/comment-reply]", e?.message || e);
+  }
+}
+
 async function fetchOwnedAiCharacter(ownerId, characterId) {
   const { data } = await supabase
     .from("users")
@@ -2769,23 +2802,18 @@ app.post(
         .maybeSingle();
       if (postAiAuthor) aiAuthor = postAiAuthor;
     }
+    const aiReplyDelayMs = aiAuthor ? randomAiReplyDelayMs() : 0;
     if (aiAuthor) {
-        const delayMs = randomAiReplyDelayMs();
-        await wait(delayMs);
-        const replyText = await groqAiCharacterReply(aiAuthor, {
-          sourceText: text,
-          postText: post.content || "",
-          parentText: aiReplyParentText,
-          commenterName: commentAuthor.name || req.user.name || "Someone"
-        });
-        await supabase.from("post_comments").insert({
-          id: `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
-          post_id,
-          author_id: aiAuthor.id,
-          content: replyText,
-          parent_id: id,
-          image_url: null
-        });
+      void createAiCharacterCommentReply({
+        aiAuthor,
+        delayMs: aiReplyDelayMs,
+        postId: post_id,
+        parentId: id,
+        sourceText: text,
+        postText: post.content || "",
+        parentText: aiReplyParentText,
+        commenterName: commentAuthor.name || req.user.name || "Someone"
+      });
     }
 
     // Notifications: replies only notify the replied-to comment author —
@@ -2815,7 +2843,11 @@ app.post(
       `/community?post=${encodeURIComponent(post_id)}${parentId ? `&comment=${encodeURIComponent(parentId)}` : ""}`;
     await notifyMentions(text, parentId ? `a reply by ${commentAuthor.name}` : `a comment by ${commentAuthor.name}`, commentAuthor.id, mentionLink);
 
-    res.status(201).json({ comment: { id, text, author: commentAuthor.name, parentId }, post: await serializePost(post, req.user.id) });
+    res.status(201).json({
+      comment: { id, text, author: commentAuthor.name, parentId },
+      post: await serializePost(post, req.user.id),
+      aiReplyPending: aiCharacterTypingPayload(aiAuthor, aiReplyDelayMs)
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
