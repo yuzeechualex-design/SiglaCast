@@ -122,6 +122,9 @@ export default function AICharactersPage({
               </div>
             </Link>
             <div className="ai-character-row-actions">
+              <Link to={`/characters/${encodeURIComponent(character.id)}/edit`} className="btn btn-ghost btn-sm">
+                Edit profile
+              </Link>
               <label className="ai-character-mini-toggle">
                 <input
                   type="checkbox"
@@ -141,10 +144,9 @@ export default function AICharactersPage({
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
-                disabled={!character.autoPost}
                 onClick={() => onGenerateCharacterPost?.(character)}
               >
-                Generate character post
+                Generate a post
               </button>
             </div>
           </article>

@@ -17,6 +17,7 @@ import AssistantPage from "./pages/AssistantPage.jsx";
 import DownloadPage from "./pages/DownloadPage.jsx";
 import AddFriendsPage from "./pages/AddFriendsPage.jsx";
 import AICharactersPage from "./pages/AICharactersPage.jsx";
+import CharacterEditPage from "./pages/CharacterEditPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
@@ -896,10 +897,11 @@ export default function App() {
     navigate("/events/detail");
   }
 
-  async function postCommunityPost({ content, imageFile }) {
+  async function postCommunityPost({ content, imageFile, characterId }) {
     const formData = new FormData();
     formData.append("content", content || "");
     if (imageFile) formData.append("image", imageFile);
+    if (characterId) formData.append("characterId", characterId);
     const res = await apiForm("/community/posts", formData);
     setNotice(res.error || "Post published");
     if (!res.error) await loadCore();
@@ -935,6 +937,34 @@ export default function App() {
       setAiCharacters((prev) => prev.map((c) => (c.id === res.character.id ? res.character : c)));
     }
     setNotice("AI character updated");
+  }
+
+  async function uploadCharacterAvatar(characterId, file) {
+    const formData = new FormData();
+    formData.append("avatar", file);
+    const res = await apiForm(`/ai-characters/${encodeURIComponent(characterId)}/avatar`, formData);
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.character) {
+      setAiCharacters((prev) => prev.map((c) => (c.id === res.character.id ? res.character : c)));
+    }
+    setNotice("Character photo updated");
+  }
+
+  async function uploadCharacterCover(characterId, file) {
+    const formData = new FormData();
+    formData.append("cover", file);
+    const res = await apiForm(`/ai-characters/${encodeURIComponent(characterId)}/cover`, formData);
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.character) {
+      setAiCharacters((prev) => prev.map((c) => (c.id === res.character.id ? res.character : c)));
+    }
+    setNotice("Character banner updated");
   }
 
   async function generateAiCharacterPost(character) {
@@ -1811,6 +1841,18 @@ export default function App() {
           }
         />
         <Route
+          path="/characters/:characterId/edit"
+          element={
+            <CharacterEditPage
+              characters={aiCharacters}
+              onSave={updateAiCharacter}
+              onAvatarUpload={uploadCharacterAvatar}
+              onCoverUpload={uploadCharacterCover}
+              setNotice={setNotice}
+            />
+          }
+        />
+        <Route
           path="/users/:userId"
           element={
             <PublicProfilePage
@@ -1933,6 +1975,7 @@ export default function App() {
               onSendSiglaInActiveThread={sendSiglaInActiveThread}
               onOpenUserProfile={openUserProfileModal}
               onUnauthorizedRetry={onUnauthorizedRetry}
+              characters={aiCharacters}
               token={token}
               liteMode={liteMode}
             />

@@ -144,12 +144,14 @@ function VisibilityDropdown({ value, onChange }) {
 export default function CommunityStoriesRail({
   token,
   currentUser,
+  characters = [],
   variant = "horizontal",
   className = "",
   onOpenUserProfile,
   onUnauthorizedRetry
 }) {
   const [rings, setRings] = useState([]);
+  const [ownedCharacterIds, setOwnedCharacterIds] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterMode, setFilterMode] = useState("friends"); // "friends" or "public"
   const scrollerRef = useRef(null);
@@ -174,7 +176,10 @@ export default function CommunityStoriesRail({
     setLoading(true);
     try {
       const data = await request("/stories", { token, onUnauthorizedRetry });
-      if (!data.error && Array.isArray(data.rings)) setRings(data.rings);
+      if (!data.error && Array.isArray(data.rings)) {
+        setRings(data.rings);
+        setOwnedCharacterIds(Array.isArray(data.ownedCharacterIds) ? data.ownedCharacterIds : []);
+      }
     } finally {
       setLoading(false);
     }
@@ -301,7 +306,11 @@ export default function CommunityStoriesRail({
                   </button>
                 </div>
                 <span className="story-ring-caption" title={ring.user.name}>
-                  {ring.user.id === currentUser?.id ? "Your story" : truncateName(ring.user.name)}
+                  {ring.user.id === currentUser?.id
+                    ? "Your story"
+                    : ownedCharacterIds.includes(ring.user.id)
+                      ? truncateName(ring.user.name)
+                      : truncateName(ring.user.name)}
                 </span>
               </div>
             );
@@ -321,6 +330,8 @@ export default function CommunityStoriesRail({
       {createOpen ? (
         <CreateStoryModal
           token={token}
+          currentUser={currentUser}
+          characters={characters}
           onUnauthorizedRetry={onUnauthorizedRetry}
           onClose={() => setCreateOpen(false)}
           onPosted={() => {
@@ -335,6 +346,7 @@ export default function CommunityStoriesRail({
           token={token}
           rings={filteredRings}
           currentUser={currentUser}
+          ownedCharacterIds={ownedCharacterIds}
           ringIndex={viewer.ringIndex}
           storyIndex={viewer.storyIndex}
           onClose={() => setViewer(null)}
@@ -350,7 +362,7 @@ export default function CommunityStoriesRail({
   );
 }
 
-function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
+function CreateStoryModal({ token, currentUser, characters = [], onUnauthorizedRetry, onClose, onPosted }) {
   const [text, setText] = useState("");
   const [file, setFile] = useState(null);
   const preview = file ? URL.createObjectURL(file) : null;
@@ -358,6 +370,15 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
   const [sending, setSending] = useState(false);
   const [visibility, setVisibility] = useState("friends");
   const [err, setErr] = useState("");
+  const [storyMode, setStoryMode] = useState("profile");
+  const [selectedCharacterId, setSelectedCharacterId] = useState(() => characters[0]?.id || "");
+  const selectedCharacter = characters.find((c) => c.id === selectedCharacterId) || characters[0] || null;
+  const actorAvatar = storyMode === "characters" && selectedCharacter?.avatarUrl
+    ? mediaUrl(selectedCharacter.avatarUrl)
+    : currentUser?.avatarUrl
+      ? mediaUrl(currentUser.avatarUrl)
+      : null;
+  const actorName = storyMode === "characters" ? selectedCharacter?.name || "Character" : currentUser?.name || "You";
 
   async function submit(e) {
     e.preventDefault();
@@ -366,12 +387,19 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
       setErr("Add text or a photo.");
       return;
     }
+    if (storyMode === "characters" && !selectedCharacter?.id) {
+      setErr("Choose a character first.");
+      return;
+    }
     setSending(true);
     setErr("");
     const fd = new FormData();
     fd.append("text", t);
     fd.append("visibility", visibility);
     if (file) fd.append("image", file);
+    if (storyMode === "characters" && selectedCharacter?.id) {
+      fd.append("characterId", selectedCharacter.id);
+    }
     const data = await requestForm("/stories", { token, method: "POST", formData: fd, onUnauthorizedRetry });
     setSending(false);
     if (data.error) {
@@ -393,6 +421,56 @@ function CreateStoryModal({ token, onUnauthorizedRetry, onClose, onPosted }) {
           </div>
           <form className="modal-body stories-create-form" onSubmit={submit}>
             <p className="muted small">Stories disappear after 24 hours. Choose who can view them below.</p>
+
+            <div className="story-identity-switch" role="tablist" aria-label="Story identity">
+              <button
+                type="button"
+                className={storyMode === "profile" ? "active" : ""}
+                onClick={() => setStoryMode("profile")}
+              >
+                Your profile
+              </button>
+              <button
+                type="button"
+                className={storyMode === "characters" ? "active" : ""}
+                disabled={!characters.length}
+                onClick={() => {
+                  setStoryMode("characters");
+                  if (!selectedCharacterId && characters[0]?.id) setSelectedCharacterId(characters[0].id);
+                }}
+              >
+                Your characters
+              </button>
+            </div>
+
+            {storyMode === "characters" ? (
+              characters.length ? (
+                <div className="story-character-strip">
+                  {characters.map((character) => (
+                    <button
+                      type="button"
+                      key={character.id}
+                      className={(selectedCharacter?.id || characters[0]?.id) === character.id ? "active" : ""}
+                      onClick={() => setSelectedCharacterId(character.id)}
+                    >
+                      {character.avatarUrl ? (
+                        <img src={mediaUrl(character.avatarUrl)} alt="" />
+                      ) : (
+                        <span>{character.name?.charAt(0) || "AI"}</span>
+                      )}
+                      <strong>{character.name}</strong>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">Create an AI character first to post stories as them.</p>
+              )
+            ) : null}
+
+            <div className="story-create-actor">
+              {actorAvatar ? <img src={actorAvatar} alt="" /> : <span>{actorName?.charAt(0) || "?"}</span>}
+              <span>Posting as <strong>{actorName}</strong></span>
+            </div>
 
             <textarea
               className="stories-create-textarea"
@@ -649,6 +727,7 @@ function StoryViewerModal({
   token,
   rings,
   currentUser,
+  ownedCharacterIds = [],
   ringIndex: initialRi,
   storyIndex: initialSi,
   onClose,
@@ -704,7 +783,15 @@ function StoryViewerModal({
   }, [story?.id]);
 
   useEffect(() => {
-    if (!story?.id || !authorId || authorId === currentUser?.id || !token) return undefined;
+    if (
+      !story?.id ||
+      !authorId ||
+      authorId === currentUser?.id ||
+      ownedCharacterIds.includes(authorId) ||
+      !token
+    ) {
+      return undefined;
+    }
     let cancelled = false;
     (async () => {
       await request(`/stories/${encodeURIComponent(story.id)}/view`, { token, method: "POST", body: {} });
@@ -811,8 +898,10 @@ function StoryViewerModal({
     });
   }
 
+  const isOwner = authorId === currentUser?.id || ownedCharacterIds.includes(authorId);
+
   async function deleteCurrentStory() {
-    if (!story?.id || authorId !== currentUser?.id || deleteBusy) return;
+    if (!story?.id || !isOwner || deleteBusy) return;
     if (!window.confirm("Delete this story? Friends will no longer see it.")) return;
     setDeleteBusy(true);
     setMoreOpen(false);
@@ -834,8 +923,6 @@ function StoryViewerModal({
   const imgSrc = story.imageUrl ? mediaUrl(story.imageUrl) : null;
   const hasSong = Boolean(story.spotifyTrackId || story.musicTitle);
   const albumHref = story.musicImageUrl ? mediaUrl(story.musicImageUrl) : null;
-  const isOwner = authorId === currentUser?.id;
-
   function openAuthorProfile() {
     const uid = ring.user?.id;
     if (!uid || !onOpenUserProfile) return;

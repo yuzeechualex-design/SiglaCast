@@ -30,7 +30,7 @@ function dateLabel(value) {
   }
 }
 
-function ProfileComposer({ user, avatarSrc, onPost }) {
+function ProfileComposer({ user, avatarSrc, onPost, onGeneratePost }) {
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
@@ -81,6 +81,11 @@ function ProfileComposer({ user, avatarSrc, onPost }) {
           <input type="file" accept="image/*" hidden onChange={onFileChange} />
         </label>
         <EmojiPickerButton onPick={(emoji) => setContent((text) => text + emoji)} />
+        {onGeneratePost ? (
+          <button type="button" className="btn btn-secondary" onClick={() => onGeneratePost?.()}>
+            Generate a post
+          </button>
+        ) : null}
         <button type="submit" className="btn btn-primary" disabled={!content.trim() && !imageFile}>
           <span className="ui-icon ui-icon-send" aria-hidden="true" />
           <span>Publish</span>
@@ -126,7 +131,7 @@ export default function MyProfilePage({
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
-  const canCompose = isOwnProfile && !isCharacterProfile;
+  const canCompose = isOwnProfile;
 
   return (
     <section className="my-profile-page">
@@ -182,7 +187,10 @@ export default function MyProfilePage({
             <div className="my-profile-cover-fallback" />
           )}
           {isOwnProfile ? (
-            <Link to={isCharacterProfile ? "/characters" : "/settings"} className="my-profile-cover-edit">
+            <Link
+              to={isCharacterProfile ? `/characters/${encodeURIComponent(displayUser.id)}/edit` : "/settings"}
+              className="my-profile-cover-edit"
+            >
               {isCharacterProfile ? "Manage character" : "Edit profile"}
             </Link>
           ) : null}
@@ -251,10 +259,9 @@ export default function MyProfilePage({
               <button
                 type="button"
                 className="my-profile-edit-wide"
-                disabled={!displayUser.autoPost}
                 onClick={() => onGenerateCharacterPost?.(displayUser)}
               >
-                Generate character post
+                Generate a post
               </button>
             </div>
           ) : isOwnProfile ? <Link to="/settings" className="my-profile-edit-wide">Edit details</Link> : null}
@@ -267,7 +274,17 @@ export default function MyProfilePage({
             </Link>
           ) : null}
           {canCompose ? (
-            <ProfileComposer user={displayUser} avatarSrc={avatarSrc} onPost={onPost} />
+            <ProfileComposer
+              user={displayUser}
+              avatarSrc={avatarSrc}
+              onPost={(payload) =>
+                onPost?.({
+                  ...payload,
+                  characterId: isCharacterProfile ? displayUser.id : undefined
+                })
+              }
+              onGeneratePost={isCharacterProfile ? () => onGenerateCharacterPost?.(displayUser) : null}
+            />
           ) : null}
 
           <div className="my-profile-section-head">
@@ -314,21 +331,16 @@ export default function MyProfilePage({
             <div className="my-profile-empty-posts">
               <strong>No posts yet</strong>
               <p className="muted small">
-                {isOwnProfile ? "Share something in Community and it will show up here." : "This user has not posted yet."}
+                {isOwnProfile
+                  ? isCharacterProfile
+                    ? "Write a post above or generate one with AI."
+                    : "Share something in Community and it will show up here."
+                  : "This user has not posted yet."}
               </p>
-              {canCompose ? (
+              {canCompose && !isCharacterProfile ? (
                 <Link to="/community" className="btn btn-secondary btn-sm my-profile-create-post-btn">
                   Create post
                 </Link>
-              ) : isCharacterProfile && isOwnProfile ? (
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-sm my-profile-create-post-btn"
-                  disabled={!displayUser.autoPost}
-                  onClick={() => onGenerateCharacterPost?.(displayUser)}
-                >
-                  Generate character post
-                </button>
               ) : null}
             </div>
           )}

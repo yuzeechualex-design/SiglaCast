@@ -109,6 +109,7 @@ export default function MessagesPage({
   onSendSiglaInActiveThread = async () => {},
   onOpenUserProfile,
   onUnauthorizedRetry,
+  characters = [],
   liteMode = false
 }) {
   const navigate = useNavigate();
@@ -394,6 +395,7 @@ export default function MessagesPage({
             <CommunityStoriesRail
               token={token}
               currentUser={currentUser}
+              characters={characters}
               variant="horizontal"
               onOpenUserProfile={onOpenUserProfile}
             />
@@ -1279,6 +1281,7 @@ export default function MessagesPage({
             <CommunityStoriesRail
               token={token}
               currentUser={currentUser}
+              characters={characters}
               variant="vertical"
               onOpenUserProfile={onOpenUserProfile}
               onUnauthorizedRetry={onUnauthorizedRetry}

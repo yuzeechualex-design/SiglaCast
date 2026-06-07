@@ -873,36 +873,75 @@ async function friendIdsForUser(meId) {
 
 const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
+async function resolveStoryAuthorMeta(authorId) {
+  const { data } = await supabase
+    .from("users")
+    .select("id, owner_user_id, is_ai_character, name")
+    .eq("id", authorId)
+    .maybeSingle();
+  return data || null;
+}
+
+function storyHumanOwnerId(authorRow, authorId) {
+  return authorRow?.is_ai_character ? authorRow.owner_user_id : authorId;
+}
+
+function viewerOwnsStory(viewerId, story, authorRow) {
+  if (story.user_id === viewerId) return true;
+  return Boolean(authorRow?.is_ai_character && authorRow.owner_user_id === viewerId);
+}
+
 /** Friend or owner can access non-expired story (for reactions / reactor list). */
 async function storyFriendAccess(storyId, viewerId) {
   const { data: story } = await supabase.from("user_stories").select("*").eq("id", storyId).maybeSingle();
   if (!story) return { ok: false, status: 404, msg: "Story not found" };
   const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
   if (story.created_at < cutoff) return { ok: false, status: 410, msg: "Story expired" };
-  if (story.user_id === viewerId) return { ok: true, story };
+  const authorRow = await resolveStoryAuthorMeta(story.user_id);
+  if (viewerOwnsStory(viewerId, story, authorRow)) {
+    return { ok: true, story, authorRow, notifyUserId: storyHumanOwnerId(authorRow, story.user_id) };
+  }
   if (story.visibility === "only me") return { ok: false, status: 403, msg: "Not allowed" };
-  if (story.visibility === "public") return { ok: true, story };
-  const okFriend = await areFriends(viewerId, story.user_id);
+  if (story.visibility === "public") {
+    return { ok: true, story, authorRow, notifyUserId: storyHumanOwnerId(authorRow, story.user_id) };
+  }
+  const friendTarget = storyHumanOwnerId(authorRow, story.user_id);
+  const okFriend = await areFriends(viewerId, friendTarget);
   if (!okFriend) return { ok: false, status: 403, msg: "Not allowed" };
-  return { ok: true, story };
+  return { ok: true, story, authorRow, notifyUserId: friendTarget };
 }
 
 /** Stories from the last 24h for me + friends, grouped by author with view state. */
 async function buildStoryRings(viewerId) {
   const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
   const friendIds = await friendIdsForUser(viewerId);
+  const { data: ownedCharRows } = await supabase
+    .from("users")
+    .select("id")
+    .eq("owner_user_id", viewerId)
+    .eq("is_ai_character", true);
+  const ownedCharIds = new Set((ownedCharRows || []).map((r) => r.id));
+
   const { data: allRows } = await supabase
     .from("user_stories")
     .select("*")
     .gte("created_at", cutoff)
     .order("created_at", { ascending: true });
 
+  const storyAuthorIds = [...new Set((allRows || []).map((r) => r.user_id))];
+  const { data: storyAuthors } = storyAuthorIds.length
+    ? await supabase.from("users").select("id, owner_user_id, is_ai_character").in("id", storyAuthorIds)
+    : { data: [] };
+  const authorMeta = new Map((storyAuthors || []).map((u) => [u.id, u]));
+
   const rows = (allRows || []).filter((r) => {
     if (r.user_id === viewerId) return true;
+    const meta = authorMeta.get(r.user_id);
+    if (meta?.is_ai_character && meta.owner_user_id === viewerId) return true;
     if (r.visibility === "only me") return false;
     if (r.visibility === "public") return true;
-    // Default or "friends" visibility
-    return friendIds.includes(r.user_id);
+    const friendTarget = meta?.is_ai_character ? meta.owner_user_id : r.user_id;
+    return friendIds.includes(friendTarget);
   });
 
   if (!rows?.length) return { rings: [] };
@@ -933,7 +972,13 @@ async function buildStoryRings(viewerId) {
     if (row.user_id === viewerId) bag.myReaction = type;
   }
 
-  const ownStoryIds = rows.filter((row) => row.user_id === viewerId).map((row) => row.id);
+  function isOwnStoryAuthor(storyUserId) {
+    if (storyUserId === viewerId) return true;
+    const meta = authorMeta.get(storyUserId);
+    return Boolean(meta?.is_ai_character && meta.owner_user_id === viewerId);
+  }
+
+  const ownStoryIds = rows.filter((row) => isOwnStoryAuthor(row.user_id)).map((row) => row.id);
   /** @type {Map<string, number>} */
   const viewCountMap = new Map();
   if (ownStoryIds.length) {
@@ -974,7 +1019,7 @@ async function buildStoryRings(viewerId) {
       myReaction: bag.myReaction,
       reactionCount,
       commentCount: commentCountMap.get(r.id) || 0,
-      ...(r.user_id === viewerId ? { viewerCount: viewCountMap.get(r.id) || 0 } : {})
+      ...(isOwnStoryAuthor(r.user_id) ? { viewerCount: viewCountMap.get(r.id) || 0 } : {})
     });
   }
 
@@ -988,7 +1033,7 @@ async function buildStoryRings(viewerId) {
     if (!u) return null;
     const stories = byUser.get(uid) || [];
     const pub = publicProfileWithPresence(u, viewerId, onlineSet);
-    const isSelf = uid === viewerId;
+    const isSelf = uid === viewerId || ownedCharIds.has(uid);
     const hasUnviewed = isSelf ? stories.length > 0 : stories.some((s) => !s.viewed);
     return { user: pub, stories, hasUnviewed };
   }
@@ -998,15 +1043,22 @@ async function buildStoryRings(viewerId) {
     const mine = ringFor(viewerId);
     if (mine) rings.push(mine);
   }
+  const ownedWithStories = [...ownedCharIds]
+    .filter((id) => byUser.has(id))
+    .sort((a, b) => String(um.get(a)?.name || "").localeCompare(String(um.get(b)?.name || "")));
+  for (const cid of ownedWithStories) {
+    const ring = ringFor(cid);
+    if (ring) rings.push(ring);
+  }
   const others = authorIds
-    .filter((id) => id !== viewerId)
+    .filter((id) => id !== viewerId && !ownedCharIds.has(id))
     .sort((a, b) => String(um.get(a)?.name || "").localeCompare(String(um.get(b)?.name || "")));
   for (const uid of others) {
     const ring = ringFor(uid);
     if (ring) rings.push(ring);
   }
 
-  return { rings };
+  return { rings, ownedCharacterIds: [...ownedCharIds] };
 }
 
 // ---------- Group chat helpers ----------
@@ -2027,6 +2079,7 @@ app.patch("/api/ai-characters/:id", authenticate, async (req, res) => {
     if (body.background !== undefined) updates.ai_background = String(body.background || "").trim().slice(0, 1000) || null;
     if (body.autoPost !== undefined) updates.ai_auto_post = Boolean(body.autoPost);
     if (body.autoReply !== undefined) updates.ai_auto_reply = Boolean(body.autoReply);
+    if (body.removeCover) updates.cover_url = null;
     if (!Object.keys(updates).length) return res.status(400).json({ error: "Nothing to update" });
     const { data, error } = await supabase
       .from("users")
@@ -2041,13 +2094,58 @@ app.patch("/api/ai-characters/:id", authenticate, async (req, res) => {
   }
 });
 
+app.post("/api/ai-characters/:id/avatar", authenticate, (req, res, next) => {
+  uploadImage.single("avatar")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const character = await fetchOwnedAiCharacter(req.user.id, req.params.id);
+    if (!character) return res.status(404).json({ error: "Character not found" });
+    if (!req.file) return res.status(400).json({ error: "No image file provided" });
+    const publicUrl = await uploadToBucket("avatars", req.file);
+    const { data, error } = await supabase
+      .from("users")
+      .update({ avatar_url: publicUrl })
+      .eq("id", character.id)
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ character: toAiCharacter(data) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/ai-characters/:id/cover", authenticate, (req, res, next) => {
+  uploadImage.single("cover")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const character = await fetchOwnedAiCharacter(req.user.id, req.params.id);
+    if (!character) return res.status(404).json({ error: "Character not found" });
+    if (!req.file) return res.status(400).json({ error: "No image file provided" });
+    const publicUrl = await uploadToBucket("avatars", req.file);
+    const { data, error } = await supabase
+      .from("users")
+      .update({ cover_url: publicUrl })
+      .eq("id", character.id)
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ character: toAiCharacter(data) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.post("/api/ai-characters/:id/generate-post", authenticate, async (req, res) => {
   try {
     const character = await fetchOwnedAiCharacter(req.user.id, req.params.id);
     if (!character) return res.status(404).json({ error: "Character not found" });
-    if (!character.ai_auto_post) {
-      return res.status(400).json({ error: "Enable generated character posts first" });
-    }
     const content = await groqAiCharacterPost(character);
     const id = `p${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
     const { data: post, error } = await supabase
@@ -2312,15 +2410,24 @@ app.post("/api/community/posts", authenticate, (req, res, next) => {
   try {
     const content = String(req.body?.content || "").trim();
     if (!content && !req.file) return res.status(400).json({ error: "Add text or an image to your post" });
+    let authorId = req.user.id;
+    let authorName = req.user.name;
+    const characterId = req.body?.characterId ? String(req.body.characterId).trim() : "";
+    if (characterId) {
+      const ownedCharacter = await fetchOwnedAiCharacter(req.user.id, characterId);
+      if (!ownedCharacter) return res.status(403).json({ error: "Character not found" });
+      authorId = ownedCharacter.id;
+      authorName = ownedCharacter.name || authorName;
+    }
     let image_url = null;
     if (req.file) image_url = await uploadToBucket("posts", req.file);
     const id = `p${Date.now().toString(36)}`;
     const { data: post, error } = await supabase.from("posts").insert({
-      id, author_id: req.user.id, content, image_url
+      id, author_id: authorId, content, image_url
     }).select().maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
-    await broker.publish("post.created", { id: post.id });
-    await notifyMentions(content, `a community post by ${req.user.name}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
+    await broker.publish("post.created", { id: post.id, aiCharacterId: characterId || undefined });
+    await notifyMentions(content, `a community post by ${authorName}`, req.user.id, `/community?post=${encodeURIComponent(id)}`);
     res.status(201).json(await serializePost(post, req.user.id));
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -2390,6 +2497,13 @@ app.post("/api/stories", authenticate, (req, res, next) => {
     if (!text && !req.file) {
       return res.status(400).json({ error: "Add text or a photo to your story" });
     }
+    let storyUserId = req.user.id;
+    const characterId = req.body?.characterId ? String(req.body.characterId).trim() : "";
+    if (characterId) {
+      const ownedCharacter = await fetchOwnedAiCharacter(req.user.id, characterId);
+      if (!ownedCharacter) return res.status(403).json({ error: "Character not found" });
+      storyUserId = ownedCharacter.id;
+    }
     let media_url = null;
     if (req.file) media_url = await uploadToBucket("posts", req.file);
     const id = `st${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -2397,7 +2511,7 @@ app.post("/api/stories", authenticate, (req, res, next) => {
     /** @type {Record<string, unknown>} */
     const insertRow = {
       id,
-      user_id: req.user.id,
+      user_id: storyUserId,
       body_text: text || "",
       media_url,
       visibility
@@ -2450,14 +2564,11 @@ app.post("/api/stories/:storyId/view", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
     const storyId = req.params.storyId;
-    const { data: story } = await supabase.from("user_stories").select("*").eq("id", storyId).maybeSingle();
-    if (!story) return res.status(404).json({ error: "Story not found" });
-    const cutoff = new Date(Date.now() - STORY_TTL_MS).toISOString();
-    if (story.created_at < cutoff) return res.status(410).json({ error: "Story expired" });
-    const owner = story.user_id;
-    if (owner === me) return res.json({ ok: true });
-    const okFriend = await areFriends(me, owner);
-    if (!okFriend) return res.status(403).json({ error: "Not allowed" });
+    const acc = await storyFriendAccess(storyId, me);
+    if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
+    const story = acc.story;
+    const authorRow = acc.authorRow || await resolveStoryAuthorMeta(story.user_id);
+    if (viewerOwnsStory(me, story, authorRow)) return res.json({ ok: true });
     const { error } = await supabase.from("story_views").upsert(
       { story_id: storyId, viewer_id: me },
       { onConflict: "story_id,viewer_id" }
@@ -2479,9 +2590,13 @@ app.post("/api/stories/:storyId/react", authenticate, async (req, res) => {
 
     const acc = await storyFriendAccess(storyId, me);
     if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
-    if (acc.story.user_id === me) return res.status(403).json({ error: "You can't react to your own story" });
+    const authorRow = acc.authorRow || await resolveStoryAuthorMeta(acc.story.user_id);
+    if (viewerOwnsStory(me, acc.story, authorRow)) {
+      return res.status(403).json({ error: "You can't react to your own story" });
+    }
 
     const labelEmoji = { like: "👍", love: "❤️", haha: "😂", wow: "😮", sad: "😢", cry: "😭", angry: "😡" };
+    const notifyUserId = acc.notifyUserId || storyHumanOwnerId(authorRow, acc.story.user_id);
 
     if (wantClear) {
       await supabase.from("story_reactions").delete().eq("story_id", storyId).eq("user_id", me);
@@ -2498,9 +2613,9 @@ app.post("/api/stories/:storyId/react", authenticate, async (req, res) => {
       } else {
         await supabase.from("story_reactions").insert({ story_id: storyId, user_id: me, reaction });
       }
-      if (wasNew) {
+      if (wasNew && notifyUserId && notifyUserId !== me) {
         await insertNotification({
-          userId: acc.story.user_id,
+          userId: notifyUserId,
           text: `${req.user.name} reacted ${labelEmoji[reaction] || "👍"} to your story`,
           kind: "story_reaction",
           badgeCount: 1,
@@ -2548,7 +2663,10 @@ app.get("/api/stories/:storyId/viewers", authenticate, async (req, res) => {
     const storyId = req.params.storyId;
     const acc = await storyFriendAccess(storyId, me);
     if (!acc.ok) return res.status(acc.status).json({ error: acc.msg });
-    if (acc.story.user_id !== me) return res.status(403).json({ error: "Only the story owner can see who viewed" });
+    const authorRow = acc.authorRow || await resolveStoryAuthorMeta(acc.story.user_id);
+    if (!viewerOwnsStory(me, acc.story, authorRow)) {
+      return res.status(403).json({ error: "Only the story owner can see who viewed" });
+    }
 
     const { data: viewRows } = await supabase
       .from("story_views")
@@ -2635,9 +2753,11 @@ app.post("/api/stories/:storyId/comments", authenticate, async (req, res) => {
     });
     if (error) return res.status(400).json({ error: error.message });
 
-    if (acc.story.user_id && acc.story.user_id !== me) {
+    const authorRow = acc.authorRow || await resolveStoryAuthorMeta(acc.story.user_id);
+    const notifyUserId = acc.notifyUserId || storyHumanOwnerId(authorRow, acc.story.user_id);
+    if (notifyUserId && notifyUserId !== me) {
       await insertNotification({
-        userId: acc.story.user_id,
+        userId: notifyUserId,
         text: `${req.user.name} commented on your story`,
         kind: "story_comment",
         badgeCount: 1,
@@ -2665,7 +2785,8 @@ app.delete("/api/stories/:storyId", authenticate, async (req, res) => {
     const storyId = req.params.storyId;
     const { data: story } = await supabase.from("user_stories").select("id, user_id").eq("id", storyId).maybeSingle();
     if (!story) return res.status(404).json({ error: "Story not found" });
-    if (story.user_id !== me) return res.status(403).json({ error: "Not allowed" });
+    const authorRow = await resolveStoryAuthorMeta(story.user_id);
+    if (!viewerOwnsStory(me, story, authorRow)) return res.status(403).json({ error: "Not allowed" });
     const { error } = await supabase.from("user_stories").delete().eq("id", storyId);
     if (error) return res.status(400).json({ error: error.message });
     res.json({ ok: true });
