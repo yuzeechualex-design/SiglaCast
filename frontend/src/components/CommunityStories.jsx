@@ -468,8 +468,12 @@ function CreateStoryModal({ token, currentUser, characters = [], onUnauthorizedR
             ) : null}
 
             <div className="story-create-actor">
-              {actorAvatar ? <img src={actorAvatar} alt="" /> : <span>{actorName?.charAt(0) || "?"}</span>}
-              <span>Posting as <strong>{actorName}</strong></span>
+              {actorAvatar ? (
+                <img src={actorAvatar} alt="" className="story-create-actor-avatar" />
+              ) : (
+                <span className="story-create-actor-placeholder">{actorName?.charAt(0) || "?"}</span>
+              )}
+              <span className="story-create-actor-text">Posting as <strong>{actorName}</strong></span>
             </div>
 
             <textarea

@@ -2252,8 +2252,8 @@ label.btn.btn-icon {
   font-size: 0.92rem;
 }
 
-.story-create-actor img,
-.story-create-actor span {
+.story-create-actor-avatar,
+.story-create-actor-placeholder {
   width: 34px;
   height: 34px;
   border-radius: 50%;
