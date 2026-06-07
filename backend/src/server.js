@@ -828,6 +828,139 @@ async function createAiCharacterCommentReply({ aiAuthor, delayMs, postId, parent
   }
 }
 
+// ---------- Chat Typing Indicators & Background AI Reply Workers ----------
+const activeTypingStates = new Map();
+
+function addTypingState(key, userId, durationMs) {
+  const expiresAt = Date.now() + durationMs;
+  if (!activeTypingStates.has(key)) {
+    activeTypingStates.set(key, []);
+  }
+  const list = activeTypingStates.get(key);
+  const filtered = list.filter((item) => item.userId !== userId && item.expiresAt > Date.now());
+  filtered.push({ userId, expiresAt });
+  activeTypingStates.set(key, filtered);
+}
+
+function getTypingActors(key) {
+  const list = activeTypingStates.get(key) || [];
+  const now = Date.now();
+  const valid = list.filter((item) => item.expiresAt > now);
+  activeTypingStates.set(key, valid);
+  return valid.map((item) => item.userId);
+}
+
+async function triggerAiDmReply(humanUser, otherId) {
+  const me = humanUser.id;
+  const delayMs = 2000 + Math.floor(Math.random() * 4000); // 2 to 6 seconds
+  addTypingState(`dm:${me}:${otherId}`, otherId, delayMs);
+  
+  setTimeout(async () => {
+    try {
+      let systemPrompt = "";
+      let character = null;
+      if (otherId === SIGLACAST_AI_USER_ID) {
+        systemPrompt = buildSiglaContextualPrompt(humanUser);
+      } else {
+        const { data } = await supabase.from("users").select("*").eq("id", otherId).eq("is_ai_character", true).maybeSingle();
+        character = data;
+        if (!character) return;
+        systemPrompt = aiCharacterSystemPrompt(character, "reply to user in chat");
+      }
+
+      const rawThread = await fetchDmMessagesRaw(me, otherId);
+      const decThread = await decorateChatMessages(rawThread, me);
+      const transcript = transcriptTurnsFromDecorated(decThread);
+      
+      const g = await groqCompletion(systemPrompt, transcript, { maxTokens: 250, temperature: 0.85 });
+      if (g.error || !g.reply) {
+        console.warn("[ai-dm-reply/groq]", g.error || "empty reply");
+        return;
+      }
+
+      const aiMsgId = `msg${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      await supabase.from("messages").insert({
+        id: aiMsgId,
+        from_user_id: otherId,
+        to_user_id: me,
+        text: g.reply,
+        read: false,
+        reply_to_id: null,
+        attachment_url: null,
+        attachment_type: null,
+        attachment_name: null,
+        attachment_size: null,
+        bridge_mirror: false
+      });
+      await broker.publish("message.sent", { id: aiMsgId, fromUserId: otherId, toUserId: me });
+    } catch (err) {
+      console.error("[triggerAiDmReply] error:", err.message);
+    }
+  }, delayMs);
+}
+
+async function triggerGroupAiReplies(humanUser, gid) {
+  try {
+    const { data: memberRows } = await supabase
+      .from("conversation_members")
+      .select("user_id")
+      .eq("conversation_id", gid);
+    const memberIds = (memberRows || []).map((m) => m.user_id);
+    const { data: users } = memberIds.length
+      ? await supabase.from("users").select("*").in("id", memberIds).eq("is_ai_character", true)
+      : { data: [] };
+    const aiCharacters = users || [];
+
+    if (!aiCharacters.length) return;
+
+    for (const character of aiCharacters) {
+      const delayMs = 3000 + Math.floor(Math.random() * 5000); // 3 to 8 seconds delay
+      addTypingState(`group:${gid}`, character.id, delayMs);
+      
+      setTimeout(async () => {
+        try {
+          const { data: allRows } = await supabase
+            .from("messages")
+            .select("*")
+            .eq("conversation_id", gid)
+            .order("created_at", { ascending: true });
+          
+          const decorated = await decorateChatMessages(allRows || [], humanUser.id);
+          const transcript = transcriptTurnsFromDecorated(decorated);
+          
+          const systemPrompt = aiCharacterSystemPrompt(character, "reply to group chat conversation naturally as a participant");
+          const g = await groqCompletion(systemPrompt, transcript, { maxTokens: 250, temperature: 0.85 });
+          if (g.error || !g.reply) {
+            console.warn(`[ai-group-reply/${character.name}/groq]`, g.error || "empty reply");
+            return;
+          }
+
+          const aiMsgId = `msg${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+          await supabase.from("messages").insert({
+            id: aiMsgId,
+            conversation_id: gid,
+            from_user_id: character.id,
+            to_user_id: null,
+            text: g.reply,
+            read: false,
+            reply_to_id: null,
+            attachment_url: null,
+            attachment_type: null,
+            attachment_name: null,
+            attachment_size: null,
+            bridge_mirror: false
+          });
+          await broker.publish("message.sent", { id: aiMsgId, fromUserId: character.id, conversationId: gid });
+        } catch (err) {
+          console.error(`[triggerGroupAiReplies - ${character.name}] error:`, err.message);
+        }
+      }, delayMs);
+    }
+  } catch (err) {
+    console.error("[triggerGroupAiReplies] outer error:", err.message);
+  }
+}
+
 async function fetchOwnedAiCharacter(ownerId, characterId) {
   const { data } = await supabase
     .from("users")
@@ -3409,9 +3542,9 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const pattern = `%${cleaned}%`;
   const [byName, byEmail, byCourse] = await usersSelectOmitMissingColumns(async (cols) => {
     return Promise.all([
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("name", pattern).limit(12),
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("email", pattern).limit(12),
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("course", pattern).limit(12)
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("name", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("email", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("course", pattern).limit(12)
     ]);
   }, USER_SEARCH_SELECT_DEFAULT);
   const firstErr = [byName, byEmail, byCourse].find((r) => r.error)?.error;
@@ -3872,12 +4005,27 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
       .maybeSingle()
   ]);
   const isFriend = otherId === SIGLACAST_AI_USER_ID ? true : await areFriends(me, otherId);
+  
+  const typingUserIds = getTypingActors(`dm:${me}:${otherId}`);
+  const typingActors = [];
+  if (typingUserIds.length) {
+    const { data: users } = await supabase.from("users").select("id, name, avatar_url").in("id", typingUserIds);
+    for (const u of users || []) {
+      typingActors.push({
+        id: u.id,
+        name: u.name,
+        avatarUrl: u.avatar_url
+      });
+    }
+  }
+
   res.json({
     user: publicProfileWithPresence(other, me, onlineSet),
     isFriend,
     incomingRequestId: incomingReq?.id || null,
     outgoingRequestPending: !!(outgoingReq && !isFriend),
-    messages: await decorateChatMessages(msgs, me)
+    messages: await decorateChatMessages(msgs, me),
+    typingActors
   });
 });
 
@@ -3940,6 +4088,13 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
     await broker.publish("message.sent", { id, fromUserId: me, toUserId: otherId });
+    const isAssistant = otherId === SIGLACAST_AI_USER_ID;
+    let isAiCharacter = false;
+    if (!isAssistant) {
+      const { data: partnerUser } = await supabase.from("users").select("id, is_ai_character").eq("id", otherId).maybeSingle();
+      isAiCharacter = !!partnerUser?.is_ai_character;
+    }
+
     if (otherId !== SIGLACAST_AI_USER_ID) {
       await bumpAggregatedNotification({
         userId: otherId,
@@ -3951,28 +4106,8 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       if (text) await notifyMentions(text, `a chat from ${req.user.name}`, me, `/messages?dm=${encodeURIComponent(me)}`);
     }
 
-    if (otherId === SIGLACAST_AI_USER_ID && text) {
-      const rawThread = await fetchDmMessagesRaw(me, SIGLACAST_AI_USER_ID);
-      const decThread = await decorateChatMessages(rawThread, me);
-      const transcript = transcriptTurnsFromDecorated(decThread);
-      const g = await groqCompletion(buildSiglaContextualPrompt(req.user), transcript);
-      if (g.error) return res.status(502).json({ error: g.error });
-
-      const aiMsgId = `msg${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-      const { error: aiErr } = await supabase.from("messages").insert({
-        id: aiMsgId,
-        from_user_id: SIGLACAST_AI_USER_ID,
-        to_user_id: me,
-        text: g.reply,
-        read: false,
-        reply_to_id: null,
-        attachment_url: null,
-        attachment_type: null,
-        attachment_name: null,
-        attachment_size: null,
-        bridge_mirror: false
-      });
-      if (aiErr) return res.status(400).json({ error: aiErr.message });
+    if ((isAssistant || isAiCharacter) && text) {
+      triggerAiDmReply(req.user, otherId);
     }
 
     const [decorated] = await decorateChatMessages([message], me);
@@ -4181,7 +4316,26 @@ app.get("/api/groups/:id", authenticate, async (req, res) => {
   const payload = await getGroupThreadPayload(gid, me);
   if (payload.errorStatus === 403) return res.status(403).json({ error: payload.errorMessage });
   if (payload.errorStatus === 404) return res.status(404).json({ error: payload.errorMessage });
-  res.json({ group: payload.group, messages: payload.messages, groupUserphone: payload.groupUserphone });
+
+  const typingUserIds = getTypingActors(`group:${gid}`);
+  const typingActors = [];
+  if (typingUserIds.length) {
+    const { data: users } = await supabase.from("users").select("id, name, avatar_url").in("id", typingUserIds);
+    for (const u of users || []) {
+      typingActors.push({
+        id: u.id,
+        name: u.name,
+        avatarUrl: u.avatar_url
+      });
+    }
+  }
+
+  res.json({
+    group: payload.group,
+    messages: payload.messages,
+    groupUserphone: payload.groupUserphone,
+    typingActors
+  });
 });
 
 app.post("/api/groups/:id/userphone/start", authenticate, async (req, res) => {
@@ -4352,6 +4506,10 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
     }
 
     if (text) await notifyMentions(text, `a group chat from ${req.user.name}`, me, `/messages?group=${encodeURIComponent(gid)}`);
+
+    if (text) {
+      triggerGroupAiReplies(req.user, gid);
+    }
 
     const [decorated] = await decorateChatMessages([message], me);
     res.status(201).json({ message: decorated });

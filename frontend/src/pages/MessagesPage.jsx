@@ -121,6 +121,7 @@ export default function MessagesPage({
   const [composeSiglaMode, setComposeSiglaMode] = useState(false);
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
+  const [chatTab, setChatTab] = useState("users");
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
@@ -586,205 +587,270 @@ export default function MessagesPage({
             </div>
           </div>
 
-          {messagesArchivedView ? (
-            <div className="sidebar-archived-back-row">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm sidebar-archived-back-btn"
-                onClick={() => onToggleMessagesArchived?.()}
-              >
-                ← Active chats
-              </button>
-            </div>
-          ) : null}
-
-          <form
-            className="friend-search"
-            onSubmit={(e) => {
-              e.preventDefault();
-              onSearch?.();
-            }}
-          >
-            <input
-              value={searchQuery}
-              onChange={(e) => {
-                onSearchQueryEdited?.();
-                setSearchQuery(e.target.value);
-              }}
-              placeholder="Search people…"
-              aria-label="Search people by name or email"
-            />
-            <button type="submit" className="btn btn-secondary btn-sm">
-              🔍
+          <div className="story-identity-switch chat-list-switch" style={{ display: "flex", width: "100%", marginBottom: "10px", boxSizing: "border-box" }}>
+            <button
+              type="button"
+              className={chatTab === "users" ? "active" : ""}
+              onClick={() => setChatTab("users")}
+              style={{ flex: 1 }}
+            >
+              Users
             </button>
-            {peopleSearchHint ? (
-              <p className="people-search-hint muted small">{peopleSearchHint}</p>
-            ) : null}
-          </form>
+            <button
+              type="button"
+              className={chatTab === "characters" ? "active" : ""}
+              onClick={() => setChatTab("characters")}
+              style={{ flex: 1 }}
+            >
+              AI Characters
+            </button>
+          </div>
 
-          {(searchResults || []).length > 0 ? (
-            <div className="search-results">
-              <p className="search-results-title">Search results</p>
-              {searchResults.map((u) => (
-                <div key={u.id} className="search-result-row">
-                  {renderAvatar(u, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })}
-                  <div className="search-result-info">
-                    <strong className="user-line-name">
-                      {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
-                    </strong>
-                    {(() => {
-                      const line = listeningStatusLine(u);
-                      return line ? (
-                        <span className="search-result-status" title={line}>
-                          <OverflowMarqueeText text={line} />
-                        </span>
-                      ) : null;
-                    })()}
-                    <small>{u.email}</small>
-                  </div>
-                  <div className="search-result-actions">
-                    {u.isFriend ? (
-                      <span className="pill pill-you">Friends</span>
-                    ) : u.incomingRequestId ? (
-                      <>
-                        <button
-                          type="button"
-                          className="btn btn-primary btn-sm"
-                          onClick={() => onAcceptFriendRequest?.(u.incomingRequestId)}
-                        >
-                          Accept
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm"
-                          onClick={() => onRejectFriendRequest?.(u.incomingRequestId)}
-                        >
-                          Decline
-                        </button>
-                      </>
-                    ) : u.outgoingRequestPending ? (
-                      <span className="pill pill-muted small">Requested</span>
-                    ) : (
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddFriend(u.id)}>
-                        Request
-                      </button>
-                    )}
-                    <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenChat("dm", u.id)}>
-                      💬
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : null}
-
-          <div className="conv-list">
-            {!(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && messagesArchivedView ? (
-              <p className="empty-hint muted small archive-empty-msg">No archived chats. Tap Active chats.</p>
-            ) : !(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && !messagesArchivedView ? (
-              <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
-            ) : null}
-            {(conversations || []).map((c) => {
-                const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
-                const target = c.kind === "group" ? c.group : c.user;
-                const isActive =
-                  (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
-                  (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
-                  (c.kind === "userphone" && activeChat?.kind === "userphone");
-
-                function openThisConversation() {
-                  if (c.kind === "userphone") return onOpenChat?.("userphone", "userphone");
-                  return onOpenChat?.(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id);
-                }
-
-                return (
-                  <div
-                    key={c.id}
-                    role="button"
-                    tabIndex={0}
-                    className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
-                    onClick={openThisConversation}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.preventDefault();
-                        openThisConversation();
-                      }
-                    }}
+          {chatTab === "users" ? (
+            <>
+              {messagesArchivedView ? (
+                <div className="sidebar-archived-back-row">
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm sidebar-archived-back-btn"
+                    onClick={() => onToggleMessagesArchived?.()}
                   >
-                    {c.kind === "userphone" ? (
-                      <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
-                        📞
-                      </div>
-                    ) : c.kind === "dm" ? (
-                      renderAvatar(target, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })
-                    ) : (
-                      renderAvatar(target, "sm")
-                    )}
-                    <div className="conv-item-body">
-                      <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
-                        {target?.name || "Unknown"}{" "}
-                        {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
-                        {c.kind === "userphone" ? (
-                          <span className="pill pill-muted small">anonymous</span>
-                        ) : null}
-                        {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
-                      </strong>
-                      {c.kind === "dm" ? (
-                        (() => {
-                          const line = listeningStatusLine(target);
+                    ← Active chats
+                  </button>
+                </div>
+              ) : null}
+
+              <form
+                className="friend-search"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  onSearch?.();
+                }}
+              >
+                <input
+                  value={searchQuery}
+                  onChange={(e) => {
+                    onSearchQueryEdited?.();
+                    setSearchQuery(e.target.value);
+                  }}
+                  placeholder="Search people…"
+                  aria-label="Search people by name or email"
+                />
+                <button type="submit" className="btn btn-secondary btn-sm">
+                  🔍
+                </button>
+                {peopleSearchHint ? (
+                  <p className="people-search-hint muted small">{peopleSearchHint}</p>
+                ) : null}
+              </form>
+
+              {(searchResults || []).length > 0 ? (
+                <div className="search-results">
+                  <p className="search-results-title">Search results</p>
+                  {searchResults.map((u) => (
+                    <div key={u.id} className="search-result-row">
+                      {renderAvatar(u, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })}
+                      <div className="search-result-info">
+                        <strong className="user-line-name">
+                          {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
+                        </strong>
+                        {(() => {
+                          const line = listeningStatusLine(u);
                           return line ? (
-                            <span className="conv-status-sub" title={line}>
+                            <span className="search-result-status" title={line}>
                               <OverflowMarqueeText text={line} />
                             </span>
                           ) : null;
-                        })()
-                      ) : null}
-                      <span className="conv-preview">
-                        {c.lastMessage
-                          ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text || ""}`
-                          : "No messages yet"}
-                      </span>
-                    </div>
-                    <div className="conv-item-tail">
-                      {!messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm conv-row-archive-btn"
-                          aria-label="Archive chat"
-                          title="Archive"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void (c.kind === "group"
-                              ? onArchiveConversation?.({ conversationId: c.group.id })
-                              : onArchiveConversation?.({ dmPeerId: c.user.id }));
-                          }}
-                        >
-                          <span className="ui-icon ui-icon-box" aria-hidden="true" />
+                        })()}
+                        <small>{u.email}</small>
+                      </div>
+                      <div className="search-result-actions">
+                        {u.isFriend ? (
+                          <span className="pill pill-you">Friends</span>
+                        ) : u.incomingRequestId ? (
+                          <>
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-sm"
+                              onClick={() => onAcceptFriendRequest?.(u.incomingRequestId)}
+                            >
+                              Accept
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm"
+                              onClick={() => onRejectFriendRequest?.(u.incomingRequestId)}
+                            >
+                              Decline
+                            </button>
+                          </>
+                        ) : u.outgoingRequestPending ? (
+                          <span className="pill pill-muted small">Requested</span>
+                        ) : (
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={() => onAddFriend(u.id)}>
+                            Request
+                          </button>
+                        )}
+                        <button type="button" className="btn btn-primary btn-sm" onClick={() => onOpenChat("dm", u.id)}>
+                          💬
                         </button>
-                      ) : messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
-                        <button
-                          type="button"
-                          className="btn btn-ghost btn-sm conv-row-archive-btn"
-                          aria-label="Restore chat"
-                          title="Restore to active"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            void (c.kind === "group"
-                              ? onUnarchiveConversation?.({ conversationId: c.group.id })
-                              : onUnarchiveConversation?.({ dmPeerId: c.user.id }));
-                          }}
-                        >
-                          <span className="ui-icon ui-icon-box" aria-hidden="true" />
-                        </button>
-                      ) : null}
-                      {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-          </div>
+                  ))}
+                </div>
+              ) : null}
+
+              <div className="conv-list">
+                {!(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && messagesArchivedView ? (
+                  <p className="empty-hint muted small archive-empty-msg">No archived chats. Tap Active chats.</p>
+                ) : !(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && !messagesArchivedView ? (
+                  <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
+                ) : null}
+                {(conversations || []).map((c) => {
+                    const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
+                    const target = c.kind === "group" ? c.group : c.user;
+                    const isActive =
+                      (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
+                      (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
+                      (c.kind === "userphone" && activeChat?.kind === "userphone");
+
+                    function openThisConversation() {
+                      if (c.kind === "userphone") return onOpenChat?.("userphone", "userphone");
+                      return onOpenChat?.(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id);
+                    }
+
+                    return (
+                      <div
+                        key={c.id}
+                        role="button"
+                        tabIndex={0}
+                        className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
+                        onClick={openThisConversation}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            openThisConversation();
+                          }
+                        }}
+                      >
+                        {c.kind === "userphone" ? (
+                          <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
+                            📞
+                          </div>
+                        ) : c.kind === "dm" ? (
+                          renderAvatar(target, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })
+                        ) : (
+                          renderAvatar(target, "sm")
+                        )}
+                        <div className="conv-item-body">
+                          <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
+                            {target?.name || "Unknown"}{" "}
+                            {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
+                            {c.kind === "userphone" ? (
+                              <span className="pill pill-muted small">anonymous</span>
+                            ) : null}
+                            {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
+                          </strong>
+                          {c.kind === "dm" ? (
+                            (() => {
+                              const line = listeningStatusLine(target);
+                              return line ? (
+                                <span className="conv-status-sub" title={line}>
+                                  <OverflowMarqueeText text={line} />
+                                </span>
+                              ) : null;
+                            })()
+                          ) : null}
+                          <span className="conv-preview">
+                            {c.lastMessage
+                              ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text || ""}`
+                              : "No messages yet"}
+                          </span>
+                        </div>
+                        <div className="conv-item-tail">
+                          {!messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm conv-row-archive-btn"
+                              aria-label="Archive chat"
+                              title="Archive"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void (c.kind === "group"
+                                  ? onArchiveConversation?.({ conversationId: c.group.id })
+                                  : onArchiveConversation?.({ dmPeerId: c.user.id }));
+                              }}
+                            >
+                              <span className="ui-icon ui-icon-box" aria-hidden="true" />
+                            </button>
+                          ) : messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
+                            <button
+                              type="button"
+                              className="btn btn-ghost btn-sm conv-row-archive-btn"
+                              aria-label="Restore chat"
+                              title="Restore to active"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                void (c.kind === "group"
+                                  ? onUnarchiveConversation?.({ conversationId: c.group.id })
+                                  : onUnarchiveConversation?.({ dmPeerId: c.user.id }));
+                              }}
+                            >
+                              <span className="ui-icon ui-icon-box" aria-hidden="true" />
+                            </button>
+                          ) : null}
+                          {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
+          ) : (
+            <div className="conv-list">
+              {characters.length ? (
+                characters.map((character) => {
+                  const isActive = activeChat?.kind === "dm" && activeChat?.user?.id === character.id;
+                  return (
+                    <div
+                      key={character.id}
+                      role="button"
+                      tabIndex={0}
+                      className={`conv-item ${isActive ? "active" : ""}`}
+                      onClick={() => onOpenChat("dm", character.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          onOpenChat("dm", character.id);
+                        }
+                      }}
+                    >
+                      {character.avatarUrl ? (
+                        <img className="msg-avatar sm" src={mediaUrl(character.avatarUrl)} alt="" />
+                      ) : (
+                        <div className="msg-avatar sm placeholder">{character.name?.charAt(0) || "AI"}</div>
+                      )}
+                      <div className="conv-item-body">
+                        <strong style={{ display: "block" }}>{character.name}</strong>
+                        <span className="conv-status-sub" style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {character.roles || "AI Character"}
+                        </span>
+                        <span className="conv-preview" style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {character.bio || "No bio."}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="empty-hint muted small" style={{ padding: "14px", textAlign: "center" }}>
+                  Create an AI Character in the **AI Characters** tab to chat with them.
+                </p>
+              )}
+            </div>
+          )}
         </aside>
 
         <div className="messages-thread">
@@ -1092,6 +1158,25 @@ export default function MessagesPage({
                       onOpenUserProfile={onOpenUserProfile}
                       liteMode={liteMode}
                     />
+                    ))}
+                    {activeChat.typingActors && activeChat.typingActors.map((actor) => (
+                      <div className="bubble-row row-them" key={actor.id} style={{ marginBottom: "8px" }}>
+                        {actor.avatarUrl ? (
+                          <img className="msg-avatar sm" src={mediaUrl(actor.avatarUrl)} alt="" />
+                        ) : (
+                          <div className="msg-avatar sm placeholder">{actor.name?.charAt(0) || "?"}</div>
+                        )}
+                        <div className="bubble-stack">
+                          <div className="bubble bubble-them">
+                            {isGroup ? <p className="bubble-author">{actor.name}</p> : null}
+                            <span className="typing-dots" aria-label={`${actor.name} is typing`}>
+                              <span />
+                              <span />
+                              <span />
+                            </span>
+                          </div>
+                        </div>
+                      </div>
                     ))}
                     {isGroup && groupUserphoneWaiting ? (
                       <GroupUserphoneQueueBubbleRow
