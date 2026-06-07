@@ -1336,13 +1336,24 @@ async function decorateChatMessages(rows, viewerId) {
 
 /** DM thread rows: pairwise human messages plus SiglaCast AI replies bound to either participant (`to_user_id`). */
 async function fetchDmMessagesRaw(me, otherId) {
+  let isAiChar = false;
+  if (otherId !== SIGLACAST_AI_USER_ID) {
+    const { data: usr } = await supabase.from("users").select("is_ai_character").eq("id", otherId).maybeSingle();
+    isAiChar = !!usr?.is_ai_character;
+  }
+
+  let orClause = `and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`;
+  if (otherId === SIGLACAST_AI_USER_ID) {
+    // Keep standard behaviour
+  } else if (!isAiChar) {
+    orClause += `,and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${otherId})`;
+  }
+
   const { data } = await supabase
     .from("messages")
     .select("*")
     .is("conversation_id", null)
-    .or(
-      `and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${otherId})`
-    )
+    .or(orClause)
     .order("created_at", { ascending: true });
   return data || [];
 }

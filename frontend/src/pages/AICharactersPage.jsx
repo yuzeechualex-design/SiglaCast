@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
-import { mediaUrl } from "../services/api.js";
+import AvatarEditModal from "../components/AvatarEditModal.jsx";
+import CoverEditModal from "../components/CoverEditModal.jsx";
 
 const initialForm = {
   name: "",
@@ -14,20 +14,13 @@ const initialForm = {
   coverFile: null
 };
 
-function CharacterAvatar({ character }) {
-  const src = character?.avatarUrl ? mediaUrl(character.avatarUrl) : null;
-  if (src) return <img src={src} alt="" />;
-  return <span>{character?.name?.charAt(0) || "AI"}</span>;
-}
-
 export default function AICharactersPage({
-  characters = [],
-  onCreateCharacter,
-  onToggleCharacter,
-  onGenerateCharacterPost
+  onCreateCharacter
 }) {
   const [form, setForm] = useState(initialForm);
   const [submitting, setSubmitting] = useState(false);
+  const [pendingAvatarFile, setPendingAvatarFile] = useState(null);
+  const [pendingCoverFile, setPendingCoverFile] = useState(null);
 
   function patch(field, value) {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -43,6 +36,30 @@ export default function AICharactersPage({
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function handleAvatarPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPendingAvatarFile(file);
+  }
+
+  function handleCoverPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setPendingCoverFile(file);
+  }
+
+  function applyEditedAvatar(croppedFile) {
+    patch("avatarFile", croppedFile);
+    setPendingAvatarFile(null);
+  }
+
+  function applyEditedCover(croppedFile) {
+    patch("coverFile", croppedFile);
+    setPendingCoverFile(null);
   }
 
   return (
@@ -76,12 +93,12 @@ export default function AICharactersPage({
         <div className="ai-character-upload-row">
           <label className="btn btn-secondary">
             Profile photo
-            <input type="file" accept="image/*" hidden onChange={(e) => patch("avatarFile", e.target.files?.[0] || null)} />
+            <input type="file" accept="image/*" hidden onChange={handleAvatarPick} />
           </label>
           <span className="muted small">{form.avatarFile?.name || "No photo selected"}</span>
           <label className="btn btn-secondary">
             Banner
-            <input type="file" accept="image/*" hidden onChange={(e) => patch("coverFile", e.target.files?.[0] || null)} />
+            <input type="file" accept="image/*" hidden onChange={handleCoverPick} />
           </label>
           <span className="muted small">{form.coverFile?.name || "No banner selected"}</span>
         </div>
@@ -107,56 +124,21 @@ export default function AICharactersPage({
         </button>
       </form>
 
-      <div className="ai-character-list-head">
-        <h3>Your Characters</h3>
-        <span>{characters.length}</span>
-      </div>
-      <div className="ai-character-list">
-        {characters.length ? characters.map((character) => (
-          <article className="ai-character-row" key={character.id}>
-            <Link to={`/users/${encodeURIComponent(character.id)}`} className="ai-character-row-main">
-              <div className="ai-character-row-avatar"><CharacterAvatar character={character} /></div>
-              <div>
-                <h4>{character.name}</h4>
-                <p className="muted small">AI Character{character.roles ? ` • ${character.roles}` : ""}</p>
-              </div>
-            </Link>
-            <div className="ai-character-row-actions">
-              <Link to={`/characters/${encodeURIComponent(character.id)}/edit`} className="btn btn-ghost btn-sm">
-                Edit profile
-              </Link>
-              <label className="ai-character-mini-toggle">
-                <input
-                  type="checkbox"
-                  checked={Boolean(character.autoPost)}
-                  onChange={(e) => onToggleCharacter?.(character.id, { autoPost: e.target.checked })}
-                />
-                <span>Posts</span>
-              </label>
-              <label className="ai-character-mini-toggle">
-                <input
-                  type="checkbox"
-                  checked={Boolean(character.autoReply)}
-                  onChange={(e) => onToggleCharacter?.(character.id, { autoReply: e.target.checked })}
-                />
-                <span>Replies</span>
-              </label>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => onGenerateCharacterPost?.(character)}
-              >
-                Generate a post
-              </button>
-            </div>
-          </article>
-        )) : (
-          <div className="ai-character-empty">
-            <strong>No AI characters yet</strong>
-            <p className="muted small">Create one above and it will appear on your profile under Your characters.</p>
-          </div>
-        )}
-      </div>
+      {pendingCoverFile ? (
+        <CoverEditModal
+          file={pendingCoverFile}
+          onClose={() => setPendingCoverFile(null)}
+          onApply={applyEditedCover}
+        />
+      ) : null}
+
+      {pendingAvatarFile ? (
+        <AvatarEditModal
+          file={pendingAvatarFile}
+          onClose={() => setPendingAvatarFile(null)}
+          onApply={applyEditedAvatar}
+        />
+      ) : null}
     </section>
   );
 }
