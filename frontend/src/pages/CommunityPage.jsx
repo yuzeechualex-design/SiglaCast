@@ -507,6 +507,23 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
     Boolean(post.authorIsAiCharacter && post.authorAiAutoReply) &&
     post.authorId !== currentUser?.id;
 
+  function commentById(commentId) {
+    for (const c of comments) {
+      if (c.id === commentId) return c;
+      const reply = (c.replies || []).find((r) => r.id === commentId);
+      if (reply) return reply;
+    }
+    return null;
+  }
+
+  function aiWillReplyToParent(parentId, payload = {}) {
+    const parent = commentById(parentId);
+    if (parent?.authorIsAiCharacter && parent.authorAiAutoReply && parent.userId !== payload.characterId) {
+      return true;
+    }
+    return aiWillReply;
+  }
+
   function toggleReplies(commentId) {
     setExpandedReplies((prev) => {
       const next = new Set(prev);
@@ -517,12 +534,13 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
   }
 
   async function submitReply(parentId, payload) {
-    if (aiWillReply) setAiTyping(true);
+    const showTyping = aiWillReplyToParent(parentId, payload);
+    if (showTyping) setAiTyping(true);
     try {
       await onComment(post.id, payload, parentId);
       setReplyingTo(null);
     } finally {
-      if (aiWillReply) setAiTyping(false);
+      if (showTyping) setAiTyping(false);
     }
   }
 

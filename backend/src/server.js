@@ -362,7 +362,7 @@ async function serializePost(post, viewerId) {
     const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
     const [{ data: users }, { data: cra }] = await Promise.all([
-      supabase.from("users").select("id, name, avatar_url, is_ai_character").in("id", authorIds),
+      supabase.from("users").select("id, name, avatar_url, is_ai_character, ai_auto_reply").in("id", authorIds),
       supabase.from("comment_reactions").select("comment_id, user_id, reaction").in("comment_id", commentIds)
     ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
@@ -395,6 +395,7 @@ async function serializePost(post, viewerId) {
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
       authorIsAiCharacter: Boolean(a?.is_ai_character),
+      authorAiAutoReply: Boolean(a?.ai_auto_reply),
       text: c.content,
       imageUrl: c.image_url || null,
       createdAt: c.created_at,
@@ -2722,16 +2723,18 @@ app.post(
 
     if (!text && !image_url) return res.status(400).json({ error: "Comment text or photo is required" });
 
+    let parentRow = null;
     // Validate parent belongs to the same post (prevents replies attaching to other posts)
     if (parentId) {
       const { data: parent } = await supabase
         .from("post_comments")
-        .select("id, post_id")
+        .select("id, post_id, author_id, content")
         .eq("id", parentId)
         .maybeSingle();
       if (!parent || parent.post_id !== post_id) {
         return res.status(400).json({ error: "Parent comment not found on this post" });
       }
+      parentRow = parent;
     }
 
     const id = `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`;
@@ -2741,24 +2744,38 @@ app.post(
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
 
-    if (post?.author_id && post.author_id !== commentAuthor.id) {
-      const { data: aiAuthor } = await supabase
+    let aiAuthor = null;
+    let aiReplyParentText = "";
+    if (parentRow?.author_id && parentRow.author_id !== commentAuthor.id) {
+      const { data: parentAiAuthor } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", parentRow.author_id)
+        .eq("is_ai_character", true)
+        .eq("ai_auto_reply", true)
+        .maybeSingle();
+      if (parentAiAuthor) {
+        aiAuthor = parentAiAuthor;
+        aiReplyParentText = parentRow.content || "";
+      }
+    }
+    if (!aiAuthor && post?.author_id && post.author_id !== commentAuthor.id) {
+      const { data: postAiAuthor } = await supabase
         .from("users")
         .select("*")
         .eq("id", post.author_id)
         .eq("is_ai_character", true)
         .eq("ai_auto_reply", true)
         .maybeSingle();
-      if (aiAuthor) {
+      if (postAiAuthor) aiAuthor = postAiAuthor;
+    }
+    if (aiAuthor) {
         const delayMs = randomAiReplyDelayMs();
         await wait(delayMs);
-        const { data: parentComment } = parentId
-          ? await supabase.from("post_comments").select("content").eq("id", parentId).maybeSingle()
-          : { data: null };
         const replyText = await groqAiCharacterReply(aiAuthor, {
           sourceText: text,
           postText: post.content || "",
-          parentText: parentComment?.content || "",
+          parentText: aiReplyParentText,
           commenterName: commentAuthor.name || req.user.name || "Someone"
         });
         await supabase.from("post_comments").insert({
@@ -2769,7 +2786,6 @@ app.post(
           parent_id: id,
           image_url: null
         });
-      }
     }
 
     // Notifications: replies only notify the replied-to comment author —
