@@ -555,7 +555,7 @@ async function areFriends(a, b) {
   const { data } = await supabase
     .from("friends")
     .select("id")
-    .or(`and(user_id.eq.${a},friend_id.eq.${b}),and(user_id.eq.${b},friend_id.eq.${a})`)
+    .or(`and(user_id.eq."${a}",friend_id.eq."${b}"),and(user_id.eq."${b}",friend_id.eq."${a}")`)
     .limit(1);
   return Boolean(data?.length);
 }
@@ -995,7 +995,7 @@ async function friendIdsForUser(meId) {
   const { data } = await supabase
     .from("friends")
     .select("user_id, friend_id")
-    .or(`user_id.eq.${meId},friend_id.eq.${meId}`);
+    .or(`user_id.eq."${meId}",friend_id.eq."${meId}"`);
   const ids = [];
   for (const f of data || []) {
     ids.push(f.user_id === meId ? f.friend_id : f.user_id);
@@ -1341,11 +1341,11 @@ async function fetchDmMessagesRaw(me, otherId) {
     isAiChar = !!usr?.is_ai_character;
   }
 
-  let orClause = `and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`;
+  let orClause = `and(from_user_id.eq."${me}",to_user_id.eq."${otherId}"),and(from_user_id.eq."${otherId}",to_user_id.eq."${me}")`;
   if (otherId === SIGLACAST_AI_USER_ID) {
     // Keep standard behaviour
   } else if (!isAiChar) {
-    orClause += `,and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${me}),and(from_user_id.eq.${SIGLACAST_AI_USER_ID},to_user_id.eq.${otherId})`;
+    orClause += `,and(from_user_id.eq."${SIGLACAST_AI_USER_ID}",to_user_id.eq."${me}"),and(from_user_id.eq."${SIGLACAST_AI_USER_ID}",to_user_id.eq."${otherId}")`;
   }
 
   const { data } = await supabase
@@ -1543,7 +1543,7 @@ async function fetchActiveUserphoneSession(userId) {
     .from("anon_userphone_sessions")
     .select("*")
     .is("ended_at", null)
-    .or(`participant_a.eq.${userId},participant_b.eq.${userId}`)
+    .or(`participant_a.eq."${userId}",participant_b.eq."${userId}"`)
     .maybeSingle();
   return data || null;
 }
@@ -1679,7 +1679,7 @@ async function fetchActiveBridgeSessionForConversation(conversationId) {
     .from("anon_userphone_sessions")
     .select("*")
     .is("ended_at", null)
-    .or(`bridge_conversation_a.eq.${conversationId},bridge_conversation_b.eq.${conversationId}`)
+    .or(`bridge_conversation_a.eq."${conversationId}",bridge_conversation_b.eq."${conversationId}"`)
     .maybeSingle();
   return data || null;
 }
@@ -2543,7 +2543,7 @@ app.get("/api/community/posts", authenticate, async (req, res) => {
     const { data: friendsRows } = await supabase
       .from("friends")
       .select("user_id, friend_id")
-      .or(`user_id.eq.${me},friend_id.eq.${me}`);
+      .or(`user_id.eq."${me}",friend_id.eq."${me}"`);
     const myFriends = new Set();
     for (const f of friendsRows || []) {
       myFriends.add(f.user_id === me ? f.friend_id : f.user_id);
@@ -3337,8 +3337,8 @@ app.delete("/api/admin/users/:id", authenticate, requireAdmin, async (req, res) 
   await supabase.from("post_reactions").delete().eq("user_id", id);
   await supabase.from("comment_reactions").delete().eq("user_id", id);
   await supabase.from("post_comments").delete().eq("author_id", id);
-  await supabase.from("messages").delete().or(`from_user_id.eq.${id},to_user_id.eq.${id}`);
-  await supabase.from("friends").delete().or(`user_id.eq.${id},friend_id.eq.${id}`);
+  await supabase.from("messages").delete().or(`from_user_id.eq."${id}",to_user_id.eq."${id}"`);
+  await supabase.from("friends").delete().or(`user_id.eq."${id}",friend_id.eq."${id}"`);
   await supabase.from("notifications").delete().eq("user_id", id);
   await supabase.from("votes").delete().eq("user_id", id);
   await supabase.from("conversation_members").delete().eq("user_id", id);
@@ -3591,7 +3591,7 @@ app.get("/api/users/search", authenticate, async (req, res) => {
 
   const ids = rows.map((u) => u.id);
   const [{ data: friendsRows }, { data: toMeReqs }, { data: fromMeReqs }] = await Promise.all([
-    supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
+    supabase.from("friends").select("user_id, friend_id").or(`user_id.eq."${me}",friend_id.eq."${me}"`),
     supabase.from("friend_requests").select("id, from_user_id").eq("to_user_id", me).in("from_user_id", ids),
     supabase.from("friend_requests").select("id, to_user_id").eq("from_user_id", me).in("to_user_id", ids)
   ]);
@@ -3638,7 +3638,7 @@ app.get("/api/users/discover", authenticate, async (req, res) => {
     const { data: friendsRows } = await supabase
       .from("friends")
       .select("user_id, friend_id")
-      .or(`user_id.eq.${me},friend_id.eq.${me}`);
+      .or(`user_id.eq."${me}",friend_id.eq."${me}"`);
 
     const friendIdSet = new Set();
     for (const f of friendsRows || []) {
@@ -3666,38 +3666,43 @@ app.get("/api/users/discover", authenticate, async (req, res) => {
 
 /** Public-ish profile card for avatar popovers (Community, message bubbles). Mirror search-row friend flags. */
 app.get("/api/users/:userId", authenticate, async (req, res) => {
-  const me = req.user.id;
-  const targetId = req.params.userId;
-  if (!targetId) return res.status(400).json({ error: "Missing user id" });
-  if (targetId === SIGLACAST_AI_USER_ID || targetId === USERPHONE_GUEST_ID) {
-    return res.status(404).json({ error: "User not found" });
+  try {
+    const me = req.user.id;
+    const targetId = req.params.userId;
+    if (!targetId) return res.status(400).json({ error: "Missing user id" });
+    if (targetId === SIGLACAST_AI_USER_ID || targetId === USERPHONE_GUEST_ID) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const row = await fetchUserById(targetId);
+    if (!row) return res.status(404).json({ error: "User not found" });
+
+    const onlineSet = await presenceOnlineSetForUserIds([targetId]);
+
+    let isFriend = false;
+    let incomingRequestId = null;
+    let outgoingRequestPending = false;
+
+    if (me !== targetId) {
+      isFriend = await areFriends(me, targetId);
+      const [{ data: toMeReq }, { data: fromMeReq }] = await Promise.all([
+        supabase.from("friend_requests").select("id").eq("to_user_id", me).eq("from_user_id", targetId).maybeSingle(),
+        supabase.from("friend_requests").select("id").eq("from_user_id", me).eq("to_user_id", targetId).maybeSingle()
+      ]);
+      incomingRequestId = toMeReq?.id || null;
+      outgoingRequestPending = Boolean(fromMeReq?.id);
+    }
+
+    const profile = {
+      ...publicProfileWithPresence(row, me, onlineSet),
+      isFriend,
+      incomingRequestId,
+      outgoingRequestPending
+    };
+    res.json(profile);
+  } catch (err) {
+    console.error(`Error in GET /api/users/${req.params.userId}:`, err);
+    res.status(500).json({ error: "Failed to load user profile" });
   }
-  const row = await fetchUserById(targetId);
-  if (!row) return res.status(404).json({ error: "User not found" });
-
-  const onlineSet = await presenceOnlineSetForUserIds([targetId]);
-
-  let isFriend = false;
-  let incomingRequestId = null;
-  let outgoingRequestPending = false;
-
-  if (me !== targetId) {
-    isFriend = await areFriends(me, targetId);
-    const [{ data: toMeReq }, { data: fromMeReq }] = await Promise.all([
-      supabase.from("friend_requests").select("id").eq("to_user_id", me).eq("from_user_id", targetId).maybeSingle(),
-      supabase.from("friend_requests").select("id").eq("from_user_id", me).eq("to_user_id", targetId).maybeSingle()
-    ]);
-    incomingRequestId = toMeReq?.id || null;
-    outgoingRequestPending = Boolean(fromMeReq?.id);
-  }
-
-  const profile = {
-    ...publicProfileWithPresence(row, me, onlineSet),
-    isFriend,
-    incomingRequestId,
-    outgoingRequestPending
-  };
-  res.json(profile);
 });
 
 app.get("/api/friend-requests", authenticate, async (req, res) => {
@@ -3758,7 +3763,7 @@ app.get("/api/friends", authenticate, async (req, res) => {
   const { data } = await supabase
     .from("friends")
     .select("user_id, friend_id")
-    .or(`user_id.eq.${req.user.id},friend_id.eq.${req.user.id}`);
+    .or(`user_id.eq."${req.user.id}",friend_id.eq."${req.user.id}"`);
   const ids = new Set();
   for (const f of data || []) {
     ids.add(f.user_id === req.user.id ? f.friend_id : f.user_id);
@@ -3886,7 +3891,7 @@ app.delete("/api/friends/:friendId", authenticate, async (req, res) => {
   const { data, error } = await supabase
     .from("friends")
     .delete()
-    .or(`and(user_id.eq.${req.user.id},friend_id.eq.${friendId}),and(user_id.eq.${friendId},friend_id.eq.${req.user.id})`)
+    .or(`and(user_id.eq."${req.user.id}",friend_id.eq."${friendId}"),and(user_id.eq."${friendId}",friend_id.eq."${req.user.id}")`)
     .select();
   if (error) return res.status(400).json({ error: error.message });
   if (!data?.length) return res.status(404).json({ error: "Friend not found" });
@@ -3978,12 +3983,12 @@ app.get("/api/messages/conversations", authenticate, async (req, res) => {
   const viewArchived = String(req.query.view || "").trim().toLowerCase() === "archived";
   const archivedSets = await fetchArchivedChatTargets(me);
   const [{ data: friendsRows }, { data: dmMsgs }, { data: groupMemberRows }] = await Promise.all([
-    supabase.from("friends").select("user_id, friend_id").or(`user_id.eq.${me},friend_id.eq.${me}`),
+    supabase.from("friends").select("user_id, friend_id").or(`user_id.eq."${me}",friend_id.eq."${me}"`),
     supabase
       .from("messages")
       .select("*")
       .is("conversation_id", null)
-      .or(`from_user_id.eq.${me},to_user_id.eq.${me}`)
+      .or(`from_user_id.eq."${me}",to_user_id.eq."${me}"`)
       .order("created_at", { ascending: true }),
     supabase.from("conversation_members").select("conversation_id, role").eq("user_id", me)
   ]);
@@ -4344,7 +4349,7 @@ app.get("/api/messages/with/:userId/attachments", authenticate, async (req, res)
     .select("*")
     .is("conversation_id", null)
     .not("attachment_url", "is", null)
-    .or(`and(from_user_id.eq.${me},to_user_id.eq.${otherId}),and(from_user_id.eq.${otherId},to_user_id.eq.${me})`)
+    .or(`and(from_user_id.eq."${me}",to_user_id.eq."${otherId}"),and(from_user_id.eq."${otherId}",to_user_id.eq."${me}")`)
     .order("created_at", { ascending: false });
   res.json((msgs || []).map((m) => serializeChatMessage(m, me)));
 });
