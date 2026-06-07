@@ -501,10 +501,20 @@ function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
 function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteComment, onShowCommentReactors, onOpenUserProfile, characters = [], liteMode = false }) {
   const [replyingTo, setReplyingTo] = useState(null);
   const [aiTyping, setAiTyping] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState(() => new Set());
   const comments = post.comments || [];
   const aiWillReply =
     Boolean(post.authorIsAiCharacter && post.authorAiAutoReply) &&
     post.authorId !== currentUser?.id;
+
+  function toggleReplies(commentId) {
+    setExpandedReplies((prev) => {
+      const next = new Set(prev);
+      if (next.has(commentId)) next.delete(commentId);
+      else next.add(commentId);
+      return next;
+    });
+  }
 
   async function submitReply(parentId, payload) {
     if (aiWillReply) setAiTyping(true);
@@ -534,48 +544,61 @@ function CommentsBlock({ post, currentUser, onComment, onReactComment, onDeleteC
       ) : null}
 
       <ul className="comment-list">
-        {comments.map((c) => (
-          <li key={c.id} className="comment-thread">
-            <CommentRow
-              comment={c}
-              isReply={false}
-              onReplyClick={() => setReplyingTo(c.id === replyingTo ? null : c.id)}
-              replying={replyingTo === c.id}
-              currentUser={currentUser}
-              onSubmitReply={(payload) => submitReply(c.id, payload)}
-              onCancelReply={() => setReplyingTo(null)}
-              onReactComment={onReactComment}
-              onDeleteComment={onDeleteComment}
-              onShowCommentReactors={onShowCommentReactors}
-              onOpenUserProfile={onOpenUserProfile}
-              characters={characters}
-              liteMode={liteMode}
-            />
-            {c.replies?.length ? (
-              <ul className="reply-list">
-                {c.replies.map((r) => (
-                  <li key={r.id} className="comment-reply">
-                    <CommentRow
-                      comment={r}
-                      isReply
-                      onReplyClick={() => setReplyingTo(r.id === replyingTo ? null : r.id)}
-                      replying={replyingTo === r.id}
-                      currentUser={currentUser}
-                      onSubmitReply={(payload) => submitReply(r.id, payload)}
-                      onCancelReply={() => setReplyingTo(null)}
-                      onReactComment={onReactComment}
-                      onDeleteComment={onDeleteComment}
-                      onShowCommentReactors={onShowCommentReactors}
-                      onOpenUserProfile={onOpenUserProfile}
-                      characters={characters}
-                      liteMode={liteMode}
-                    />
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-          </li>
-        ))}
+        {comments.map((c) => {
+          const replyCount = c.replies?.length || 0;
+          const repliesOpen = expandedReplies.has(c.id);
+          return (
+            <li key={c.id} className="comment-thread">
+              <CommentRow
+                comment={c}
+                isReply={false}
+                onReplyClick={() => setReplyingTo(c.id === replyingTo ? null : c.id)}
+                replying={replyingTo === c.id}
+                currentUser={currentUser}
+                onSubmitReply={(payload) => submitReply(c.id, payload)}
+                onCancelReply={() => setReplyingTo(null)}
+                onReactComment={onReactComment}
+                onDeleteComment={onDeleteComment}
+                onShowCommentReactors={onShowCommentReactors}
+                onOpenUserProfile={onOpenUserProfile}
+                characters={characters}
+                liteMode={liteMode}
+              />
+              {replyCount ? (
+                <button
+                  type="button"
+                  className="view-replies-btn"
+                  onClick={() => toggleReplies(c.id)}
+                >
+                  {repliesOpen ? "Hide replies" : `View ${replyCount} ${replyCount === 1 ? "reply" : "replies"}`}
+                </button>
+              ) : null}
+              {replyCount && repliesOpen ? (
+                <ul className="reply-list">
+                  {c.replies.map((r) => (
+                    <li key={r.id} className="comment-reply">
+                      <CommentRow
+                        comment={r}
+                        isReply
+                        onReplyClick={() => setReplyingTo(r.id === replyingTo ? null : r.id)}
+                        replying={replyingTo === r.id}
+                        currentUser={currentUser}
+                        onSubmitReply={(payload) => submitReply(r.id, payload)}
+                        onCancelReply={() => setReplyingTo(null)}
+                        onReactComment={onReactComment}
+                        onDeleteComment={onDeleteComment}
+                        onShowCommentReactors={onShowCommentReactors}
+                        onOpenUserProfile={onOpenUserProfile}
+                        characters={characters}
+                        liteMode={liteMode}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </li>
+          );
+        })}
       </ul>
 
       {aiTyping ? (

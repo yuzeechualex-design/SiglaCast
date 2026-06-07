@@ -125,7 +125,6 @@ export default function MyProfilePage({
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
-  const characterPersonality = displayUser.personality || displayUser.aiPersonality || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
   const canCompose = isOwnProfile && !isCharacterProfile;
 
@@ -226,7 +225,6 @@ export default function MyProfilePage({
             <span>{isCharacterProfile ? "AI Character" : displayUser.role === "admin" ? "Administrator" : "Student"}</span>
             <span>{isCharacterProfile ? "Generated identity" : availabilityLabel(displayUser.availability)}</span>
             {statusLine ? <span id="profile-status">{statusLine}</span> : null}
-            {isCharacterProfile && characterPersonality ? <span>{characterPersonality}</span> : null}
             {musicLine ? <span>{musicLine}</span> : null}
           </div>
           {isCharacterProfile && characterBackground ? (

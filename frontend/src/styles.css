@@ -6394,6 +6394,25 @@ button.comment-profile-avatar-btn:focus-visible {
   padding-left: 12px;
 }
 
+.view-replies-btn {
+  width: fit-content;
+  margin: 0 0 0 40px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--blue-700);
+  font-size: 0.76rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.view-replies-btn:hover,
+.view-replies-btn:focus-visible {
+  background: rgba(31, 94, 199, 0.1);
+  text-decoration: none;
+}
+
 .comment-row {
   display: flex;
   gap: 8px;
