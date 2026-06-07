@@ -174,6 +174,9 @@ export default function AppShell({
               </span>
             ) : null}
           </NavLink>
+          <NavLink to="/characters" className="nav-btn" title="Create AI Character">
+            <NavIcon name="plus" />
+          </NavLink>
           <NavLink to="/profile" className="nav-btn" title="Profile">
             <NavIcon name="profile" />
           </NavLink>

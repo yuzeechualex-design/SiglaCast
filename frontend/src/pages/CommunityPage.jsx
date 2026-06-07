@@ -395,8 +395,11 @@ export function PostCardBody({
           )}
         </button>
         <div className="post-header-meta">
-          <strong className="author">{post.author}</strong>
-          <div className="post-meta">Community post</div>
+          <div className="post-author-line">
+            <strong className="author">{post.author}</strong>
+            {post.authorIsAiCharacter || post.authorTag ? <span className="ai-character-badge">AI Character</span> : null}
+          </div>
+          <div className="post-meta">{post.authorIsAiCharacter ? "Generated character post" : "Community post"}</div>
         </div>
         {canModerateDelete ? (
           <button
@@ -677,6 +680,7 @@ function CommentRow({
       <div className="comment-body">
         <div className="comment-bubble">
           <strong>{comment.author}</strong>{" "}
+          {comment.authorIsAiCharacter ? <span className="ai-character-badge comment-ai-character-badge">AI Character</span> : null}{" "}
           {comment.replyToAuthor ? (
             <span className="reply-mention">@{comment.replyToAuthor}</span>
           ) : null}{" "}

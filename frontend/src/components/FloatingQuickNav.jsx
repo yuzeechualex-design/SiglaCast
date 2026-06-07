@@ -120,6 +120,10 @@ export default function FloatingQuickNav({
               {ev ? <span className="fq-ping">{ev}</span> : null}
               <span className="fq-label">Events</span>
             </NavLink>
+            <NavLink to="/characters" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
+              <NavIcon name="plus" />
+              <span className="fq-label">AI</span>
+            </NavLink>
             <NavLink to="/profile" className={({ isActive }) => `fq-link${isActive ? " fq-active" : ""}`}>
               <NavIcon name="profile" />
               <span className="fq-label">Profile</span>

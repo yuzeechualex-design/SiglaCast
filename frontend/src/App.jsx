@@ -16,6 +16,7 @@ import MessagesPage from "./pages/MessagesPage.jsx";
 import AssistantPage from "./pages/AssistantPage.jsx";
 import DownloadPage from "./pages/DownloadPage.jsx";
 import AddFriendsPage from "./pages/AddFriendsPage.jsx";
+import AICharactersPage from "./pages/AICharactersPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
@@ -102,6 +103,7 @@ export default function App() {
   });
   const [events, setEvents] = useState([]);
   const [posts, setPosts] = useState([]);
+  const [aiCharacters, setAiCharacters] = useState([]);
   const [notice, setNotice] = useState("");
   const [liteMode, setLiteMode] = useState(readLiteModePreference);
   const [selectedEventId, setSelectedEventId] = useState("");
@@ -404,11 +406,13 @@ export default function App() {
 
   async function loadCore() {
     if (!token) return;
-    const [ev, po] = await Promise.all([
+    const [ev, po, chars] = await Promise.all([
       api("/events"),
-      api("/community/posts")
+      api("/community/posts"),
+      api("/ai-characters")
     ]);
     setEvents(Array.isArray(ev) ? ev : []);
+    setAiCharacters(Array.isArray(chars) ? chars : []);
     if (Array.isArray(po)) {
       setPosts(po);
       writeCachedPosts(po);
@@ -899,6 +903,49 @@ export default function App() {
     const res = await apiForm("/community/posts", formData);
     setNotice(res.error || "Post published");
     if (!res.error) await loadCore();
+  }
+
+  async function createAiCharacter(form) {
+    const formData = new FormData();
+    formData.append("name", form.name || "");
+    formData.append("bio", form.bio || "");
+    formData.append("roles", form.roles || "");
+    formData.append("personality", form.personality || "");
+    formData.append("background", form.background || "");
+    formData.append("autoPost", form.autoPost ? "true" : "false");
+    formData.append("autoReply", form.autoReply ? "true" : "false");
+    if (form.avatarFile) formData.append("avatar", form.avatarFile);
+    if (form.coverFile) formData.append("cover", form.coverFile);
+    const res = await apiForm("/ai-characters", formData);
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.character) setAiCharacters((prev) => [res.character, ...prev.filter((c) => c.id !== res.character.id)]);
+    setNotice("AI character created");
+  }
+
+  async function updateAiCharacter(characterId, payload) {
+    const res = await api(`/ai-characters/${encodeURIComponent(characterId)}`, { method: "PATCH", body: payload });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.character) {
+      setAiCharacters((prev) => prev.map((c) => (c.id === res.character.id ? res.character : c)));
+    }
+    setNotice("AI character updated");
+  }
+
+  async function generateAiCharacterPost(character) {
+    if (!character?.id) return;
+    const res = await api(`/ai-characters/${encodeURIComponent(character.id)}/generate-post`, { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    if (res.post) setPosts((prev) => [res.post, ...prev.filter((p) => p.id !== res.post.id)]);
+    setNotice(`${character.name} published a post`);
   }
 
   async function refreshVisibleContent() {
@@ -1727,9 +1774,12 @@ export default function App() {
             <MyProfilePage
               user={user}
               posts={posts}
+              characters={aiCharacters}
               currentUser={user}
               liteMode={liteMode}
               onPost={postCommunityPost}
+              onGenerateCharacterPost={generateAiCharacterPost}
+              onToggleCharacter={updateAiCharacter}
               onReact={reactToPost}
               onComment={commentOnPost}
               onReactComment={reactToComment}
@@ -1737,6 +1787,17 @@ export default function App() {
               onDeletePost={deletePost}
               onShare={sharePost}
               onOpenUserProfile={openUserProfileModal}
+            />
+          }
+        />
+        <Route
+          path="/characters"
+          element={
+            <AICharactersPage
+              characters={aiCharacters}
+              onCreateCharacter={createAiCharacter}
+              onToggleCharacter={updateAiCharacter}
+              onGenerateCharacterPost={generateAiCharacterPost}
             />
           }
         />

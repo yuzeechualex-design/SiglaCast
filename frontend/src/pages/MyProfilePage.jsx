@@ -93,11 +93,14 @@ function ProfileComposer({ user, avatarSrc, onPost }) {
 export default function MyProfilePage({
   user,
   posts = [],
+  characters = [],
   currentUser = user,
   liteMode = false,
   isOwnProfile = true,
   backHref = "",
   onPost,
+  onGenerateCharacterPost,
+  onToggleCharacter,
   onReact,
   onComment,
   onReactComment,
@@ -106,16 +109,68 @@ export default function MyProfilePage({
   onShare,
   onOpenUserProfile
 }) {
-  const avatarSrc = user.avatarUrl ? mediaUrl(user.avatarUrl) : null;
-  const coverSrc = user.coverUrl ? mediaUrl(user.coverUrl) : null;
+  const [profileMode, setProfileMode] = useState("profile");
+  const [selectedCharacterId, setSelectedCharacterId] = useState("");
+  const selectedCharacter =
+    isOwnProfile && profileMode === "characters"
+      ? characters.find((c) => c.id === selectedCharacterId) || characters[0] || null
+      : null;
+  const displayUser = selectedCharacter || user;
+  const avatarSrc = displayUser.avatarUrl ? mediaUrl(displayUser.avatarUrl) : null;
+  const coverSrc = displayUser.coverUrl ? mediaUrl(displayUser.coverUrl) : null;
   const coverIsGif = coverSrc && publicUrlLooksLikeGif(coverSrc);
-  const myPosts = posts.filter((post) => post.authorId === user.id);
-  const statusLine = [user.statusEmoji, user.statusNote].filter(Boolean).join(" ");
-  const musicLine = listeningStatusLine(user);
+  const myPosts = posts.filter((post) => post.authorId === displayUser.id);
+  const statusLine = [displayUser.statusEmoji, displayUser.statusNote].filter(Boolean).join(" ");
+  const musicLine = displayUser.isAiCharacter ? "" : listeningStatusLine(displayUser);
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
+  const isCharacterProfile = Boolean(displayUser.isAiCharacter);
+  const characterRoles = displayUser.roles || displayUser.aiRoles || "";
+  const characterPersonality = displayUser.personality || displayUser.aiPersonality || "";
+  const characterBackground = displayUser.background || displayUser.aiBackground || "";
+  const canCompose = isOwnProfile && !isCharacterProfile;
 
   return (
     <section className="my-profile-page">
+      {isOwnProfile ? (
+        <div className="my-profile-owner-switch" role="tablist" aria-label="Profile view">
+          <button
+            type="button"
+            className={profileMode === "profile" ? "active" : ""}
+            onClick={() => setProfileMode("profile")}
+          >
+            Your profile
+          </button>
+          <button
+            type="button"
+            className={profileMode === "characters" ? "active" : ""}
+            onClick={() => {
+              setProfileMode("characters");
+              if (!selectedCharacterId && characters[0]?.id) setSelectedCharacterId(characters[0].id);
+            }}
+          >
+            Your characters
+          </button>
+        </div>
+      ) : null}
+
+      {isOwnProfile && profileMode === "characters" ? (
+        <div className="my-profile-character-strip">
+          {characters.length ? characters.map((character) => (
+            <button
+              type="button"
+              key={character.id}
+              className={(selectedCharacter?.id || characters[0]?.id) === character.id ? "active" : ""}
+              onClick={() => setSelectedCharacterId(character.id)}
+            >
+              {character.avatarUrl ? <img src={mediaUrl(character.avatarUrl)} alt="" /> : <span>{character.name?.charAt(0) || "AI"}</span>}
+              <strong>{character.name}</strong>
+            </button>
+          )) : (
+            <Link to="/characters" className="my-profile-character-create">Create your first AI character</Link>
+          )}
+        </div>
+      ) : null}
+
       <div className="my-profile-hero-card">
         <div className="my-profile-cover">
           {coverSrc && !liteMode ? (
@@ -128,8 +183,8 @@ export default function MyProfilePage({
             <div className="my-profile-cover-fallback" />
           )}
           {isOwnProfile ? (
-            <Link to="/settings" className="my-profile-cover-edit">
-              Edit profile
+            <Link to={isCharacterProfile ? "/characters" : "/settings"} className="my-profile-cover-edit">
+              {isCharacterProfile ? "Manage character" : "Edit profile"}
             </Link>
           ) : null}
         </div>
@@ -139,17 +194,18 @@ export default function MyProfilePage({
             {avatarSrc ? (
               <img className="my-profile-avatar" src={avatarSrc} alt="" />
             ) : (
-              <span className="my-profile-avatar my-profile-avatar--empty">{user.name?.charAt(0) || "?"}</span>
+              <span className="my-profile-avatar my-profile-avatar--empty">{displayUser.name?.charAt(0) || "?"}</span>
             )}
           </div>
           <div className="my-profile-name-block">
-            <h2>{user.name}</h2>
-            <p>{user.email}</p>
+            <h2>{displayUser.name}</h2>
+            <p>{isCharacterProfile ? "AI Character" : displayUser.email}</p>
             <div className="my-profile-pills">
-              <span className={`my-profile-presence my-profile-presence--${user.availability || "online"}`}>
-                {availabilityLabel(user.availability)}
+              <span className={`my-profile-presence my-profile-presence--${displayUser.availability || "online"}`}>
+                {isCharacterProfile ? "AI Character" : availabilityLabel(displayUser.availability)}
               </span>
               {statusLine ? <span>{statusLine}</span> : null}
+              {isCharacterProfile && characterRoles ? <span>{characterRoles}</span> : null}
               {musicLine ? <span>{musicLine}</span> : null}
             </div>
           </div>
@@ -165,14 +221,45 @@ export default function MyProfilePage({
       <div className="my-profile-grid">
         <aside className="my-profile-about-card" id="profile-about">
           <h3>Intro</h3>
-          {user.bio ? <p className="my-profile-bio">{user.bio}</p> : <p className="muted small">No bio yet.</p>}
+          {displayUser.bio ? <p className="my-profile-bio">{displayUser.bio}</p> : <p className="muted small">No bio yet.</p>}
           <div className="my-profile-info-list">
-            <span>{user.role === "admin" ? "Administrator" : "Student"}</span>
-            <span>{availabilityLabel(user.availability)}</span>
+            <span>{isCharacterProfile ? "AI Character" : displayUser.role === "admin" ? "Administrator" : "Student"}</span>
+            <span>{isCharacterProfile ? "Generated identity" : availabilityLabel(displayUser.availability)}</span>
             {statusLine ? <span id="profile-status">{statusLine}</span> : null}
+            {isCharacterProfile && characterPersonality ? <span>{characterPersonality}</span> : null}
             {musicLine ? <span>{musicLine}</span> : null}
           </div>
-          {isOwnProfile ? <Link to="/settings" className="my-profile-edit-wide">Edit details</Link> : null}
+          {isCharacterProfile && characterBackground ? (
+            <p className="my-profile-bio my-profile-character-lore">{characterBackground}</p>
+          ) : null}
+          {isCharacterProfile ? (
+            <div className="my-profile-character-controls">
+              <label className="ai-character-mini-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(displayUser.autoPost)}
+                  onChange={(e) => onToggleCharacter?.(displayUser.id, { autoPost: e.target.checked })}
+                />
+                <span>Generate posts</span>
+              </label>
+              <label className="ai-character-mini-toggle">
+                <input
+                  type="checkbox"
+                  checked={Boolean(displayUser.autoReply)}
+                  onChange={(e) => onToggleCharacter?.(displayUser.id, { autoReply: e.target.checked })}
+                />
+                <span>Auto replies</span>
+              </label>
+              <button
+                type="button"
+                className="my-profile-edit-wide"
+                disabled={!displayUser.autoPost}
+                onClick={() => onGenerateCharacterPost?.(displayUser)}
+              >
+                Generate character post
+              </button>
+            </div>
+          ) : isOwnProfile ? <Link to="/settings" className="my-profile-edit-wide">Edit details</Link> : null}
         </aside>
 
         <main className="my-profile-posts" id="profile-posts">
@@ -181,8 +268,8 @@ export default function MyProfilePage({
               ← Back to Community
             </Link>
           ) : null}
-          {isOwnProfile ? (
-            <ProfileComposer user={user} avatarSrc={avatarSrc} onPost={onPost} />
+          {canCompose ? (
+            <ProfileComposer user={displayUser} avatarSrc={avatarSrc} onPost={onPost} />
           ) : null}
 
           <div className="my-profile-section-head">
@@ -195,7 +282,10 @@ export default function MyProfilePage({
               <article key={post.id} id={`post-${post.id}`} className="tile post-card my-profile-post-card">
                 <PostCardBody
                   post={post}
-                  canModerateDelete={(currentUser?.role === "admin" || post.authorId === currentUser?.id) && !!onDeletePost}
+                  canModerateDelete={
+                    (currentUser?.role === "admin" || post.authorId === currentUser?.id || (isCharacterProfile && isOwnProfile)) &&
+                    !!onDeletePost
+                  }
                   forceExpandedBody={false}
                   currentUser={currentUser}
                   onDeletePost={() => onDeletePost?.(post)}
@@ -227,10 +317,19 @@ export default function MyProfilePage({
               <p className="muted small">
                 {isOwnProfile ? "Share something in Community and it will show up here." : "This user has not posted yet."}
               </p>
-              {isOwnProfile ? (
+              {canCompose ? (
                 <Link to="/community" className="btn btn-secondary btn-sm my-profile-create-post-btn">
                   Create post
                 </Link>
+              ) : isCharacterProfile && isOwnProfile ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm my-profile-create-post-btn"
+                  disabled={!displayUser.autoPost}
+                  onClick={() => onGenerateCharacterPost?.(displayUser)}
+                >
+                  Generate character post
+                </button>
               ) : null}
             </div>
           )}

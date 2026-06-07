@@ -24,7 +24,14 @@ export function toPublicUser(row) {
     coverUrl: row.cover_url || null,
     statusEmoji: row.status_emoji || null,
     statusNote: row.status_note || null,
-    bio: row.bio || null
+    bio: row.bio || null,
+    ownerUserId: row.owner_user_id || null,
+    isAiCharacter: Boolean(row.is_ai_character),
+    aiRoles: row.ai_roles || null,
+    aiPersonality: row.ai_personality || null,
+    aiBackground: row.ai_background || null,
+    aiAutoPost: Boolean(row.ai_auto_post),
+    aiAutoReply: Boolean(row.ai_auto_reply)
   };
 }
 

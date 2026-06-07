@@ -211,10 +211,10 @@ async function fetchUserByEmail(email) {
 
 /** Explicit `users` projections for routes that cannot use select("*") (secrets). Omit columns at runtime when DB migrations lag. */
 const USER_SEARCH_SELECT_DEFAULT =
-  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing";
+  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 const USER_ADMIN_LIST_SELECT_DEFAULT =
-  "id, role, name, email, course, avatar_url, cover_url, bio, availability, created_at";
+  "id, role, name, email, course, avatar_url, cover_url, bio, availability, created_at, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 function parseMissingUsersColumn(errorMessage = "") {
   const msg = String(errorMessage);
@@ -316,7 +316,7 @@ async function serializeSharedPost(post) {
   if (!post) return null;
   const { data: author } = await supabase
     .from("users")
-    .select("id, name, avatar_url")
+    .select("id, name, avatar_url, is_ai_character")
     .eq("id", post.author_id)
     .maybeSingle();
   return {
@@ -324,6 +324,8 @@ async function serializeSharedPost(post) {
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
+    authorIsAiCharacter: Boolean(author?.is_ai_character),
+    authorTag: author?.is_ai_character ? "AI Character" : null,
     content: post.content || "",
     imageUrl: post.image_url || null,
     createdAt: post.created_at
@@ -334,7 +336,7 @@ async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }, { data: sharedPost }] = await Promise.all([
     supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
-    supabase.from("users").select("id, name, avatar_url").eq("id", post.author_id).maybeSingle(),
+    supabase.from("users").select("id, name, avatar_url, is_ai_character").eq("id", post.author_id).maybeSingle(),
     post.shared_post_id
       ? supabase.from("posts").select("*").eq("id", post.shared_post_id).maybeSingle()
       : Promise.resolve({ data: null })
@@ -359,7 +361,7 @@ async function serializePost(post, viewerId) {
     const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
     const [{ data: users }, { data: cra }] = await Promise.all([
-      supabase.from("users").select("id, name, avatar_url").in("id", authorIds),
+      supabase.from("users").select("id, name, avatar_url, is_ai_character").in("id", authorIds),
       supabase.from("comment_reactions").select("comment_id, user_id, reaction").in("comment_id", commentIds)
     ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
@@ -391,6 +393,7 @@ async function serializePost(post, viewerId) {
       userId: c.author_id,
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
+      authorIsAiCharacter: Boolean(a?.is_ai_character),
       text: c.content,
       imageUrl: c.image_url || null,
       createdAt: c.created_at,
@@ -435,6 +438,8 @@ async function serializePost(post, viewerId) {
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
+    authorIsAiCharacter: Boolean(author?.is_ai_character),
+    authorTag: author?.is_ai_character ? "AI Character" : null,
     content: post.content || "",
     imageUrl: post.image_url || null,
     sharedPostId: post.shared_post_id || null,
@@ -635,6 +640,15 @@ function authUserPayload(row) {
 function publicProfileWithPresence(dbRow, viewerId, onlineSet) {
   if (!dbRow) return null;
   const pub = toPublicUser(dbRow);
+  if (pub.isAiCharacter) {
+    return {
+      ...pub,
+      isOnline: true,
+      presence: "online",
+      availability: "online",
+      musicNowPlaying: null
+    };
+  }
   const mode = sanitizeAvailability(dbRow.availability);
   const connected = onlineSet.has(pub.id);
   const self = viewerId === pub.id;
@@ -665,6 +679,53 @@ function publicProfileWithPresence(dbRow, viewerId, onlineSet) {
 
   const musicNowPlaying = peerMusicNowPlaying(dbRow);
   return { ...pub, isOnline, presence, musicNowPlaying };
+}
+
+function toAiCharacter(row) {
+  const pub = publicProfileWithPresence(row, row?.owner_user_id || null, new Set([row?.id].filter(Boolean)));
+  return {
+    ...pub,
+    tag: "AI Character",
+    roles: row.ai_roles || "",
+    personality: row.ai_personality || "",
+    background: row.ai_background || "",
+    autoPost: Boolean(row.ai_auto_post),
+    autoReply: Boolean(row.ai_auto_reply)
+  };
+}
+
+function aiCharacterPostText(character) {
+  const name = character.name || "this character";
+  const roles = String(character.ai_roles || character.roles || "").trim();
+  const personality = String(character.ai_personality || character.personality || "").trim();
+  const background = String(character.ai_background || character.background || "").trim();
+  const bio = String(character.bio || "").trim();
+  const seeds = [
+    `Today feels like a good day to be ${personality || "curious and present"}. ${roles ? `Still carrying my ${roles} side everywhere I go.` : ""}`,
+    `${background || bio || "A small thought from my little corner of SiglaCast"} keeps coming back to me. I think stories become real when someone replies to them.`,
+    `${roles ? `Role check: ${roles}. ` : ""}${personality || "Soft chaos, big feelings, and a bit of wonder"} is the mood right now.`,
+    `If you see this, ask ${name} about ${background || bio || "their lore"}. I probably have more to say than one post can hold.`
+  ];
+  return seeds[Math.floor(Math.random() * seeds.length)].replace(/\s+/g, " ").trim();
+}
+
+function aiCharacterReplyText(character, sourceText = "") {
+  const personality = String(character.ai_personality || "").trim();
+  const background = String(character.ai_background || "").trim();
+  const hint = String(sourceText || "").trim().slice(0, 120);
+  if (hint) return `${personality || "I"} noticed this: "${hint}" — and from my perspective, that is worth answering.`;
+  return `${personality || "I"} had to jump in here. ${background || "This feels connected to my story."}`;
+}
+
+async function fetchOwnedAiCharacter(ownerId, characterId) {
+  const { data } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", characterId)
+    .eq("owner_user_id", ownerId)
+    .eq("is_ai_character", true)
+    .maybeSingle();
+  return data || null;
 }
 
 async function upsertUserPresence(userId) {
@@ -1774,6 +1835,123 @@ app.post("/api/profile/cover", authenticate, (req, res, next) => {
   }
 });
 
+const uploadCharacterImages = uploadImage.fields([
+  { name: "avatar", maxCount: 1 },
+  { name: "cover", maxCount: 1 }
+]);
+
+app.get("/api/ai-characters", authenticate, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("owner_user_id", req.user.id)
+      .eq("is_ai_character", true)
+      .order("created_at", { ascending: false });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json((data || []).map(toAiCharacter));
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/ai-characters", authenticate, (req, res, next) => {
+  uploadCharacterImages(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
+  try {
+    const name = String(req.body?.name || "").trim().slice(0, 80);
+    if (!name) return res.status(400).json({ error: "Character name is required" });
+
+    const id = `ai_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+    const avatar = req.files?.avatar?.[0] ? await uploadToBucket("avatars", req.files.avatar[0]) : null;
+    const cover = req.files?.cover?.[0] ? await uploadToBucket("avatars", req.files.cover[0]) : null;
+    const passwordHash = await bcrypt.hash(`${id}-${Date.now()}`, 10);
+    const { data, error } = await supabase
+      .from("users")
+      .insert({
+        id,
+        role: "ai_character",
+        name,
+        email: `${id}@characters.siglacast.local`,
+        password_hash: passwordHash,
+        owner_user_id: req.user.id,
+        is_ai_character: true,
+        avatar_url: avatar,
+        cover_url: cover,
+        bio: String(req.body?.bio || "").trim().slice(0, 500) || null,
+        ai_roles: String(req.body?.roles || "").trim().slice(0, 240) || null,
+        ai_personality: String(req.body?.personality || "").trim().slice(0, 500) || null,
+        ai_background: String(req.body?.background || "").trim().slice(0, 1000) || null,
+        ai_auto_post: String(req.body?.autoPost || "false") === "true",
+        ai_auto_reply: String(req.body?.autoReply || "false") === "true",
+        availability: "online",
+        permissions: []
+      })
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.status(201).json({ character: toAiCharacter(data) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.patch("/api/ai-characters/:id", authenticate, async (req, res) => {
+  try {
+    const character = await fetchOwnedAiCharacter(req.user.id, req.params.id);
+    if (!character) return res.status(404).json({ error: "Character not found" });
+    const body = req.body || {};
+    const updates = {};
+    if (body.name !== undefined) {
+      const name = String(body.name || "").trim().slice(0, 80);
+      if (!name) return res.status(400).json({ error: "Character name is required" });
+      updates.name = name;
+    }
+    if (body.bio !== undefined) updates.bio = String(body.bio || "").trim().slice(0, 500) || null;
+    if (body.roles !== undefined) updates.ai_roles = String(body.roles || "").trim().slice(0, 240) || null;
+    if (body.personality !== undefined) updates.ai_personality = String(body.personality || "").trim().slice(0, 500) || null;
+    if (body.background !== undefined) updates.ai_background = String(body.background || "").trim().slice(0, 1000) || null;
+    if (body.autoPost !== undefined) updates.ai_auto_post = Boolean(body.autoPost);
+    if (body.autoReply !== undefined) updates.ai_auto_reply = Boolean(body.autoReply);
+    if (!Object.keys(updates).length) return res.status(400).json({ error: "Nothing to update" });
+    const { data, error } = await supabase
+      .from("users")
+      .update(updates)
+      .eq("id", character.id)
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ character: toAiCharacter(data) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/ai-characters/:id/generate-post", authenticate, async (req, res) => {
+  try {
+    const character = await fetchOwnedAiCharacter(req.user.id, req.params.id);
+    if (!character) return res.status(404).json({ error: "Character not found" });
+    if (!character.ai_auto_post) {
+      return res.status(400).json({ error: "Enable generated character posts first" });
+    }
+    const content = aiCharacterPostText(character);
+    const id = `p${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const { data: post, error } = await supabase
+      .from("posts")
+      .insert({ id, author_id: character.id, content, image_url: null })
+      .select()
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    await broker.publish("post.created", { id: post.id, aiCharacterId: character.id });
+    res.status(201).json({ post: await serializePost(post, req.user.id) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 function spotifyFrontendRedirect(extraQueryPairs) {
   const base = (SPOTIFY_FRONTEND_AFTER_LINK || "http://localhost:5173/music").trim();
   const hasQ = base.includes("?");
@@ -2479,6 +2657,26 @@ app.post(
     if (error) return res.status(400).json({ error: error.message });
     const { data: post } = await supabase.from("posts").select("*").eq("id", post_id).maybeSingle();
 
+    if (post?.author_id && post.author_id !== req.user.id) {
+      const { data: aiAuthor } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", post.author_id)
+        .eq("is_ai_character", true)
+        .eq("ai_auto_reply", true)
+        .maybeSingle();
+      if (aiAuthor) {
+        await supabase.from("post_comments").insert({
+          id: `cm${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 5)}`,
+          post_id,
+          author_id: aiAuthor.id,
+          content: aiCharacterReplyText(aiAuthor, text),
+          parent_id: id,
+          image_url: null
+        });
+      }
+    }
+
     // Notifications: replies only notify the replied-to comment author —
     // not every top-level comment on someone else's post.
     const notes = [];
@@ -2725,7 +2923,18 @@ app.delete("/api/community/posts/:id", authenticate, async (req, res) => {
   const id = req.params.id;
   const { data: post } = await supabase.from("posts").select("*").eq("id", id).maybeSingle();
   if (!post) return res.status(404).json({ error: "Post not found" });
-  if (req.user.role !== "admin" && post.author_id !== req.user.id) {
+  let ownsCharacterPost = false;
+  if (post.author_id !== req.user.id) {
+    const { data: characterAuthor } = await supabase
+      .from("users")
+      .select("id")
+      .eq("id", post.author_id)
+      .eq("owner_user_id", req.user.id)
+      .eq("is_ai_character", true)
+      .maybeSingle();
+    ownsCharacterPost = Boolean(characterAuthor?.id);
+  }
+  if (req.user.role !== "admin" && post.author_id !== req.user.id && !ownsCharacterPost) {
     return res.status(403).json({ error: "You can only delete your own posts" });
   }
   await supabase.from("post_reactions").delete().eq("post_id", id);
@@ -2925,9 +3134,9 @@ app.get("/api/users/search", authenticate, async (req, res) => {
   const pattern = `%${cleaned}%`;
   const [byName, byEmail, byCourse] = await usersSelectOmitMissingColumns(async (cols) => {
     return Promise.all([
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("name", pattern).limit(12),
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("email", pattern).limit(12),
-      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).ilike("course", pattern).limit(12)
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("name", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("email", pattern).limit(12),
+      supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character").ilike("course", pattern).limit(12)
     ]);
   }, USER_SEARCH_SELECT_DEFAULT);
   const firstErr = [byName, byEmail, byCourse].find((r) => r.error)?.error;
@@ -2971,7 +3180,7 @@ app.get("/api/users/discover", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
     const result = await usersSelectOmitMissingColumns(async (cols) => {
-      return supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID);
+      return supabase.from("users").select(cols).neq("id", me).neq("id", SIGLACAST_AI_USER_ID).neq("role", "ai_character");
     }, USER_SEARCH_SELECT_DEFAULT);
 
     if (result.error) return res.status(400).json({ error: result.error.message });
