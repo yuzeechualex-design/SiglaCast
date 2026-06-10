@@ -70,7 +70,7 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
               <h3>{item.name}</h3>
               <p>{item.description}</p>
               <div className="shop-card-footer">
-                <strong>{item.price} coins</strong>
+                <strong>{(item.effectivePrice ?? item.price) === 0 ? "Free" : `${item.effectivePrice ?? item.price} coins`}</strong>
                 <button type="button" className="btn btn-primary" disabled={item.owned || !item.unlocked} onClick={() => onBuy?.(item.id)}>
                   {item.owned ? "Owned" : item.unlocked ? "Buy" : "Locked"}
                 </button>

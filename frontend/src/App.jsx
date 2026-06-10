@@ -270,6 +270,23 @@ export default function App() {
     await loadBondsAndShop();
   }
 
+  async function equipProfileFrame(itemId) {
+    const res = await api("/profile/frame", {
+      method: "PATCH",
+      body: { itemId: itemId || "" }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return false;
+    }
+    if (res.user) {
+      setUser(res.user);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+    }
+    setNotice(itemId ? "Profile frame equipped" : "Profile frame removed");
+    return true;
+  }
+
   function startSocialLogin(provider) {
     if (loadingAuth) return;
     const callbackUrl = `${window.location.origin}/auth/callback`;
@@ -1907,6 +1924,8 @@ export default function App() {
               onOpenUserProfile={openUserProfileModal}
               bonds={bondState.bonds}
               onTogglePinnedBond={togglePinnedBond}
+              shopItems={shopState.items}
+              onEquipProfileFrame={equipProfileFrame}
             />
           }
         />

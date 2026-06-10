@@ -22,6 +22,11 @@ export function toPublicUser(row) {
     course: row.course || null,
     avatarUrl: row.avatar_url || null,
     coverUrl: row.cover_url || null,
+    profileFrameItemId: row.profile_frame_item_id || null,
+    profileFrameUrl:
+      row.profile_frame_item_id === "pink-heart-bond-frame"
+        ? "/assets/bond-frame-pink.png"
+        : null,
     statusEmoji: row.status_emoji || null,
     statusNote: row.status_note || null,
     bio: row.bio || null,

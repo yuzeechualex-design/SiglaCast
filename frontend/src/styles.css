@@ -3735,6 +3735,10 @@ body.community-thread-overlay-open {
   margin-top: -58px;
   position: relative;
   z-index: 2;
+  width: 148px;
+  height: 148px;
+  display: grid;
+  place-items: center;
 }
 
 .my-profile-avatar {
@@ -3750,6 +3754,35 @@ body.community-thread-overlay-open {
   font-size: 2.4rem;
   font-weight: 900;
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.24);
+}
+
+.my-profile-avatar-frame {
+  position: absolute;
+  inset: -16px;
+  z-index: 3;
+  width: calc(100% + 32px);
+  height: calc(100% + 32px);
+  object-fit: contain;
+  pointer-events: none;
+  filter: drop-shadow(0 10px 22px rgba(76, 29, 149, 0.35));
+}
+
+.my-profile-frame-add {
+  position: absolute;
+  right: 4px;
+  bottom: 8px;
+  z-index: 4;
+  width: 34px;
+  height: 34px;
+  border: 2px solid var(--card);
+  border-radius: 50%;
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #fff;
+  box-shadow: 0 10px 22px rgba(76, 29, 149, 0.34);
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: 1000;
+  line-height: 1;
 }
 
 .my-profile-name-block {
@@ -4755,6 +4788,10 @@ button.my-profile-edit-wide:disabled,
 .thread-header-info {
   flex: 1;
   min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 46%);
+  align-items: center;
+  gap: 8px 14px;
 }
 
 .thread-header-info strong,
@@ -11111,10 +11148,13 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 /* ---------- Bond system + shop ---------- */
 .bond-thread-meter {
   position: relative;
-  width: min(260px, 100%);
-  margin-top: 7px;
-  border-radius: 12px;
-  padding: 7px 9px;
+  width: 100%;
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: stretch;
+  margin-top: 0;
+  border-radius: 10px;
+  padding: 5px 7px;
   background: rgba(139, 92, 246, 0.12);
   border: 1px solid rgba(167, 139, 250, 0.3);
 }
@@ -11125,7 +11165,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   align-items: center;
   gap: 7px;
   color: #f5f3ff;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 900;
 }
 
@@ -11146,8 +11186,8 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .bond-thread-bar {
-  height: 6px;
-  margin-top: 6px;
+  height: 4px;
+  margin-top: 4px;
   overflow: hidden;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.1);
@@ -11277,6 +11317,143 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   color: rgba(255, 255, 255, 0.76);
   font-size: 0.68rem;
   font-weight: 800;
+}
+
+.profile-frame-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(10, 6, 18, 0.68);
+  backdrop-filter: blur(10px);
+}
+
+.profile-frame-modal {
+  width: min(760px, 96vw);
+  max-height: min(760px, 92vh);
+  overflow: auto;
+  border: 1px solid rgba(167, 139, 250, 0.34);
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: 0 28px 90px rgba(10, 6, 18, 0.42);
+}
+
+.profile-frame-modal-head,
+.profile-frame-modal-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 18px;
+}
+
+.profile-frame-modal-head {
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-frame-modal-head p {
+  color: var(--blue-700);
+  font-size: 0.75rem;
+  font-weight: 1000;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.profile-frame-modal-head button {
+  width: 34px;
+  height: 34px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(139, 92, 246, 0.12);
+  color: var(--ink-900);
+  cursor: pointer;
+  font-size: 1.3rem;
+}
+
+.profile-frame-modal-body {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.profile-frame-preview {
+  min-height: 310px;
+  display: grid;
+  place-items: center;
+  position: relative;
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.14), transparent 9rem),
+    linear-gradient(135deg, #2e1065, #7c3aed);
+}
+
+.profile-frame-preview-frame {
+  position: absolute;
+  width: min(280px, 86%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  filter: drop-shadow(0 18px 30px rgba(0, 0, 0, 0.28));
+  animation: shop-frame-float 3.8s ease-in-out infinite;
+}
+
+.profile-frame-preview-avatar,
+.profile-frame-preview > span {
+  width: 112px;
+  height: 112px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: rgba(18, 11, 34, 0.82);
+  color: #fff;
+  font-size: 2rem;
+  font-weight: 900;
+  box-shadow: inset 0 0 0 4px rgba(255, 255, 255, 0.16);
+}
+
+.profile-frame-list {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+}
+
+.profile-frame-list button {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  background: var(--surface);
+  color: var(--ink-900);
+  cursor: pointer;
+  text-align: left;
+}
+
+.profile-frame-list button.active {
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.16);
+}
+
+.profile-frame-list img,
+.profile-frame-none {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  object-fit: contain;
+  background: rgba(139, 92, 246, 0.12);
+}
+
+.profile-frame-modal-actions {
+  justify-content: flex-end;
+  border-top: 1px solid var(--line);
 }
 
 .shop-page {
@@ -11494,12 +11671,25 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 @media (max-width: 720px) {
+  .thread-header-info {
+    display: block;
+  }
+
+  .bond-thread-meter {
+    width: 100%;
+    margin-top: 7px;
+  }
+
   .profile-bonds-mini {
     position: relative;
     right: auto;
     bottom: auto;
     margin: 12px 14px 0;
     width: auto;
+  }
+
+  .profile-frame-modal-body {
+    grid-template-columns: 1fr;
   }
 
   .shop-hero {

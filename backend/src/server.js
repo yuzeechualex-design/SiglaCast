@@ -235,6 +235,16 @@ const SHOP_ITEMS = [
     requiredBondLevel: "partner"
   }
 ];
+const FREE_SHOP_EMAILS = new Set(["alexcarloman@dorsu.edu.ph"]);
+
+function userHasFreeShop(user) {
+  return FREE_SHOP_EMAILS.has(String(user?.email || "").trim().toLowerCase());
+}
+
+function shopItemUrl(itemId) {
+  if (itemId === "pink-heart-bond-frame") return "/assets/bond-frame-pink.png";
+  return null;
+}
 
 function bondLevelForExp(exp = 0) {
   const value = Math.max(0, Number(exp) || 0);
@@ -2415,12 +2425,14 @@ app.get("/api/shop", authenticate, async (req, res) => {
     const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
     const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
     const hasPartnerBond = Boolean(partnerBonds?.length);
+    const freeShop = userHasFreeShop(req.user);
     res.json({
       wallet,
       items: SHOP_ITEMS.map((item) => ({
         ...item,
-        owned: owned.has(item.id),
-        unlocked: item.requiredBondLevel !== "partner" || hasPartnerBond
+        effectivePrice: freeShop ? 0 : item.price,
+        owned: freeShop || owned.has(item.id),
+        unlocked: freeShop || item.requiredBondLevel !== "partner" || hasPartnerBond
       }))
     });
   } catch (e) {
@@ -2440,14 +2452,46 @@ app.post("/api/shop/:itemId/buy", authenticate, async (req, res) => {
       .eq("item_id", item.id)
       .maybeSingle();
     if (existing) return res.status(400).json({ error: "You already own this item" });
+    const freeShop = userHasFreeShop(req.user);
     const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
-    if (item.requiredBondLevel === "partner" && !partnerBonds?.length) {
+    if (!freeShop && item.requiredBondLevel === "partner" && !partnerBonds?.length) {
       return res.status(403).json({ error: "Reach Partner Bond Level with someone before buying this frame." });
     }
-    if (shop.coins < item.price) return res.status(400).json({ error: "Not enough purxu coins" });
+    const effectivePrice = freeShop ? 0 : item.price;
+    if (shop.coins < effectivePrice) return res.status(400).json({ error: "Not enough purxu coins" });
     await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: item.id });
-    const wallet = await addWalletCoins(req.user.id, -item.price);
-    res.json({ wallet, item: { ...item, owned: true, unlocked: true } });
+    const wallet = await addWalletCoins(req.user.id, -effectivePrice);
+    res.json({ wallet, item: { ...item, effectivePrice, owned: true, unlocked: true } });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.patch("/api/profile/frame", authenticate, async (req, res) => {
+  try {
+    const itemId = String(req.body?.itemId || "").trim();
+    const selected = itemId || null;
+    if (selected) {
+      const item = SHOP_ITEMS.find((row) => row.id === selected);
+      if (!item) return res.status(404).json({ error: "Profile frame not found" });
+      if (!userHasFreeShop(req.user)) {
+        const { data: purchase } = await supabase
+          .from("user_shop_purchases")
+          .select("item_id")
+          .eq("user_id", req.user.id)
+          .eq("item_id", selected)
+          .maybeSingle();
+        if (!purchase) return res.status(403).json({ error: "Buy this frame before equipping it." });
+      }
+    }
+    const { data, error } = await supabase
+      .from("users")
+      .update({ profile_frame_item_id: selected })
+      .eq("id", req.user.id)
+      .select("*")
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ user: authUserPayload(data), frameUrl: shopItemUrl(selected) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }

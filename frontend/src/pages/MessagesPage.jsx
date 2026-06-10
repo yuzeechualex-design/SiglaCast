@@ -906,9 +906,6 @@ export default function MessagesPage({
                       );
                     })()
                   )}
-                  {!isGroup && !isUserphone && activeChat.isFriend ? (
-                    <span className="pill pill-you">Friends</span>
-                  ) : null}
                   {!isGroup && !isUserphone && activeChat.bond ? (
                     <div className="bond-thread-meter">
                       <div className="bond-thread-meter-top">

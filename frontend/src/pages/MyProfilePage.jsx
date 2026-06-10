@@ -114,7 +114,9 @@ export default function MyProfilePage({
   onShare,
   onOpenUserProfile,
   bonds = [],
-  onTogglePinnedBond
+  onTogglePinnedBond,
+  shopItems = [],
+  onEquipProfileFrame
 }) {
   const [profileMode, setProfileMode] = useState("profile");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
@@ -130,10 +132,28 @@ export default function MyProfilePage({
   const statusLine = [displayUser.statusEmoji, displayUser.statusNote].filter(Boolean).join(" ");
   const musicLine = displayUser.isAiCharacter ? "" : listeningStatusLine(displayUser);
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
+  const [framePickerOpen, setFramePickerOpen] = useState(false);
+  const [selectedFrameId, setSelectedFrameId] = useState(displayUser.profileFrameItemId || "");
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
   const canCompose = isOwnProfile;
+  const frameFallback =
+    currentUser?.email === "alexcarloman@dorsu.edu.ph"
+      ? [{
+          id: "pink-heart-bond-frame",
+          name: "Pink Heart Bond Frame",
+          type: "profile_frame",
+          imageUrl: "/assets/bond-frame-pink.png",
+          owned: true,
+          unlocked: true,
+          effectivePrice: 0,
+          price: 20
+        }]
+      : [];
+  const frameItems = (shopItems.length ? shopItems : frameFallback).filter((item) => item.type === "profile_frame");
+  const ownedFrameItems = frameItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
   const eligibleBonds = isOwnProfile ? bonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target) : [];
   const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
   const addableBond = eligibleBonds.find((bond) => !bond.pinned);
@@ -203,11 +223,27 @@ export default function MyProfilePage({
 
         <div className="my-profile-identity">
           <div className="my-profile-avatar-wrap">
+            {activeFrame?.imageUrl || displayUser.profileFrameUrl ? (
+              <img className="my-profile-avatar-frame" src={activeFrame?.imageUrl || displayUser.profileFrameUrl} alt="" />
+            ) : null}
             {avatarSrc ? (
               <img className="my-profile-avatar" src={avatarSrc} alt="" />
             ) : (
               <span className="my-profile-avatar my-profile-avatar--empty">{displayUser.name?.charAt(0) || "?"}</span>
             )}
+            {isOwnProfile ? (
+              <button
+                type="button"
+                className="my-profile-frame-add"
+                title="Choose profile frame"
+                onClick={() => {
+                  setSelectedFrameId(displayUser.profileFrameItemId || ownedFrameItems[0]?.id || "");
+                  setFramePickerOpen(true);
+                }}
+              >
+                +
+              </button>
+            ) : null}
           </div>
           <div className="my-profile-name-block">
             <h2>{displayUser.name}</h2>
@@ -257,6 +293,70 @@ export default function MyProfilePage({
           </div>
         ) : null}
       </div>
+
+      {framePickerOpen ? (
+        <div className="profile-frame-modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose profile frame">
+          <div className="profile-frame-modal">
+            <div className="profile-frame-modal-head">
+              <div>
+                <p>Avatar frames</p>
+                <h3>Choose your profile frame</h3>
+              </div>
+              <button type="button" onClick={() => setFramePickerOpen(false)} aria-label="Close">
+                ×
+              </button>
+            </div>
+            <div className="profile-frame-modal-body">
+              <div className="profile-frame-preview">
+                {selectedFrameId ? (
+                  <img
+                    className="profile-frame-preview-frame"
+                    src={frameItems.find((item) => item.id === selectedFrameId)?.imageUrl}
+                    alt=""
+                  />
+                ) : null}
+                {avatarSrc ? <img className="profile-frame-preview-avatar" src={avatarSrc} alt="" /> : <span>{displayUser.name?.charAt(0) || "?"}</span>}
+              </div>
+              <div className="profile-frame-list">
+                <button
+                  type="button"
+                  className={!selectedFrameId ? "active" : ""}
+                  onClick={() => setSelectedFrameId("")}
+                >
+                  <span className="profile-frame-none">None</span>
+                  <strong>No frame</strong>
+                </button>
+                {ownedFrameItems.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={selectedFrameId === item.id ? "active" : ""}
+                    onClick={() => setSelectedFrameId(item.id)}
+                  >
+                    <img src={item.imageUrl} alt="" />
+                    <strong>{item.name}</strong>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="profile-frame-modal-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setFramePickerOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={async () => {
+                  const ok = await onEquipProfileFrame?.(selectedFrameId);
+                  if (ok !== false) setFramePickerOpen(false);
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="my-profile-grid">
         <aside className="my-profile-about-card" id="profile-about">
