@@ -65,13 +65,13 @@ export default function AuthPage({
   return (
     <div className="auth-page-container">
       <div className="auth-bg-grid" />
-      <img className="auth-bg-mark auth-bg-mark-one" src="/assets/siglacast-splash.png" alt="" />
-      <img className="auth-bg-mark auth-bg-mark-two" src="/assets/siglacast-icon.png" alt="" />
+      <img className="auth-bg-mark auth-bg-mark-one" src="/assets/purxu-logo.png" alt="" />
+      <img className="auth-bg-mark auth-bg-mark-two" src="/assets/purxu-logo.png" alt="" />
       
       <form className="auth-card" onSubmit={onSubmit} noValidate>
         <div className="auth-brand">
-          <img src="/assets/siglacast-icon.png" alt="" />
-          <h1>SiglaCast</h1>
+          <img src="/assets/purxu-logo.png" alt="" />
+          <h1>purxu</h1>
         </div>
 
         {!showEmailForm ? (

@@ -192,7 +192,7 @@ public class ChatHeadService extends Service {
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         header.setOrientation(LinearLayout.HORIZONTAL);
-        TextView title = text("SiglaCast", 18, true, Color.WHITE);
+        TextView title = text("purxu", 18, true, Color.WHITE);
         header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1));
         TextView close = text("×", 24, true, Color.WHITE);
         close.setGravity(Gravity.CENTER);
@@ -250,7 +250,7 @@ public class ChatHeadService extends Service {
         for (int i = 0; i < Math.min(items.length(), 3); i++) {
             JSONObject item = items.optJSONObject(i);
             if (item == null) continue;
-            TextView row = text(item.optString("title", "SiglaCast"), 14, true, Color.WHITE);
+            TextView row = text(item.optString("title", "purxu"), 14, true, Color.WHITE);
             String subtitle = item.optString("subtitle", "");
             if (!subtitle.isEmpty()) row.setText(row.getText() + "\n" + subtitle);
             row.setTextColor(Color.WHITE);
@@ -330,10 +330,10 @@ public class ChatHeadService extends Service {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return;
         NotificationChannel channel = new NotificationChannel(
             CHANNEL_ID,
-            "SiglaCast floating bubble",
+            "purxu floating bubble",
             NotificationManager.IMPORTANCE_LOW
         );
-        channel.setDescription("Keeps the SiglaCast floating notification bubble available.");
+        channel.setDescription("Keeps the purxu floating notification bubble available.");
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (manager != null) manager.createNotificationChannel(channel);
     }
@@ -341,7 +341,7 @@ public class ChatHeadService extends Service {
     private Notification buildForegroundNotification() {
         return new NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(getApplicationInfo().icon)
-            .setContentTitle("SiglaCast bubble is active")
+            .setContentTitle("purxu bubble is active")
             .setContentText("Unread messages and announcements can pop up as a floating bubble.")
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)

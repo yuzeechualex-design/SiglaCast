@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
 export const ASSISTANT_WELCOME =
-  "Hi—I’m Sigla Assistant. Ask me anything: SiglaCast how-tos (voting, announcements, chats), homework explanations, Filipino/English, study tips, drafts, trivia, beginner coding—you name it. I’m not an official DosU channel for policy/emergencies, but otherwise I’m here to help. Say \"Ingles\" if you prefer English.";
+  "Hi-I’m purxu Assistant. Ask me anything: purxu how-tos (voting, announcements, chats), homework explanations, Filipino/English, study tips, drafts, trivia, beginner coding-you name it. I’m not an official DosU channel for policy/emergencies, but otherwise I’m here to help. Say \"Ingles\" if you prefer English.";
 
 /** Embedded in Messages thread or full page — shared UI + state. */
 export function AssistantChatCore({ chatWithGroq }) {
@@ -92,7 +92,7 @@ export function AssistantChatCore({ chatWithGroq }) {
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Ask anything… SiglaCast, homework, study help, Filipino/English, etc."
+          placeholder="Ask anything… purxu, homework, study help, Filipino/English, etc."
           rows={3}
           disabled={busy}
         />

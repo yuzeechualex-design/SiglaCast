@@ -662,7 +662,7 @@ export default function App() {
           typeof n.badgeCount === "number" && n.badgeCount > 1
             ? `${n.text} (${n.badgeCount})`
             : n.text || "Activity";
-        const notif = new Notification("SiglaCast", { body, tag: n.id });
+        const notif = new Notification("purxu", { body, tag: n.id });
         notif.onclick = () => {
           window.focus();
           const path = notificationTargetPath(n);
@@ -1428,7 +1428,7 @@ export default function App() {
     await loadMessages();
   }
 
-  /** SiglaCast AI replies inside this thread — everyone in the chat sees assistant bubbles like a participant. */
+  /** purxu AI replies inside this thread — everyone in the chat sees assistant bubbles like a participant. */
   async function sendSiglaInActiveThread(text, replyToId = null) {
     if (!activeChat) return;
     const body = {

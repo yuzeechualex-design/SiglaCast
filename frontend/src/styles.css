@@ -1,21 +1,23 @@
 :root,
 [data-theme="light"] {
-  --blue-950: #0a255e;
-  --blue-800: #0d47a1;
-  --blue-700: #1f5ec7;
-  --yellow-500: #fbc02d;
-  --yellow-300: #fde293;
+  --blue-950: #2b0f62;
+  --blue-800: #5b21b6;
+  --blue-700: #7c3aed;
+  --blue-600: #8b5cf6;
+  --blue-500: #a78bfa;
+  --yellow-500: #8b5cf6;
+  --yellow-300: #c4b5fd;
   --white: #ffffff;
-  --ink-900: #112b47;
-  --ink-600: #506a87;
-  --surface: #f8fbff;
+  --ink-900: #20123f;
+  --ink-600: #675781;
+  --surface: #fbf8ff;
   --card: #ffffff;
-  --line: #d8e6f7;
-  --shadow-soft: 0 10px 30px rgba(13, 71, 161, 0.12);
-  --body-bg-1: #f3f8ff;
-  --body-bg-2: #fff7dd;
-  --body-bg-3: #edf5ff;
-  --body-bg-4: #fffdf1;
+  --line: #e9ddff;
+  --shadow-soft: 0 10px 30px rgba(124, 58, 237, 0.16);
+  --body-bg-1: #f3ecff;
+  --body-bg-2: #eee7ff;
+  --body-bg-3: #fbf8ff;
+  --body-bg-4: #f7f0ff;
   --input-bg: #ffffff;
   --bubble-them-bg: #ffffff;
   --bubble-them-text: var(--ink-900);
@@ -23,24 +25,26 @@
 }
 
 [data-theme="dark"] {
-  --blue-950: #0a255e;
-  --blue-800: #2b56c9;
-  --blue-700: #3a73e0;
-  --yellow-500: #facc15;
-  --yellow-300: #fde047;
+  --blue-950: #1e103c;
+  --blue-800: #5b21b6;
+  --blue-700: #8b5cf6;
+  --blue-600: #a78bfa;
+  --blue-500: #c4b5fd;
+  --yellow-500: #8b5cf6;
+  --yellow-300: #c4b5fd;
   --white: #ffffff;
   --ink-900: #e6edf6;
   --ink-600: #a3b2cc;
-  --surface: #182234;
-  --card: #131c2e;
-  --line: #283246;
+  --surface: #1d1530;
+  --card: #171024;
+  --line: #352750;
   --shadow-soft: 0 10px 30px rgba(0, 0, 0, 0.45);
-  --body-bg-1: rgba(31, 94, 199, 0.12);
-  --body-bg-2: rgba(250, 204, 21, 0.06);
-  --body-bg-3: #0b1220;
-  --body-bg-4: #131c2e;
-  --input-bg: #1a2236;
-  --bubble-them-bg: #1f2940;
+  --body-bg-1: rgba(139, 92, 246, 0.18);
+  --body-bg-2: rgba(196, 181, 253, 0.09);
+  --body-bg-3: #100b1f;
+  --body-bg-4: #1a112b;
+  --input-bg: #211632;
+  --bubble-them-bg: #251936;
   --bubble-them-text: var(--ink-900);
   --menu-bg: #1a2236;
 }
@@ -94,8 +98,8 @@ p {
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #facc15;
-  color: #101827;
+  background: #8b5cf6;
+  color: #ffffff;
   box-shadow:
     0 14px 28px rgba(0, 0, 0, 0.28),
     0 0 0 1px rgba(255, 255, 255, 0.55) inset;
@@ -135,9 +139,9 @@ p {
   overflow: hidden;
   color: #f8fbff;
   background:
-    radial-gradient(circle at 16% 18%, rgba(250, 204, 21, 0.2), transparent 20rem),
-    radial-gradient(circle at 92% 12%, rgba(20, 184, 166, 0.25), transparent 22rem),
-    linear-gradient(145deg, #09111f 0%, #172554 42%, #101827 100%);
+    radial-gradient(circle at 16% 18%, rgba(167, 139, 250, 0.28), transparent 20rem),
+    radial-gradient(circle at 92% 12%, rgba(109, 40, 217, 0.32), transparent 22rem),
+    linear-gradient(145deg, #10091f 0%, #2e1065 44%, #120b22 100%);
 }
 
 .download-nav {
@@ -170,7 +174,7 @@ p {
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  box-shadow: 0 10px 30px rgba(250, 204, 21, 0.22);
+  box-shadow: 0 10px 30px rgba(139, 92, 246, 0.32);
 }
 
 .download-nav-links {
@@ -245,7 +249,7 @@ p {
 
 .download-eyebrow {
   margin: 0 0 18px;
-  color: #fde68a;
+  color: #ddd6fe;
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.14em;
@@ -297,8 +301,8 @@ p {
 }
 
 .download-primary-btn {
-  background: #facc15;
-  color: #111827;
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #ffffff;
 }
 
 .download-secondary-btn {
@@ -353,7 +357,7 @@ p {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #facc15;
+  background: #a78bfa;
 }
 
 .shot-topbar span:nth-child(2) {
@@ -368,8 +372,8 @@ p {
   padding: 24px;
   min-height: 112px;
   background:
-    linear-gradient(135deg, rgba(31, 94, 199, 0.94), rgba(20, 184, 166, 0.34)),
-    url("/assets/siglacast-splash.png") right 24px center / 96px 96px no-repeat;
+    linear-gradient(135deg, rgba(91, 33, 182, 0.94), rgba(167, 139, 250, 0.34)),
+    url("/assets/purxu-logo.png") right 24px center / 96px 96px no-repeat;
 }
 
 .shot-hero strong {
@@ -402,7 +406,7 @@ p {
 
 .shot-tabs span:first-child {
   background: #fff;
-  color: #172554;
+  color: #3b0764;
 }
 
 .shot-feed {
@@ -458,7 +462,7 @@ p {
   height: 108px;
   background:
     linear-gradient(rgba(15, 23, 42, 0.1), rgba(15, 23, 42, 0.46)),
-    url("/assets/siglacast-splash.png") center / cover no-repeat;
+    url("/assets/purxu-logo.png") center / cover no-repeat;
 }
 
 .phone-avatar {
@@ -467,7 +471,7 @@ p {
   margin: -28px 0 10px 16px;
   border-radius: 50%;
   border: 3px solid #121a2d;
-  background: url("/assets/siglacast-icon.png") center / cover no-repeat;
+  background: url("/assets/purxu-logo.png") center / cover no-repeat;
 }
 
 .phone-profile strong,
@@ -548,8 +552,8 @@ p {
   margin-bottom: 12px;
   border-radius: 999px;
   padding: 6px 10px;
-  background: rgba(250, 204, 21, 0.14);
-  color: #fde68a;
+  background: rgba(139, 92, 246, 0.22);
+  color: #ddd6fe;
   font-weight: 900;
   font-size: 0.76rem;
   text-transform: uppercase;
@@ -782,8 +786,8 @@ p {
 }
 
 .lite-toggle.active {
-  background: #facc15;
-  border-color: #facc15;
+  background: #8b5cf6;
+  border-color: #8b5cf6;
   color: #111827;
 }
 
@@ -1415,7 +1419,7 @@ label.btn:hover {
 }
 
 .btn-primary {
-  background: linear-gradient(180deg, var(--yellow-500), #f5b800);
+  background: linear-gradient(180deg, var(--yellow-500), #6d28d9);
   color: #1a1f28;
 }
 
@@ -1698,7 +1702,7 @@ label.btn.btn-icon {
   font-size: 1rem;
   font-weight: 800;
   letter-spacing: 0.02em;
-  color: var(--blue-800, #1e3a8a);
+  color: var(--blue-800, #5b21b6);
 }
 
 .community-stories-scroll-wrap {
@@ -1751,7 +1755,7 @@ label.btn.btn-icon {
   border-radius: 50%;
   border: 1px solid var(--line);
   background: var(--surface, #fff);
-  color: var(--blue-800, #1e40af);
+  color: var(--blue-800, #5b21b6);
   font-size: 1.35rem;
   font-weight: 700;
   line-height: 1;
@@ -1866,7 +1870,7 @@ label.btn.btn-icon {
   font-weight: 700;
   border: 2px dashed var(--line);
   background: rgba(37, 99, 235, 0.06);
-  color: var(--blue-700, #1d4ed8);
+  color: var(--blue-700, #7c3aed);
 }
 
 .story-add-label {
@@ -1916,7 +1920,7 @@ label.btn.btn-icon {
 .story-ring-placeholder {
   font-weight: 800;
   font-size: 1.25rem;
-  color: var(--blue-700, #1d4ed8);
+  color: var(--blue-700, #7c3aed);
 }
 
 /* Notes bubble: default = centered overlapping ring top + tail aimed at avatar.
@@ -3681,7 +3685,7 @@ body.community-thread-overlay-open {
 .my-profile-cover-fallback {
   background:
     radial-gradient(circle at 16% 18%, rgba(250, 204, 21, 0.28), transparent 28%),
-    linear-gradient(135deg, var(--blue-950), var(--blue-700) 52%, #1d4ed8);
+    linear-gradient(135deg, var(--blue-950), var(--blue-700) 52%, #a78bfa);
 }
 
 .my-profile-cover::after {
@@ -3800,7 +3804,7 @@ body.community-thread-overlay-open {
 }
 
 .my-profile-presence--idle::before {
-  background: #f59e0b;
+  background: #a78bfa;
 }
 
 .my-profile-presence--dnd::before {
@@ -4599,7 +4603,7 @@ button.my-profile-edit-wide:disabled,
   height: 28px;
   border-radius: 50%;
   border: 3px solid var(--line);
-  border-top-color: var(--blue-700, #3478ea);
+  border-top-color: var(--blue-700, #8b5cf6);
   animation: spin-avatar 700ms linear infinite;
 }
 
@@ -4610,7 +4614,7 @@ button.my-profile-edit-wide:disabled,
 .userphone-countdown-digits {
   font-variant-numeric: tabular-nums;
   font-weight: 700;
-  color: var(--blue-700, #3478ea);
+  color: var(--blue-700, #8b5cf6);
 }
 
 .userphone-timeout-hint {
@@ -4629,7 +4633,7 @@ button.my-profile-edit-wide:disabled,
 .userphone-queue-meter-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--blue-600, #2b6bdc), var(--blue-800, #1a54c4));
+  background: linear-gradient(90deg, var(--blue-600, #8b5cf6), var(--blue-800, #5b21b6));
   transition: width 0.2s ease;
 }
 
@@ -4885,7 +4889,7 @@ textarea.profile-bio-input::placeholder {
   background: var(--elev-700, rgba(0, 0, 0, 0.04));
 }
 .profile-avail-row-selected {
-  border-color: var(--accent, #fbc02d);
+  border-color: var(--accent, #a78bfa);
   background: rgba(251, 192, 45, 0.08);
 }
 .profile-avail-row input {
@@ -5125,7 +5129,7 @@ textarea.profile-bio-input::placeholder {
 .msg-avatar.placeholder {
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2563eb, #fbbf24);
+  background: linear-gradient(135deg, #7c3aed, #c4b5fd);
   color: #fff;
   font-weight: 700;
 }
@@ -6405,8 +6409,8 @@ button.comment-profile-avatar-btn:focus-visible {
 }
 
 .emoji-picker-tab.active {
-  color: var(--blue-700, #1d4ed8);
-  box-shadow: inset 0 -2px 0 var(--blue-600, #2563eb);
+  color: var(--blue-700, #7c3aed);
+  box-shadow: inset 0 -2px 0 var(--blue-600, #8b5cf6);
 }
 
 .emoji-picker-grid {
@@ -7425,7 +7429,7 @@ button.comment-profile-avatar-btn:focus-visible {
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: var(--blue-500, #3b82f6);
+  background: var(--blue-500, #a78bfa);
   display: grid;
   place-items: center;
   font-size: 11px;
@@ -7512,7 +7516,7 @@ button.comment-profile-avatar-btn:focus-visible {
 
 .custom-visibility-trigger:hover,
 .custom-visibility-trigger:focus {
-  border-color: var(--blue-700, #3b82f6);
+  border-color: var(--blue-700, #8b5cf6);
   background: var(--line);
 }
 
@@ -7523,7 +7527,7 @@ button.comment-profile-avatar-btn:focus-visible {
 [data-theme="dark"] .custom-visibility-trigger:hover,
 [data-theme="dark"] .custom-visibility-trigger:focus {
   background: rgba(255, 255, 255, 0.1);
-  border-color: var(--blue-700, #3a73e0);
+  border-color: var(--blue-700, #8b5cf6);
 }
 
 .custom-visibility-trigger-icon {
@@ -7598,7 +7602,7 @@ button.comment-profile-avatar-btn:focus-visible {
 }
 
 .custom-visibility-option.active {
-  background: var(--blue-800, #3b82f6);
+  background: var(--blue-800, #7c3aed);
   color: #fff;
 }
 
@@ -8047,7 +8051,7 @@ button.comment-profile-avatar-btn:focus-visible {
   background: transparent;
   box-shadow: none;
   transform: none;
-  color: var(--blue-800, #1e40af);
+  color: var(--blue-800, #5b21b6);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -8838,7 +8842,7 @@ body.music-mini-player-open.floating-quick-nav-open main.grid {
 
 [data-theme="dark"] .profile-music-open-btn {
   background: #eef2ff;
-  color: #172554;
+  color: #3b0764;
 }
 
 [data-theme="dark"] .profile-music-open-btn:hover {
@@ -8899,7 +8903,7 @@ body.music-mini-player-open.floating-quick-nav-open main.grid {
   white-space: nowrap;
 }
 
-/* ========== Spotify-style Music hub (SiglaCast) ========== */
+/* ========== Spotify-style Music hub (purxu) ========== */
 
 body.music-spotify-hub-open .music-mini-player-bar {
   display: none !important;
@@ -10264,9 +10268,9 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   overflow: hidden;
   color: #f8fbff;
   background:
-    radial-gradient(circle at 16% 18%, rgba(250, 204, 21, 0.18), transparent 25rem),
-    radial-gradient(circle at 92% 12%, rgba(20, 184, 166, 0.22), transparent 27rem),
-    linear-gradient(145deg, #09111f 0%, #172554 42%, #101827 100%);
+    radial-gradient(circle at 16% 18%, rgba(167, 139, 250, 0.26), transparent 25rem),
+    radial-gradient(circle at 92% 12%, rgba(109, 40, 217, 0.28), transparent 27rem),
+    linear-gradient(145deg, #10091f 0%, #2e1065 42%, #120b22 100%);
   padding: clamp(20px, 4vw, 40px) 16px;
   box-sizing: border-box;
 }
@@ -10400,9 +10404,9 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .auth-page-container .auth-tabs button.active {
-  background: #facc15;
-  color: #0b1329;
-  box-shadow: 0 4px 12px rgba(250, 204, 21, 0.2);
+  background: linear-gradient(135deg, #a78bfa, #7c3aed);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.32);
 }
 
 /* Input Fields styling */
@@ -10421,9 +10425,9 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .auth-page-container .auth-card input:focus {
   outline: none;
-  border-color: #facc15;
+  border-color: #a78bfa;
   background: rgba(255, 255, 255, 0.08);
-  box-shadow: 0 0 0 4px rgba(250, 204, 21, 0.15);
+  box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.18);
 }
 
 .auth-page-container .auth-card input::placeholder {
@@ -10491,7 +10495,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 .auth-page-container .auth-card button[type="submit"] {
   width: 100%;
   min-height: 48px;
-  background: #facc15;
+  background: #8b5cf6;
   color: #0b1329;
   border: 0;
   border-radius: 12px;
@@ -10943,7 +10947,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   background: var(--green-500, #10b981);
 }
 .presence-dot-indicator.presence-idle {
-  background: var(--yellow-500, #f59e0b);
+  background: var(--yellow-500, #8b5cf6);
 }
 .presence-dot-indicator.presence-dnd {
   background: var(--red-500, #ef4444);
@@ -10967,7 +10971,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 .availability-badge.availability-idle {
   background: rgba(245, 158, 11, 0.12);
-  color: #f59e0b;
+  color: #a78bfa;
 }
 .availability-badge.availability-dnd {
   background: rgba(239, 68, 68, 0.12);
@@ -11272,7 +11276,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .ai-discover-card-btn-add:hover {
-  background-color: #fbbf24;
+  background-color: #8b5cf6;
 }
 
 .ai-discover-card-btn-added {
@@ -11522,7 +11526,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: #facc15;
+  background: #8b5cf6;
   color: #0b1329;
   font-weight: 850;
   display: flex;
@@ -11568,8 +11572,8 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .auth-social-picker-new:hover {
-  border-color: #facc15;
-  color: #facc15;
+  border-color: #a78bfa;
+  color: #c4b5fd;
   background: rgba(250, 204, 21, 0.03);
 }
 

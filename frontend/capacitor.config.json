@@ -1,6 +1,6 @@
 {
   "appId": "com.siglacast.app",
-  "appName": "siglacast",
+  "appName": "purxu",
   "webDir": "dist",
   "exclude": [
     "downloads",

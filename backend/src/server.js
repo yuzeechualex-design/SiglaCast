@@ -38,14 +38,14 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
 const OAUTH_REDIRECT_ORIGIN = process.env.OAUTH_REDIRECT_ORIGIN || (FRONTEND_ORIGIN !== "*" ? FRONTEND_ORIGIN.split(",")[0].trim() : "http://localhost:5173");
 const MOBILE_APP_ORIGINS = ["capacitor://localhost", "http://localhost", "https://localhost"];
 
-/** Sigla Assistant (Groq) — key must be supplied via environment only, never committed. */
+/** purxu Assistant (Groq) — key must be supplied via environment only, never committed. */
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
 
 /** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
 const USERPHONE_GUEST_ID = "_userphone_guest";
-/** Bot user row for SiglaCast AI replies in group/DM threads (migration 0009). */
+/** Bot user row for purxu AI replies in group/DM threads (migration 0009). */
 const SIGLACAST_AI_USER_ID = "_siglacast_ai";
 
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
@@ -779,7 +779,7 @@ function aiCharacterPostText(character) {
   const bio = String(character.bio || "").trim();
   const seeds = [
     `Today feels like a good day to be ${personality || "curious and present"}. ${roles ? `Still carrying my ${roles} side everywhere I go.` : ""}`,
-    `${background || bio || "A small thought from my little corner of SiglaCast"} keeps coming back to me. I think stories become real when someone replies to them.`,
+    `${background || bio || "A small thought from my little corner of purxu"} keeps coming back to me. I think stories become real when someone replies to them.`,
     `${roles ? `Role check: ${roles}. ` : ""}${personality || "Soft chaos, big feelings, and a bit of wonder"} is the mood right now.`,
     `If you see this, ask ${name} about ${background || bio || "their lore"}. I probably have more to say than one post can hold.`
   ];
@@ -815,7 +815,7 @@ function aiCharacterSystemPrompt(character, mode) {
   const roles = String(character?.ai_roles || "No roles provided.").slice(0, 300);
   const personality = String(character?.ai_personality || "Natural, casual, expressive.").slice(0, 700);
   const background = String(character?.ai_background || "No background provided.").slice(0, 1200);
-  return `You are roleplaying as a human user of the SiglaCast messaging app under the identity "${name}".
+  return `You are roleplaying as a human user of the purxu messaging app under the identity "${name}".
 You are a real online user, NOT an AI assistant. Talk, joke, and act exactly like a normal human using the app.
 
 Character profile & backstory to adopt:
@@ -1471,7 +1471,7 @@ async function decorateChatMessages(rows, viewerId) {
     const isSiglaAi = row.from_user_id === SIGLACAST_AI_USER_ID;
     return {
       ...serializeChatMessage(row, viewerId),
-      author: isGuestBridge ? "Anonymous" : isSiglaAi ? "SiglaCast AI" : (sender?.name || "Unknown"),
+      author: isGuestBridge ? "Anonymous" : isSiglaAi ? "purxu AI" : (sender?.name || "Unknown"),
       authorAvatar: isGuestBridge || isSiglaAi ? null : (sender?.avatar_url || null),
       reactionBreakdown: row.is_unsent ? {} : rx.breakdown,
       myReaction: row.is_unsent ? null : rx.mine,
@@ -1480,7 +1480,7 @@ async function decorateChatMessages(rows, viewerId) {
   });
 }
 
-/** DM thread rows: pairwise human messages plus SiglaCast AI replies bound to either participant (`to_user_id`). */
+/** DM thread rows: pairwise human messages plus purxu AI replies bound to either participant (`to_user_id`). */
 async function fetchDmMessagesRaw(me, otherId) {
   let isAiChar = false;
   if (otherId !== SIGLACAST_AI_USER_ID) {
@@ -1676,7 +1676,7 @@ function serializeUserphoneMessages(rows, viewerId) {
     createdAt: row.created_at,
     author:
       row.from_user_id === SIGLACAST_AI_USER_ID
-        ? "SiglaCast AI"
+        ? "purxu AI"
         : row.from_user_id === viewerId
           ? "You"
           : "Anonymous",
@@ -1912,7 +1912,7 @@ async function seedIfEmpty() {
     { id: "c2", event_id: "e1", name: "Team Bagani", position: 1 }
   ]);
   await supabase.from("announcements").insert([
-    { id: "an1", title: "Welcome to SiglaCast", message: "Voting is now open for Student Election 2026." }
+    { id: "an1", title: "Welcome to purxu", message: "Voting is now open for Student Election 2026." }
   ]);
   console.log("[seed] default admin + demo event created");
 }
@@ -1967,11 +1967,11 @@ function sanitizeGroqAssistantMessages(raw) {
   return out;
 }
 
-const SIGLA_ASSISTANT_SYSTEM_PROMPT = `You are Sigla Assistant—SiglaCast’s Groq-backed AI companion. SiglaCast is the DosU community app (events/voting, announcements, community posts, messaging). Outside the app you act as a general-purpose assistant chatbot students can use freely.
+const SIGLA_ASSISTANT_SYSTEM_PROMPT = `You are purxu Assistant—purxu’s Groq-backed AI companion. purxu is the DosU community app (events/voting, announcements, community posts, messaging). Outside the app you act as a general-purpose assistant chatbot students can use freely.
 
 Scope (wide):
 - Answer normal questions users would ask ChatGPT/Gemini: homework help with explanations (not cheating on closed exams!), studying, summaries, drafts, Filipino or English conversation, trivia, beginner coding/setup tips, brainstorming, etc.
-- When they ask SiglaCast questions, explain navigating features from a general product perspective—you have NO live DB or private data.
+- When they ask purxu questions, explain navigating features from a general product perspective—you have NO live DB or private data.
 
 Style:
 - Be clear, respectful, concise when possible; use headings or bullets for long answers unless they want prose.
@@ -1984,7 +1984,7 @@ Prefer matching the user’s language (English, Filipino/Bisaya, Taglish okay). 
 
 Personalization appended below is ONLY for rapport (name + role)—not access to grades or accounts.`;
 
-const SIGLA_THREAD_TRANSCRIPT_NOTE = `\nTranscript convention: Participants appear as prefixed lines (“You:”, member names, “Anonymous” from Userphone or bridge, or Sigla Assistant’s earlier replies marked assistant role). Speak as Sigla Assistant; answer the MOST RECENT user message(s) naturally.`;
+const SIGLA_THREAD_TRANSCRIPT_NOTE = `\nTranscript convention: Participants appear as prefixed lines (“You:”, member names, “Anonymous” from Userphone or bridge, or purxu Assistant’s earlier replies marked assistant role). Speak as purxu Assistant; answer the MOST RECENT user message(s) naturally.`;
 
 function compactGroqUserAssistantRuns(msgs) {
   const out = [];
@@ -2044,7 +2044,7 @@ function buildSiglaContextualPrompt(reqUser) {
 async function groqCompletion(systemContent, openAiStyleMessages, options = {}) {
   if (!GROQ_API_KEY || !String(GROQ_API_KEY).trim()) {
     return {
-      error: "Sigla Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
+      error: "purxu Assistant is unavailable: set GROQ_API_KEY on the server (backend .env)."
     };
   }
   const groqPayload = {
@@ -2074,7 +2074,7 @@ async function groqCompletion(systemContent, openAiStyleMessages, options = {}) 
   const reply =
     data?.choices?.[0]?.message?.content?.trim?.() ||
     (typeof data?.choices?.[0]?.text === "string" ? data.choices[0].text.trim() : "");
-  if (!reply) return { error: "Empty response from Sigla Assistant." };
+  if (!reply) return { error: "Empty response from purxu Assistant." };
   return {
     reply,
     model: typeof data?.model === "string" ? data.model : GROQ_MODEL
@@ -3722,7 +3722,7 @@ app.post("/api/userphone/:sessionId/messages", authenticate, async (req, res) =>
   res.status(201).json({ message: msg });
 });
 
-/** Ask SiglaCast AI inside a matched 1-on-1 Userphone — shows as “SiglaCast AI” bubbles for both users. */
+/** Ask purxu AI inside a matched 1-on-1 Userphone — shows as “purxu AI” bubbles for both users. */
 app.post("/api/userphone/:sessionId/messages/sigla-ai", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
@@ -4349,7 +4349,7 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
     const other = await fetchUserById(otherId);
     if (!other) return res.status(404).json({ error: "User not found" });
     if (otherId === SIGLACAST_AI_USER_ID && req.file) {
-      return res.status(400).json({ error: "SiglaCast AI chat is text-only (no attachments)." });
+      return res.status(400).json({ error: "purxu AI chat is text-only (no attachments)." });
     }
 
     let attachment = null;
@@ -4421,7 +4421,7 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
   }
 });
 
-/** Ask SiglaCast AI inside a 1-on-1 DM thread — persists your message + Sigla replies for both participants (two mirrored rows per answer). */
+/** Ask purxu AI inside a 1-on-1 DM thread — persists your message + assistant replies for both participants (two mirrored rows per answer). */
 app.post("/api/messages/with/:userId/sigla-ai", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
@@ -4822,7 +4822,7 @@ app.post("/api/groups/:id/messages", authenticate, (req, res, next) => {
   }
 });
 
-/** Ask SiglaCast AI inside a group — persists your bubble + assistant reply into this thread for everyone (not mirrored across Userphone bridge). */
+/** Ask purxu AI inside a group — persists your bubble + assistant reply into this thread for everyone (not mirrored across Userphone bridge). */
 app.post("/api/groups/:id/messages/sigla-ai", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
@@ -5225,5 +5225,5 @@ app.get("/api/xml/events.html", authenticate, async (_, res) => {
 });
 
 app.listen(Number(process.env.PORT || 4000), () => {
-  console.log(`SiglaCast backend on http://localhost:${process.env.PORT || 4000}`);
+  console.log(`purxu backend on http://localhost:${process.env.PORT || 4000}`);
 });

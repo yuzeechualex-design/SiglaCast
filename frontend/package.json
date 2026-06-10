@@ -13,7 +13,7 @@
   },
   "build": {
     "appId": "com.siglacast.app",
-    "productName": "SiglaCast",
+    "productName": "purxu",
     "compression": "maximum",
     "directories": {
       "output": "dist-electron"

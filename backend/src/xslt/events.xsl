@@ -3,10 +3,10 @@
   <xsl:template match="/">
     <html>
       <head>
-        <title>SiglaCast Event Report</title>
+        <title>purxu Event Report</title>
       </head>
       <body style="font-family: Arial; background:#f8fbff; color:#0d47a1;">
-        <h2>SiglaCast Events</h2>
+        <h2>purxu Events</h2>
         <table border="1" cellpadding="8" cellspacing="0" style="background:#fff; border-color:#fbc02d;">
           <tr style="background:#0d47a1; color:#fff;">
             <th>ID</th>

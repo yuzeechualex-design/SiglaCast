@@ -13,10 +13,10 @@ import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 const COMMUNITY_MOBILE_MAX_PX = 720;
 
 export const REACTIONS = [
-  { type: "like", emoji: "👍", label: "Like", color: "#2563eb" },
+  { type: "like", emoji: "👍", label: "Like", color: "#8b5cf6" },
   { type: "love", emoji: "❤️", label: "Love", color: "#e11d48" },
-  { type: "haha", emoji: "😂", label: "Haha", color: "#f59e0b" },
-  { type: "wow",  emoji: "😮", label: "Wow",  color: "#f59e0b" },
+  { type: "haha", emoji: "😂", label: "Haha", color: "#a78bfa" },
+  { type: "wow",  emoji: "😮", label: "Wow",  color: "#a78bfa" },
   { type: "sad",  emoji: "😢", label: "Sad",  color: "#0ea5e9" },
   { type: "cry", emoji: "😭", label: "Crying", color: "#6366f6" },
   { type: "angry", emoji: "😡", label: "Angry", color: "#dc2626" }

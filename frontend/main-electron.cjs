@@ -7,7 +7,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    title: "SiglaCast",
+    title: "purxu",
     autoHideMenuBar: true,
     webPreferences: {
       nodeIntegration: false,

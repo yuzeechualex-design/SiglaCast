@@ -4,9 +4,9 @@ export default function DownloadPage() {
   return (
     <main className="download-page">
       <nav className="download-nav" aria-label="Download page">
-        <Link className="download-brand" to="/download" aria-label="SiglaCast download home">
-          <img src="/assets/siglacast-icon.png" alt="" />
-          <span>SiglaCast</span>
+        <Link className="download-brand" to="/download" aria-label="purxu download home">
+          <img src="/assets/purxu-logo.png" alt="" />
+          <span>purxu</span>
         </Link>
         <div className="download-nav-links">
           <a href="#features">Features</a>
@@ -16,8 +16,8 @@ export default function DownloadPage() {
       </nav>
 
       <section className="download-hero">
-        <img className="download-bg-mark download-bg-mark-one" src="/assets/siglacast-splash.png" alt="" />
-        <img className="download-bg-mark download-bg-mark-two" src="/assets/siglacast-icon.png" alt="" />
+        <img className="download-bg-mark download-bg-mark-one" src="/assets/purxu-logo.png" alt="" />
+        <img className="download-bg-mark download-bg-mark-two" src="/assets/purxu-logo.png" alt="" />
         <div className="download-hero-copy">
           <p className="download-eyebrow">Community, music, messages, stories</p>
           <h1>DOWNLOAD SIGLACAST WHEREVER YOU HANG OUT</h1>
@@ -29,7 +29,7 @@ export default function DownloadPage() {
               <span aria-hidden="true">↓</span>
               <span>Download Android App</span>
             </a>
-            <a className="download-primary-btn" href="/downloads/siglacast.exe" download style={{ background: "#3b82f6", color: "#ffffff" }}>
+            <a className="download-primary-btn" href="/downloads/siglacast.exe" download>
               <span aria-hidden="true">↓</span>
               <span>Download PC Version</span>
             </a>
@@ -39,7 +39,7 @@ export default function DownloadPage() {
           </div>
         </div>
 
-        <div className="download-showcase" aria-label="SiglaCast app screenshots">
+        <div className="download-showcase" aria-label="purxu app screenshots">
           <div className="download-desktop-shot">
             <div className="shot-topbar">
               <span />
@@ -47,7 +47,7 @@ export default function DownloadPage() {
               <span />
             </div>
             <div className="shot-hero">
-              <strong>SiglaCast</strong>
+              <strong>purxu</strong>
               <small>Community Platform</small>
             </div>
             <div className="shot-tabs">

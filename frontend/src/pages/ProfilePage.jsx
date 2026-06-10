@@ -83,7 +83,7 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
   }
 
   async function handleDisconnectSpotify() {
-    if (!token || !api || !window.confirm("Disconnect Spotify from SiglaCast?")) return;
+    if (!token || !api || !window.confirm("Disconnect Spotify from purxu?")) return;
     try {
       const data = await api("/music/spotify", { method: "DELETE" });
       if (data?.error) {

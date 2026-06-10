@@ -117,7 +117,7 @@ export default function MessagesPage({
   const [plusMenuOpen, setPlusMenuOpen] = useState(false);
   const [plusMenuPane, setPlusMenuPane] = useState("main");
   const [composePlusOpen, setComposePlusOpen] = useState(false);
-  /** When enabled, Send asks SiglaCast AI and posts assistant bubbles into this chat. */
+  /** When enabled, Send asks purxu AI and posts assistant bubbles into this chat. */
   const [composeSiglaMode, setComposeSiglaMode] = useState(false);
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
@@ -1142,7 +1142,7 @@ export default function MessagesPage({
                       key={m.id}
                       message={m}
                       showAuthor={isGroup && !m.fromMe}
-                      minimal={isUserphone && m.author !== "SiglaCast AI"}
+                      minimal={isUserphone && m.author !== "purxu AI"}
                       swipeReplyEnabled={isNarrowViewport && !isUserphone}
                       activeChat={activeChat}
                       isUserphone={isUserphone}
@@ -1205,7 +1205,7 @@ export default function MessagesPage({
 
               {composeSiglaMode && showThreadComposer ? (
                 <div className="sigla-compose-hint muted small">
-                  ✨ SiglaCast AI replies <strong>in this chat thread</strong> as a participant (everyone sees the same
+                  ✨ purxu AI replies <strong>in this chat thread</strong> as a participant (everyone sees the same
                   bubble). Attachments are ignored while this is on — toggle off via ＋.
                 </div>
               ) : null}
@@ -1287,13 +1287,13 @@ export default function MessagesPage({
                             ✨ Sigla replies here {composeSiglaMode ? "(on)" : "(off)"}
                           </span>
                           <span className="compose-plus-item-desc">
-                            Your sends go to SiglaCast AI until you turn this off — answers appear like normal messages from ✨
-                            SiglaCast AI.
+                            Your sends go to purxu AI until you turn this off — answers appear like normal messages from ✨
+                            purxu AI.
                           </span>
                         </button>
                       ) : (
                         <p className="muted small compose-plus-item" style={{ margin: "4px 0 10px", paddingRight: "8px" }}>
-                          You&apos;re chatting with SiglaCast AI — send messages normally for AI replies.
+                          You&apos;re chatting with purxu AI — send messages normally for AI replies.
                         </p>
                       )}
                     </div>
@@ -1332,9 +1332,9 @@ export default function MessagesPage({
                   onChange={setDraft}
                   placeholder={
                     composeSiglaMode
-                      ? `Ask SiglaCast AI (${isUserphone ? "this anonymous chat" : isGroup ? activeChat.group?.name || "group" : activeChat.user?.name || "DM"})…`
+                      ? `Ask purxu AI (${isUserphone ? "this anonymous chat" : isGroup ? activeChat.group?.name || "group" : activeChat.user?.name || "DM"})…`
                       : isSiglaDm
-                        ? "Ask SiglaCast AI anything…"
+                        ? "Ask purxu AI anything…"
                         : isUserphone
                           ? "Message anonymously…"
                           : isGroup
