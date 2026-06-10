@@ -1977,6 +1977,7 @@ export default function App() {
             <ShopPage
               wallet={shopState.wallet || bondState.wallet}
               items={shopState.items}
+              currentUser={user}
               onBuy={buyShopItem}
             />
           }

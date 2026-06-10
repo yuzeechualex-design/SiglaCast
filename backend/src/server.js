@@ -229,7 +229,7 @@ const SHOP_ITEMS = [
     id: "pink-heart-bond-frame",
     name: "Pink Heart Bond Frame",
     type: "profile_frame",
-    price: 250,
+    price: 20,
     imageUrl: "/assets/bond-frame-pink.png",
     description: "A glossy heart frame unlocked by reaching Partner Bond with someone.",
     requiredBondLevel: "partner"

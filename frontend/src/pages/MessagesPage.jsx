@@ -126,6 +126,7 @@ export default function MessagesPage({
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [bondHelpOpen, setBondHelpOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
   const fileRef = useRef(null);
   const threadEndRef = useRef(null);
@@ -909,9 +910,35 @@ export default function MessagesPage({
                     <span className="pill pill-you">Friends</span>
                   ) : null}
                   {!isGroup && !isUserphone && activeChat.bond ? (
-                    <span className="bond-thread-pill">
-                      {activeChat.bond.levelLabel} Bond · {activeChat.bond.exp} EXP
-                    </span>
+                    <div className="bond-thread-meter">
+                      <div className="bond-thread-meter-top">
+                        <span>{activeChat.bond.levelLabel} Bond</span>
+                        <strong>{activeChat.bond.exp} EXP</strong>
+                        <button type="button" aria-label="Bond benefits" onClick={() => setBondHelpOpen((open) => !open)}>
+                          ?
+                        </button>
+                      </div>
+                      <div className="bond-thread-bar" aria-hidden="true">
+                        <span style={{ width: `${Math.max(4, Math.min(100, activeChat.bond.progress || 0))}%` }} />
+                      </div>
+                      {bondHelpOpen ? (
+                        <div className="bond-help-popover">
+                          <strong>{activeChat.bond.levelLabel} Bond Benefits</strong>
+                          <p>{activeChat.bond.benefit}</p>
+                          {activeChat.bond.nextLevelExp ? (
+                            <small>{Math.max(0, activeChat.bond.nextLevelExp - activeChat.bond.exp)} EXP until the next bond level.</small>
+                          ) : (
+                            <small>Max bond reached.</small>
+                          )}
+                          <ul>
+                            <li>0-100: Stranger · +1% EXP gain</li>
+                            <li>100-200: Acquaintance · +1 character slot</li>
+                            <li>200-300: Friend · profile bond display</li>
+                            <li>300-500: Partner · special frames and badges</li>
+                          </ul>
+                        </div>
+                      ) : null}
+                    </div>
                   ) : null}
                   {!isGroup && !isUserphone ? (
                     activeChat.incomingRequestId ? (
