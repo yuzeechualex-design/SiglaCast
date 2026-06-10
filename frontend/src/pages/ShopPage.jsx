@@ -1,10 +1,30 @@
 import { useMemo, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 
+function shopAssetUrl(url) {
+  if (!url) return "";
+  if (String(url).startsWith("/assets/")) return url;
+  return mediaUrl(url);
+}
+
 export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
-  const featured = items[0] || null;
+  const displayItems = items.length
+    ? items
+    : [
+        {
+          id: "pink-heart-bond-frame",
+          name: "Pink Heart Bond Frame",
+          type: "profile_frame",
+          price: 20,
+          imageUrl: "/assets/bond-frame-pink.png",
+          description: "A glossy heart frame unlocked by reaching Partner Bond with someone.",
+          owned: false,
+          unlocked: false
+        }
+      ];
+  const featured = displayItems[0] || null;
   const [previewItemId, setPreviewItemId] = useState(featured?.id || "");
-  const previewItem = items.find((item) => item.id === previewItemId) || featured;
+  const previewItem = displayItems.find((item) => item.id === previewItemId) || featured;
   const avatarUrl = currentUser?.avatarUrl ? mediaUrl(currentUser.avatarUrl) : "/assets/purxu-shop-logo.png";
   const previewKey = useMemo(() => `${previewItem?.id || "empty"}-${Date.now()}`, [previewItem?.id]);
 
@@ -30,18 +50,18 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
         </div>
         {previewItem ? (
           <div key={previewKey} className="shop-profile-preview animated">
-            <img className="shop-preview-frame" src={mediaUrl(previewItem.imageUrl)} alt="" />
+            <img className="shop-preview-frame" src={shopAssetUrl(previewItem.imageUrl)} alt="" />
             <img className="shop-preview-avatar" src={avatarUrl} alt="" />
           </div>
         ) : null}
       </div>
 
       <div className="shop-grid">
-        {items.map((item) => (
+        {displayItems.map((item) => (
           <article key={item.id} className={`shop-card ${item.owned ? "owned" : ""} ${previewItem?.id === item.id ? "active" : ""}`}>
             <button type="button" className="shop-card-art" onClick={() => setPreviewItemId(item.id)}>
               <div className="shop-card-preview">
-                <img className="shop-card-frame" src={mediaUrl(item.imageUrl)} alt="" />
+                <img className="shop-card-frame" src={shopAssetUrl(item.imageUrl)} alt="" />
                 <img className="shop-card-logo" src="/assets/purxu-shop-logo.png" alt="" />
               </div>
             </button>
