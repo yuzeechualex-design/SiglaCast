@@ -908,6 +908,11 @@ export default function MessagesPage({
                   {!isGroup && !isUserphone && activeChat.isFriend ? (
                     <span className="pill pill-you">Friends</span>
                   ) : null}
+                  {!isGroup && !isUserphone && activeChat.bond ? (
+                    <span className="bond-thread-pill">
+                      {activeChat.bond.levelLabel} Bond · {activeChat.bond.exp} EXP
+                    </span>
+                  ) : null}
                   {!isGroup && !isUserphone ? (
                     activeChat.incomingRequestId ? (
                       <span className="thread-header-inline-actions">

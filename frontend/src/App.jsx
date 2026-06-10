@@ -15,6 +15,7 @@ import DownloadPage from "./pages/DownloadPage.jsx";
 import AddFriendsPage from "./pages/AddFriendsPage.jsx";
 import AICharactersPage from "./pages/AICharactersPage.jsx";
 import CharacterEditPage from "./pages/CharacterEditPage.jsx";
+import ShopPage from "./pages/ShopPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
 import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
@@ -158,6 +159,8 @@ export default function App() {
   const [navBadgeTick, setNavBadgeTick] = useState(0);
   /** `{ userId, prefetch? }` — public profile popover from avatars in Community / Messages. */
   const [userProfilePeek, setUserProfilePeek] = useState(null);
+  const [bondState, setBondState] = useState({ bonds: [], wallet: { coins: 0 }, levels: [] });
+  const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 } });
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -232,6 +235,40 @@ export default function App() {
       method,
       onUnauthorizedRetry
     });
+
+  async function loadBondsAndShop() {
+    if (!token) return;
+    const [bonds, shop] = await Promise.all([api("/bonds"), api("/shop")]);
+    if (!bonds.error) setBondState(bonds);
+    if (!shop.error) setShopState(shop);
+  }
+
+  useEffect(() => {
+    if (!token || !user) return;
+    void loadBondsAndShop();
+  }, [token, user?.id]);
+
+  async function togglePinnedBond(targetUserId, pinned) {
+    const res = await api(`/bonds/${encodeURIComponent(targetUserId)}`, {
+      method: "PATCH",
+      body: { pinned }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    await loadBondsAndShop();
+  }
+
+  async function buyShopItem(itemId) {
+    const res = await api(`/shop/${encodeURIComponent(itemId)}/buy`, { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return;
+    }
+    setNotice("Item purchased");
+    await loadBondsAndShop();
+  }
 
   function startSocialLogin(provider) {
     if (loadingAuth) return;
@@ -1420,6 +1457,10 @@ export default function App() {
       setNotice(res.error);
       return;
     }
+    if (res.bondAward) {
+      setNotice(`+${res.bondAward.expGained} bond EXP, +${res.bondAward.coinsGained} coins`);
+      void loadBondsAndShop();
+    }
     const refreshed =
       activeChat.kind === "group"
         ? await api(`/groups/${activeChat.group.id}`)
@@ -1864,6 +1905,8 @@ export default function App() {
               onDeletePost={deletePost}
               onShare={sharePost}
               onOpenUserProfile={openUserProfileModal}
+              bonds={bondState.bonds}
+              onTogglePinnedBond={togglePinnedBond}
             />
           }
         />
@@ -1924,6 +1967,17 @@ export default function App() {
               api={api}
               token={token}
               refreshUser={refreshUserFromAuthMe}
+            />
+          }
+        />
+
+        <Route
+          path="/shop"
+          element={
+            <ShopPage
+              wallet={shopState.wallet || bondState.wallet}
+              items={shopState.items}
+              onBuy={buyShopItem}
             />
           }
         />

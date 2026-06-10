@@ -112,7 +112,9 @@ export default function MyProfilePage({
   onDeleteComment,
   onDeletePost,
   onShare,
-  onOpenUserProfile
+  onOpenUserProfile,
+  bonds = [],
+  onTogglePinnedBond
 }) {
   const [profileMode, setProfileMode] = useState("profile");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
@@ -132,6 +134,9 @@ export default function MyProfilePage({
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
   const canCompose = isOwnProfile;
+  const eligibleBonds = isOwnProfile ? bonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target) : [];
+  const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
+  const addableBond = eligibleBonds.find((bond) => !bond.pinned);
 
   return (
     <section className="my-profile-page">
@@ -223,6 +228,34 @@ export default function MyProfilePage({
           <a href="#profile-about">About</a>
           <a href="#profile-status">Status</a>
         </nav>
+
+        {isOwnProfile ? (
+          <div className="profile-bonds-mini">
+            <div className="profile-bonds-mini-head">
+              <strong>Bonds</strong>
+              {addableBond ? (
+                <button type="button" title={`Add ${addableBond.target.name}`} onClick={() => onTogglePinnedBond?.(addableBond.targetUserId, true)}>
+                  +
+                </button>
+              ) : null}
+            </div>
+            <div className="profile-bonds-mini-list">
+              {pinnedBonds.length ? pinnedBonds.map((bond) => (
+                <button
+                  type="button"
+                  key={bond.targetUserId}
+                  title={`${bond.target.name} · ${bond.levelLabel} Bond`}
+                  onClick={() => onTogglePinnedBond?.(bond.targetUserId, false)}
+                >
+                  {bond.target.avatarUrl ? <img src={mediaUrl(bond.target.avatarUrl)} alt="" /> : <span>{bond.target.name?.charAt(0) || "?"}</span>}
+                  <small>{bond.levelLabel}</small>
+                </button>
+              )) : (
+                <p>Reach Friend Bond to pin someone here.</p>
+              )}
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="my-profile-grid">

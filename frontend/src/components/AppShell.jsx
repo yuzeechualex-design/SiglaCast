@@ -148,6 +148,10 @@ export default function AppShell({
             ) : null}
           </NavLink>
 
+          <NavLink to="/shop" className="nav-btn" title="Shop">
+            <NavIcon name="shop" />
+          </NavLink>
+
           <NavLink to="/notifications" className="nav-btn" title="Notifications">
             <NavIcon name="notifications" />
             {bell ? (

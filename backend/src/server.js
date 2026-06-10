@@ -217,6 +217,95 @@ async function fetchUserByEmail(email) {
   return data;
 }
 
+const BOND_LEVELS = [
+  { key: "stranger", label: "Stranger", min: 0, max: 100, benefit: "+1% bond EXP gain with this user/character." },
+  { key: "acquaintance", label: "Acquaintance", min: 100, max: 200, benefit: "Unlocks 1 character creation slot." },
+  { key: "friend", label: "Friend", min: 200, max: 300, benefit: "Unlocks profile bond display and AI profile interaction perks." },
+  { key: "partner", label: "Partner", min: 300, max: 500, benefit: "Unlocks special profile frames and banner badges." }
+];
+
+const SHOP_ITEMS = [
+  {
+    id: "pink-heart-bond-frame",
+    name: "Pink Heart Bond Frame",
+    type: "profile_frame",
+    price: 250,
+    imageUrl: "/assets/bond-frame-pink.png",
+    description: "A glossy heart frame unlocked by reaching Partner Bond with someone.",
+    requiredBondLevel: "partner"
+  }
+];
+
+function bondLevelForExp(exp = 0) {
+  const value = Math.max(0, Number(exp) || 0);
+  return [...BOND_LEVELS].reverse().find((level) => value >= level.min) || BOND_LEVELS[0];
+}
+
+function serializeBond(row, target) {
+  const exp = Math.max(0, Number(row?.exp) || 0);
+  const level = bondLevelForExp(exp);
+  const next = BOND_LEVELS.find((candidate) => candidate.min > level.min) || null;
+  const span = Math.max(1, (next?.min || 500) - level.min);
+  return {
+    targetUserId: row?.target_user_id || target?.id,
+    exp,
+    level: level.key,
+    levelLabel: level.label,
+    benefit: level.benefit,
+    nextLevelExp: next?.min || null,
+    progress: Math.min(100, Math.round(((exp - level.min) / span) * 100)),
+    pinned: Boolean(row?.pinned),
+    target: target ? toPublicUser(target) : null
+  };
+}
+
+async function fetchWallet(userId) {
+  const { data, error } = await supabase.from("user_wallets").select("*").eq("user_id", userId).maybeSingle();
+  if (error) return { userId, coins: 0 };
+  if (data) return { userId, coins: Number(data.coins) || 0 };
+  await supabase.from("user_wallets").upsert({ user_id: userId, coins: 0, updated_at: new Date().toISOString() });
+  return { userId, coins: 0 };
+}
+
+async function addWalletCoins(userId, coins) {
+  const wallet = await fetchWallet(userId);
+  const next = Math.max(0, wallet.coins + coins);
+  await supabase.from("user_wallets").upsert({ user_id: userId, coins: next, updated_at: new Date().toISOString() });
+  return { userId, coins: next };
+}
+
+async function awardBondInteraction(userId, targetUserId, { hasAttachment = false } = {}) {
+  if (!userId || !targetUserId || userId === targetUserId) return null;
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase
+    .from("user_bonds")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("target_user_id", targetUserId)
+    .maybeSingle();
+  const currentExp = Number(existing?.exp) || 0;
+  const multiplier = 1 + Math.min(0.15, currentExp >= 0 ? 0.01 : 0);
+  const baseExp = 10 + (hasAttachment ? 4 : 0);
+  const expGained = Math.max(1, Math.round(baseExp * multiplier));
+  const coinsGained = 3 + (hasAttachment ? 1 : 0) + Math.floor(Math.min(currentExp, 500) / 150);
+  const nextExp = Math.min(500, currentExp + expGained);
+  const { data: bond, error } = await supabase
+    .from("user_bonds")
+    .upsert({
+      user_id: userId,
+      target_user_id: targetUserId,
+      exp: nextExp,
+      pinned: Boolean(existing?.pinned),
+      created_at: existing?.created_at || now,
+      updated_at: now
+    })
+    .select("*")
+    .maybeSingle();
+  if (error) return null;
+  const wallet = await addWalletCoins(userId, coinsGained);
+  return { expGained, coinsGained, bond, wallet };
+}
+
 function frontendAuthCallbackUrl(rawRedirectTo) {
   const fallback = `${OAUTH_REDIRECT_ORIGIN.replace(/\/$/, "")}/auth/callback`;
   if (!rawRedirectTo) return fallback;
@@ -2264,6 +2353,104 @@ app.post("/api/auth/logout", authenticate, async (req, res) => {
 
 app.get("/api/auth/me", authenticate, (req, res) => {
   res.json({ user: authUserPayload(req.user) });
+});
+
+app.get("/api/bonds", authenticate, async (req, res) => {
+  try {
+    const { data: rows, error } = await supabase
+      .from("user_bonds")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .order("exp", { ascending: false });
+    if (error) return res.json({ bonds: [], wallet: { userId: req.user.id, coins: 0 }, levels: BOND_LEVELS });
+    const targetIds = [...new Set((rows || []).map((row) => row.target_user_id).filter(Boolean))];
+    const { data: users } = targetIds.length
+      ? await supabase.from("users").select("*").in("id", targetIds)
+      : { data: [] };
+    const byId = new Map((users || []).map((user) => [user.id, user]));
+    const wallet = await fetchWallet(req.user.id);
+    res.json({
+      bonds: (rows || []).map((row) => serializeBond(row, byId.get(row.target_user_id))).filter((bond) => bond.target),
+      wallet,
+      levels: BOND_LEVELS
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.patch("/api/bonds/:targetUserId", authenticate, async (req, res) => {
+  try {
+    const targetUserId = req.params.targetUserId;
+    const pinned = Boolean(req.body?.pinned);
+    const existing = await supabase
+      .from("user_bonds")
+      .select("*")
+      .eq("user_id", req.user.id)
+      .eq("target_user_id", targetUserId)
+      .maybeSingle();
+    if (existing.error || !existing.data) return res.status(404).json({ error: "Bond not found yet" });
+    if (pinned && (Number(existing.data.exp) || 0) < 200) {
+      return res.status(403).json({ error: "Reach Friend Bond Level before adding someone to your profile bonds." });
+    }
+    const { data, error } = await supabase
+      .from("user_bonds")
+      .update({ pinned, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id)
+      .eq("target_user_id", targetUserId)
+      .select("*")
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    const target = await fetchUserById(targetUserId);
+    res.json({ bond: serializeBond(data, target) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/shop", authenticate, async (req, res) => {
+  try {
+    const wallet = await fetchWallet(req.user.id);
+    const { data: purchases } = await supabase.from("user_shop_purchases").select("item_id").eq("user_id", req.user.id);
+    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
+    const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
+    const hasPartnerBond = Boolean(partnerBonds?.length);
+    res.json({
+      wallet,
+      items: SHOP_ITEMS.map((item) => ({
+        ...item,
+        owned: owned.has(item.id),
+        unlocked: item.requiredBondLevel !== "partner" || hasPartnerBond
+      }))
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/shop/:itemId/buy", authenticate, async (req, res) => {
+  try {
+    const item = SHOP_ITEMS.find((row) => row.id === req.params.itemId);
+    if (!item) return res.status(404).json({ error: "Shop item not found" });
+    const shop = await fetchWallet(req.user.id);
+    const { data: existing } = await supabase
+      .from("user_shop_purchases")
+      .select("item_id")
+      .eq("user_id", req.user.id)
+      .eq("item_id", item.id)
+      .maybeSingle();
+    if (existing) return res.status(400).json({ error: "You already own this item" });
+    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
+    if (item.requiredBondLevel === "partner" && !partnerBonds?.length) {
+      return res.status(403).json({ error: "Reach Partner Bond Level with someone before buying this frame." });
+    }
+    if (shop.coins < item.price) return res.status(400).json({ error: "Not enough purxu coins" });
+    await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: item.id });
+    const wallet = await addWalletCoins(req.user.id, -item.price);
+    res.json({ wallet, item: { ...item, owned: true, unlocked: true } });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
 });
 
 app.patch("/api/profile", authenticate, async (req, res) => {
@@ -4323,13 +4510,21 @@ app.get("/api/messages/with/:userId", authenticate, async (req, res) => {
     }
   }
 
+  const { data: bondRow } = await supabase
+    .from("user_bonds")
+    .select("*")
+    .eq("user_id", me)
+    .eq("target_user_id", otherId)
+    .maybeSingle();
+
   res.json({
     user: publicProfileWithPresence(other, me, onlineSet),
     isFriend,
     incomingRequestId: incomingReq?.id || null,
     outgoingRequestPending: !!(outgoingReq && !isFriend),
     messages: await decorateChatMessages(msgs, me),
-    typingActors
+    typingActors,
+    bond: bondRow ? serializeBond(bondRow, other) : null
   });
 });
 
@@ -4414,8 +4609,21 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       triggerAiDmReply(req.user, otherId);
     }
 
+    const bondAward = otherId !== SIGLACAST_AI_USER_ID
+      ? await awardBondInteraction(me, otherId, { hasAttachment: Boolean(attachment) })
+      : null;
     const [decorated] = await decorateChatMessages([message], me);
-    res.status(201).json({ message: decorated });
+    res.status(201).json({
+      message: decorated,
+      bondAward: bondAward
+        ? {
+            expGained: bondAward.expGained,
+            coinsGained: bondAward.coinsGained,
+            wallet: bondAward.wallet,
+            bond: serializeBond(bondAward.bond, other)
+          }
+        : null
+    });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
