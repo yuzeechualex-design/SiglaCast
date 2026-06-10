@@ -4,6 +4,7 @@ import { mediaUrl } from "../services/api.js";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import AvatarEditModal from "../components/AvatarEditModal.jsx";
 import CoverEditModal from "../components/CoverEditModal.jsx";
+import ThemeToggle from "../components/ThemeToggle.jsx";
 
 const AVAILABILITY_IDS = ["online", "idle", "dnd", "invisible"];
 const BIO_MAX_LEN = 500;
@@ -44,7 +45,7 @@ const AVAILABILITY_CHOICES = [
   }
 ];
 
-export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout, liteMode, onToggleLiteMode, api, token, refreshUser }) {
+export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCoverUpload, setNotice, onLogout, liteMode, onToggleLiteMode, theme, onToggleTheme, api, token, refreshUser }) {
   const navigate = useNavigate();
   const spotifyLinked = Boolean(user.spotifyLinked);
   const [musicShareNowPlaying, setMusicShareNowPlaying] = useState(() => Boolean(user.musicShareNowPlaying));
@@ -465,6 +466,13 @@ export default function ProfilePage({ user, onProfileSave, onAvatarUpload, onCov
       </form>
 
       <div className="profile-logout-footer">
+        <div className="settings-bottom-appearance">
+          <div>
+            <strong>Appearance</strong>
+            <p className="muted small profile-logout-hint">Switch the app between dark and light mode.</p>
+          </div>
+          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
+        </div>
         <p className="muted small profile-logout-hint">Sign out on this device.</p>
         <button type="button" className="btn btn-ghost profile-logout-btn" onClick={() => onLogout?.()}>
           ➜] Log out

@@ -133,6 +133,9 @@ export default function MyProfilePage({
   const musicLine = displayUser.isAiCharacter ? "" : listeningStatusLine(displayUser);
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
   const [framePickerOpen, setFramePickerOpen] = useState(false);
+  const [bondPickerOpen, setBondPickerOpen] = useState(false);
+  const [bondViewerOpen, setBondViewerOpen] = useState(false);
+  const [bondSearch, setBondSearch] = useState("");
   const [selectedFrameId, setSelectedFrameId] = useState(displayUser.profileFrameItemId || "");
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
@@ -156,7 +159,11 @@ export default function MyProfilePage({
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
   const eligibleBonds = isOwnProfile ? bonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target) : [];
   const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
-  const addableBond = eligibleBonds.find((bond) => !bond.pinned);
+  const normalizedBondSearch = bondSearch.trim().toLowerCase();
+  const filteredEligibleBonds = eligibleBonds.filter((bond) => {
+    if (!normalizedBondSearch) return true;
+    return String(bond.target?.name || "").toLowerCase().includes(normalizedBondSearch);
+  });
 
   return (
     <section className="my-profile-page">
@@ -247,7 +254,7 @@ export default function MyProfilePage({
           </div>
           <div className="my-profile-name-block">
             <h2>{displayUser.name}</h2>
-            <p>{isCharacterProfile ? "AI Character" : displayUser.email}</p>
+            <p>{isCharacterProfile ? "AI Character" : "purxu profile"}</p>
             <div className="my-profile-pills">
               <span className={`my-profile-presence my-profile-presence--${displayUser.availability || "online"}`}>
                 {isCharacterProfile ? "AI Character" : availabilityLabel(displayUser.availability)}
@@ -269,30 +276,62 @@ export default function MyProfilePage({
           <div className="profile-bonds-mini">
             <div className="profile-bonds-mini-head">
               <strong>Bonds</strong>
-              {addableBond ? (
-                <button type="button" title={`Add ${addableBond.target.name}`} onClick={() => onTogglePinnedBond?.(addableBond.targetUserId, true)}>
-                  +
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="profile-bonds-add-btn"
+                title="Add bond"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setBondPickerOpen(true);
+                }}
+              >
+                +
+              </button>
             </div>
-            <div className="profile-bonds-mini-list">
+            <button
+              type="button"
+              className="profile-bonds-mini-list"
+              onClick={() => setBondViewerOpen(true)}
+              title="View bonds"
+            >
               {pinnedBonds.length ? pinnedBonds.map((bond) => (
-                <button
-                  type="button"
+                <span
                   key={bond.targetUserId}
                   title={`${bond.target.name} · ${bond.levelLabel} Bond`}
-                  onClick={() => onTogglePinnedBond?.(bond.targetUserId, false)}
+                  className="profile-bond-mini-avatar"
                 >
                   {bond.target.avatarUrl ? <img src={mediaUrl(bond.target.avatarUrl)} alt="" /> : <span>{bond.target.name?.charAt(0) || "?"}</span>}
                   <small>{bond.levelLabel}</small>
-                </button>
+                </span>
               )) : (
-                <p>Reach Friend Bond to pin someone here.</p>
+                <span className="profile-bonds-empty-pill">Add bonds</span>
               )}
-            </div>
+            </button>
           </div>
         ) : null}
       </div>
+
+      {bondViewerOpen ? (
+        <BondLibraryModal
+          title="Your bonds"
+          bonds={eligibleBonds}
+          onClose={() => setBondViewerOpen(false)}
+          onTogglePinnedBond={onTogglePinnedBond}
+          mode="viewer"
+        />
+      ) : null}
+
+      {bondPickerOpen ? (
+        <BondLibraryModal
+          title="Add bond"
+          bonds={filteredEligibleBonds}
+          search={bondSearch}
+          onSearch={setBondSearch}
+          onClose={() => setBondPickerOpen(false)}
+          onTogglePinnedBond={onTogglePinnedBond}
+          mode="picker"
+        />
+      ) : null}
 
       {framePickerOpen ? (
         <div className="profile-frame-modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose profile frame">
@@ -488,5 +527,87 @@ export default function MyProfilePage({
         />
       ) : null}
     </section>
+  );
+}
+
+function isCharacterBond(bond) {
+  const target = bond?.target || {};
+  return Boolean(target.isAiCharacter || target.email?.includes("@characters.") || target.id?.includes("ai_"));
+}
+
+function BondLibraryModal({ title, bonds, search = "", onSearch, onClose, onTogglePinnedBond, mode }) {
+  const userBonds = bonds.filter((bond) => !isCharacterBond(bond));
+  const characterBonds = bonds.filter(isCharacterBond);
+  const showSearch = typeof onSearch === "function";
+
+  function renderSection(sectionTitle, rows) {
+    return (
+      <section className="bond-library-section">
+        <h4>{sectionTitle}</h4>
+        {rows.length ? (
+          <div className="bond-library-list">
+            {rows.map((bond) => (
+              <button
+                key={bond.targetUserId}
+                type="button"
+                className="bond-library-row"
+                onClick={() => onTogglePinnedBond?.(bond.targetUserId, !bond.pinned)}
+              >
+                <span className="bond-library-avatar">
+                  {bond.target?.avatarUrl ? (
+                    <img src={mediaUrl(bond.target.avatarUrl)} alt="" />
+                  ) : (
+                    <span>{bond.target?.name?.charAt(0) || "?"}</span>
+                  )}
+                </span>
+                <span className="bond-library-copy">
+                  <strong>{bond.target?.name || "Unknown"}</strong>
+                  <small>{bond.levelLabel} Bond · {bond.exp || 0} EXP</small>
+                </span>
+                <span className={`bond-library-action${bond.pinned ? " active" : ""}`}>
+                  {bond.pinned ? (mode === "picker" ? "Added" : "Pinned") : "Add"}
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="muted small bond-library-empty">No available bonds here yet.</p>
+        )}
+      </section>
+    );
+  }
+
+  return (
+    <div className="profile-frame-modal-backdrop" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="profile-frame-modal bond-library-modal">
+        <div className="profile-frame-modal-head">
+          <div>
+            <p>Bonds</p>
+            <h3>{title}</h3>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close">
+            x
+          </button>
+        </div>
+        <div className="profile-frame-modal-body bond-library-body">
+          {showSearch ? (
+            <input
+              className="bond-library-search"
+              value={search}
+              onChange={(e) => onSearch(e.target.value)}
+              placeholder="Search bonds..."
+              autoFocus
+            />
+          ) : null}
+          {renderSection("Character bonds", characterBonds)}
+          {renderSection("User bonds", userBonds)}
+        </div>
+        <div className="profile-frame-modal-actions">
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

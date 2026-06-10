@@ -7,6 +7,7 @@ import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import CommunityStoriesRail from "../components/CommunityStories.jsx";
 import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
+import AvatarWithFrame from "../components/AvatarWithFrame.jsx";
 import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 
 /** Narrow layout: fullscreen post threads + tap targets (keep in sync with CSS). */
@@ -390,14 +391,25 @@ export function PostCardBody({
           title="View profile"
           onClick={(e) => {
             e.stopPropagation();
-            onOpenUserProfile?.(post.authorId, { name: post.author, avatarUrl: post.authorAvatar, authorAvatar: post.authorAvatar });
+            onOpenUserProfile?.(post.authorId, {
+              name: post.author,
+              avatarUrl: post.authorAvatar,
+              authorAvatar: post.authorAvatar,
+              profileFrameUrl: post.authorProfileFrameUrl,
+              profileFrameItemId: post.authorProfileFrameItemId
+            });
           }}
         >
-          {post.authorAvatar ? (
-            <img className="post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-          ) : (
-            <div className="post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
-          )}
+          <AvatarWithFrame
+            user={post}
+            src={post.authorAvatar}
+            name={post.author}
+            frameUrl={post.authorProfileFrameUrl}
+            className="post-avatar-frame-host"
+            avatarClassName="post-avatar"
+            placeholderClassName="post-avatar placeholder"
+            size="post"
+          />
         </button>
         <div className="post-header-meta">
           <div className="post-author-line">
@@ -476,15 +488,22 @@ function SharedPostEmbed({ post, liteMode = false, onOpenUserProfile }) {
             onOpenUserProfile?.(post.authorId, {
               name: post.author,
               avatarUrl: post.authorAvatar,
-              authorAvatar: post.authorAvatar
+              authorAvatar: post.authorAvatar,
+              profileFrameUrl: post.authorProfileFrameUrl,
+              profileFrameItemId: post.authorProfileFrameItemId
             });
           }}
         >
-          {post.authorAvatar ? (
-            <img className="post-avatar shared-post-avatar" src={mediaUrl(post.authorAvatar)} alt="" />
-          ) : (
-            <div className="post-avatar shared-post-avatar placeholder">{post.author?.charAt(0) || "?"}</div>
-          )}
+          <AvatarWithFrame
+            user={post}
+            src={post.authorAvatar}
+            name={post.author}
+            frameUrl={post.authorProfileFrameUrl}
+            className="post-avatar-frame-host"
+            avatarClassName="post-avatar shared-post-avatar"
+            placeholderClassName="post-avatar shared-post-avatar placeholder"
+            size="post"
+          />
         </button>
         <div>
           <strong>{post.author}</strong>
@@ -813,15 +832,22 @@ function CommentRow({
           onOpenUserProfile?.(comment.userId, {
             name: comment.author,
             avatarUrl: comment.authorAvatar,
-            authorAvatar: comment.authorAvatar
+            authorAvatar: comment.authorAvatar,
+            profileFrameUrl: comment.authorProfileFrameUrl,
+            profileFrameItemId: comment.authorProfileFrameItemId
           });
         }}
       >
-        {comment.authorAvatar ? (
-          <img className="comment-avatar" src={mediaUrl(comment.authorAvatar)} alt="" />
-        ) : (
-          <div className="comment-avatar placeholder">{comment.author?.charAt(0) || "?"}</div>
-        )}
+        <AvatarWithFrame
+          user={comment}
+          src={comment.authorAvatar}
+          name={comment.author}
+          frameUrl={comment.authorProfileFrameUrl}
+          className="comment-avatar-frame-host"
+          avatarClassName="comment-avatar"
+          placeholderClassName="comment-avatar placeholder"
+          size={isReply ? "comment-reply" : "comment"}
+        />
       </button>
       <div className="comment-body">
         <div className="comment-bubble">

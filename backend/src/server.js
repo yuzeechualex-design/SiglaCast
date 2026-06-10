@@ -489,7 +489,7 @@ async function serializeSharedPost(post) {
   if (!post) return null;
   const { data: author } = await supabase
     .from("users")
-    .select("id, name, avatar_url, is_ai_character, ai_auto_reply")
+    .select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply")
     .eq("id", post.author_id)
     .maybeSingle();
   return {
@@ -497,6 +497,8 @@ async function serializeSharedPost(post) {
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
+    authorProfileFrameItemId: author?.profile_frame_item_id || null,
+    authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id),
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
     authorAiAutoReply: Boolean(author?.ai_auto_reply),
@@ -510,7 +512,7 @@ async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }, { data: sharedPost }] = await Promise.all([
     supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
-    supabase.from("users").select("id, name, avatar_url, is_ai_character, ai_auto_reply").eq("id", post.author_id).maybeSingle(),
+    supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply").eq("id", post.author_id).maybeSingle(),
     post.shared_post_id
       ? supabase.from("posts").select("*").eq("id", post.shared_post_id).maybeSingle()
       : Promise.resolve({ data: null })
@@ -535,7 +537,7 @@ async function serializePost(post, viewerId) {
     const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
     const [{ data: users }, { data: cra }] = await Promise.all([
-      supabase.from("users").select("id, name, avatar_url, is_ai_character, ai_auto_reply").in("id", authorIds),
+      supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply").in("id", authorIds),
       supabase.from("comment_reactions").select("comment_id, user_id, reaction").in("comment_id", commentIds)
     ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
@@ -567,6 +569,8 @@ async function serializePost(post, viewerId) {
       userId: c.author_id,
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
+      authorProfileFrameItemId: a?.profile_frame_item_id || null,
+      authorProfileFrameUrl: shopItemUrl(a?.profile_frame_item_id),
       authorIsAiCharacter: Boolean(a?.is_ai_character),
       authorAiAutoReply: Boolean(a?.ai_auto_reply),
       text: c.content,
@@ -613,6 +617,8 @@ async function serializePost(post, viewerId) {
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
+    authorProfileFrameItemId: author?.profile_frame_item_id || null,
+    authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id),
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
     authorAiAutoReply: Boolean(author?.ai_auto_reply),

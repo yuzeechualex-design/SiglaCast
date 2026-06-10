@@ -26,6 +26,78 @@ const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
   return acc;
 }, {});
 
+const DEFAULT_SERVER_ICON = "/assets/purxu-logo.png";
+const DEFAULT_SERVERS = [
+  {
+    id: "yuze-template",
+    name: "yuze",
+    iconUrl: DEFAULT_SERVER_ICON,
+    sections: [
+      {
+        id: "information",
+        name: "Information",
+        channels: [
+          { id: "apply-now", type: "text", name: "apply-now" },
+          { id: "overview", type: "text", name: "overview" },
+          { id: "announcement-info", type: "announcement", name: "announcement" },
+          { id: "cc-rules", type: "text", name: "cc-rules" },
+          { id: "creation-guideline", type: "text", name: "creation-guideline" },
+          { id: "social-feed", type: "text", name: "social-feed" },
+          { id: "welcome", type: "text", name: "welcome" }
+        ]
+      },
+      {
+        id: "level-0",
+        name: "Level 0",
+        channels: [
+          { id: "nda", type: "text", name: "nda" },
+          { id: "announcement-level0", type: "announcement", name: "announcement" },
+          { id: "special-event", type: "announcement", name: "special-event" }
+        ]
+      },
+      {
+        id: "level-1-5",
+        name: "Level 1 - 5",
+        channels: [
+          { id: "overview-level", type: "text", name: "overview" },
+          { id: "announcement-level", type: "announcement", name: "announcement" },
+          { id: "chat-room-level", type: "text", name: "[ 2 - 5 ] chat-room" },
+          { id: "all-chat-room", type: "text", name: "[all] chat-room" },
+          { id: "event", type: "text", name: "event" }
+        ]
+      },
+      {
+        id: "voice",
+        name: "Voice Channels",
+        channels: [
+          { id: "lobby", type: "voice", name: "Lobby" },
+          { id: "gaming", type: "voice", name: "Gaming" }
+        ]
+      }
+    ]
+  }
+];
+
+function loadLocalServers() {
+  if (typeof window === "undefined") return DEFAULT_SERVERS;
+  try {
+    const raw = localStorage.getItem("purxu_servers");
+    const parsed = raw ? JSON.parse(raw) : null;
+    return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_SERVERS;
+  } catch (_) {
+    return DEFAULT_SERVERS;
+  }
+}
+
+function saveLocalServers(servers) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("purxu_servers", JSON.stringify(servers));
+  } catch (_) {
+    // Ignore storage quota/private mode errors.
+  }
+}
+
 function presenceDotAttrs(entity) {
   const rawPresence =
     entity && typeof entity.presence === "string" ? entity.presence.trim().toLowerCase() : null;
@@ -123,6 +195,11 @@ export default function MessagesPage({
   const [sending, setSending] = useState(false);
   const [chatTab, setChatTab] = useState("users");
   const [showCreateGroup, setShowCreateGroup] = useState(false);
+  const [servers, setServers] = useState(loadLocalServers);
+  const [selectedServerId, setSelectedServerId] = useState(() => loadLocalServers()[0]?.id || "");
+  const [selectedChannelId, setSelectedChannelId] = useState(() => loadLocalServers()[0]?.sections?.[0]?.channels?.[0]?.id || "");
+  const [showCreateServer, setShowCreateServer] = useState(false);
+  const [createChannelContext, setCreateChannelContext] = useState(null);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -249,6 +326,83 @@ export default function MessagesPage({
   }, [menuOpen]);
 
   const incomingFriendCount = Array.isArray(friendIncomingRequests) ? friendIncomingRequests.length : 0;
+  const selectedServer = useMemo(
+    () => servers.find((server) => server.id === selectedServerId) || servers[0] || null,
+    [servers, selectedServerId]
+  );
+  const selectedChannel = useMemo(() => {
+    if (!selectedServer) return null;
+    return selectedServer.sections
+      .flatMap((section) => section.channels || [])
+      .find((channel) => channel.id === selectedChannelId) || selectedServer.sections?.[0]?.channels?.[0] || null;
+  }, [selectedChannelId, selectedServer]);
+
+  useEffect(() => {
+    saveLocalServers(servers);
+  }, [servers]);
+
+  useEffect(() => {
+    if (!selectedServer && servers[0]) {
+      setSelectedServerId(servers[0].id);
+      setSelectedChannelId(servers[0].sections?.[0]?.channels?.[0]?.id || "");
+      return;
+    }
+    if (selectedServer && !selectedChannel) {
+      setSelectedChannelId(selectedServer.sections?.[0]?.channels?.[0]?.id || "");
+    }
+  }, [selectedChannel, selectedServer, servers]);
+
+  function handleCreateServer({ name, iconUrl }) {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const nextServer = {
+      id: `server-${Date.now()}`,
+      name: trimmed,
+      iconUrl: iconUrl || DEFAULT_SERVER_ICON,
+      sections: [
+        {
+          id: "text",
+          name: "Text Channels",
+          channels: [{ id: `general-${Date.now()}`, type: "text", name: "general" }]
+        },
+        {
+          id: "voice",
+          name: "Voice Channels",
+          channels: [{ id: `lobby-${Date.now()}`, type: "voice", name: "Lobby" }]
+        }
+      ]
+    };
+    setServers((prev) => [nextServer, ...prev]);
+    setSelectedServerId(nextServer.id);
+    setSelectedChannelId(nextServer.sections[0].channels[0].id);
+    setShowCreateServer(false);
+    setChatTab("servers");
+  }
+
+  function handleCreateServerChannel({ sectionId, channelType, name, isPrivate }) {
+    if (!selectedServer || !sectionId || !name.trim()) return;
+    const channel = {
+      id: `channel-${Date.now()}`,
+      type: channelType,
+      name: name.trim().replace(/\s+/g, "-").toLowerCase(),
+      private: Boolean(isPrivate)
+    };
+    setServers((prev) =>
+      prev.map((server) => {
+        if (server.id !== selectedServer.id) return server;
+        return {
+          ...server,
+          sections: server.sections.map((section) =>
+            section.id === sectionId
+              ? { ...section, channels: [...section.channels, channel] }
+              : section
+          )
+        };
+      })
+    );
+    setSelectedChannelId(channel.id);
+    setCreateChannelContext(null);
+  }
 
   useEffect(() => {
     if (!plusMenuOpen) return undefined;
@@ -438,6 +592,18 @@ export default function MessagesPage({
                       <button
                         type="button"
                         role="menuitem"
+                        className="chat-plus-item"
+                        onClick={() => {
+                          setPlusMenuOpen(false);
+                          setShowCreateServer(true);
+                          setChatTab("servers");
+                        }}
+                      >
+                        Create a server
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
                         className="chat-plus-item chat-plus-item-row"
                         onClick={() => setPlusMenuPane("apps")}
                       >
@@ -552,7 +718,6 @@ export default function MessagesPage({
                                     </span>
                                   ) : null;
                                 })()}
-                                <small>{r.from?.email}</small>
                               </div>
                               <div className="friend-requests-menu-actions">
                                 <button
@@ -594,11 +759,11 @@ export default function MessagesPage({
             </button>
             <button
               type="button"
-              className={chatTab === "characters" ? "active" : ""}
-              onClick={() => setChatTab("characters")}
+              className={chatTab === "servers" ? "active" : ""}
+              onClick={() => setChatTab("servers")}
               style={{ flex: 1 }}
             >
-              AI Characters
+              Servers
             </button>
           </div>
 
@@ -658,7 +823,6 @@ export default function MessagesPage({
                             </span>
                           ) : null;
                         })()}
-                        <small>{u.email}</small>
                       </div>
                       <div className="search-result-actions">
                         {u.isFriend ? (
@@ -805,52 +969,31 @@ export default function MessagesPage({
               </div>
             </>
           ) : (
-            <div className="conv-list">
-              {characters.length ? (
-                characters.map((character) => {
-                  const isActive = activeChat?.kind === "dm" && activeChat?.user?.id === character.id;
-                  return (
-                    <div
-                      key={character.id}
-                      role="button"
-                      tabIndex={0}
-                      className={`conv-item ${isActive ? "active" : ""}`}
-                      onClick={() => onOpenChat("dm", character.id)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          onOpenChat("dm", character.id);
-                        }
-                      }}
-                    >
-                      {character.avatarUrl ? (
-                        <img className="msg-avatar sm" src={mediaUrl(character.avatarUrl)} alt="" />
-                      ) : (
-                        <div className="msg-avatar sm placeholder">{character.name?.charAt(0) || "AI"}</div>
-                      )}
-                      <div className="conv-item-body">
-                        <strong style={{ display: "block" }}>{character.name}</strong>
-                        <span className="conv-status-sub" style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {character.roles || "AI Character"}
-                        </span>
-                        <span className="conv-preview" style={{ display: "block", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {character.bio || "No bio."}
-                        </span>
-                      </div>
-                    </div>
-                  );
+            <ServerWorkspace
+              servers={servers}
+              selectedServer={selectedServer}
+              selectedChannel={selectedChannel}
+              onSelectServer={(server) => {
+                setSelectedServerId(server.id);
+                setSelectedChannelId(server.sections?.[0]?.channels?.[0]?.id || "");
+              }}
+              onSelectChannel={(channel) => setSelectedChannelId(channel.id)}
+              onCreateServer={() => setShowCreateServer(true)}
+              onCreateChannel={(section) =>
+                setCreateChannelContext({
+                  serverId: selectedServer?.id || "",
+                  sectionId: section.id,
+                  sectionName: section.name
                 })
-              ) : (
-                <p className="empty-hint muted small" style={{ padding: "14px", textAlign: "center" }}>
-                  Create an AI Character in the **AI Characters** tab to chat with them.
-                </p>
-              )}
-            </div>
+              }
+            />
           )}
         </aside>
 
         <div className="messages-thread">
-          {!activeChat ? (
+          {chatTab === "servers" ? (
+            <ServerChannelPreview server={selectedServer} channel={selectedChannel} />
+          ) : !activeChat ? (
             <div className="thread-empty">
               <p>Select a chat from the left or use the ＋ menu to start a group or review friend requests.</p>
             </div>
@@ -901,7 +1044,6 @@ export default function MessagesPage({
                               <OverflowMarqueeText text={line} />
                             </p>
                           ) : null}
-                          <small>{activeChat.user?.email}</small>
                         </>
                       );
                     })()
@@ -1410,6 +1552,26 @@ export default function MessagesPage({
         />
       ) : null}
 
+      {showCreateServer ? (
+        <CreateServerModal
+          onClose={() => setShowCreateServer(false)}
+          onCreate={handleCreateServer}
+        />
+      ) : null}
+
+      {createChannelContext ? (
+        <CreateServerChannelModal
+          sectionName={createChannelContext.sectionName}
+          onClose={() => setCreateChannelContext(null)}
+          onCreate={(payload) =>
+            handleCreateServerChannel({
+              ...payload,
+              sectionId: createChannelContext.sectionId
+            })
+          }
+        />
+      ) : null}
+
       {showGroupSettings && isGroup ? (
         <GroupSettingsModal
           currentUser={currentUser}
@@ -1887,6 +2049,251 @@ function MessageBubble({
   );
 }
 
+// ---------------- Server Workspace ----------------
+
+function channelIcon(type) {
+  if (type === "voice") return "speaker";
+  if (type === "announcement") return "megaphone";
+  return "#";
+}
+
+function ServerWorkspace({
+  servers,
+  selectedServer,
+  selectedChannel,
+  onSelectServer,
+  onSelectChannel,
+  onCreateServer,
+  onCreateChannel
+}) {
+  return (
+    <div className="servers-workspace">
+      <div className="server-rail" aria-label="Servers">
+        {(servers || []).map((server) => (
+          <button
+            key={server.id}
+            type="button"
+            className={`server-rail-icon${selectedServer?.id === server.id ? " active" : ""}`}
+            onClick={() => onSelectServer(server)}
+            title={server.name}
+          >
+            {server.iconUrl ? <img src={server.iconUrl} alt="" /> : <span>{server.name.charAt(0)}</span>}
+          </button>
+        ))}
+        <button type="button" className="server-rail-icon server-rail-add" onClick={onCreateServer} title="Create server">
+          +
+        </button>
+      </div>
+
+      <div className="server-channel-panel">
+        <div className="server-header">
+          <strong>{selectedServer?.name || "Server"}</strong>
+          <button type="button" className="server-member-btn" title="Invite members">
+            +
+          </button>
+        </div>
+
+        <button type="button" className="server-utility-row">
+          <span>calendar</span>
+          Events
+        </button>
+        <button type="button" className="server-utility-row">
+          <span>diamond</span>
+          Server Boosts
+        </button>
+
+        <div className="server-section-list">
+          {(selectedServer?.sections || []).map((section) => (
+            <div key={section.id} className="server-section">
+              <div className="server-section-title">
+                <span>{section.name}</span>
+                <button
+                  type="button"
+                  className="server-channel-add"
+                  onClick={() => onCreateChannel(section)}
+                  title="Create channel"
+                >
+                  +
+                </button>
+              </div>
+              {(section.channels || []).map((channel) => (
+                <button
+                  key={channel.id}
+                  type="button"
+                  className={`server-channel-row${selectedChannel?.id === channel.id ? " active" : ""}`}
+                  onClick={() => onSelectChannel(channel)}
+                >
+                  <span className="server-channel-icon">{channelIcon(channel.type)}</span>
+                  <span className="server-channel-name">{channel.name}</span>
+                  {selectedChannel?.id === channel.id ? <span className="server-channel-actions">+ gear</span> : null}
+                </button>
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServerChannelPreview({ server, channel }) {
+  return (
+    <div className="server-thread-preview">
+      <div className="server-thread-head">
+        <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
+        <div>
+          <strong>{channel?.name || "general"}</strong>
+          <small>{server?.name || "Server"}</small>
+        </div>
+      </div>
+      <div className="server-thread-empty">
+        <div className="server-thread-orb">
+          {server?.iconUrl ? <img src={server.iconUrl} alt="" /> : <span>{server?.name?.charAt(0) || "S"}</span>}
+        </div>
+        <h3>Welcome to #{channel?.name || "general"}</h3>
+        <p className="muted small">
+          This is the start of your server channel. Messaging storage can be connected after the layout feels right.
+        </p>
+        <button type="button" className="server-thread-first-message">
+          Send your first message
+          <span>›</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function CreateServerModal({ onClose, onCreate }) {
+  const [name, setName] = useState("");
+  const [iconUrl, setIconUrl] = useState(DEFAULT_SERVER_ICON);
+  const [err, setErr] = useState("");
+
+  function handleIconPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErr("Choose an image for the server icon.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setIconUrl(typeof reader.result === "string" ? reader.result : DEFAULT_SERVER_ICON);
+    reader.readAsDataURL(file);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setErr("Server name is required.");
+      return;
+    }
+    onCreate({ name, iconUrl });
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-create-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>Customize Your Server</h3>
+            <button type="button" className="modal-close" onClick={onClose} title="Close">x</button>
+          </div>
+          <form className="modal-body" onSubmit={submit}>
+            <p className="server-create-copy">
+              Give your new server a personality with a name and an icon. You can always change it later.
+            </p>
+            <label className="server-icon-upload">
+              <img src={iconUrl} alt="" />
+              <span>Upload</span>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleIconPick} />
+            </label>
+
+            <label className="field-label">Server Name *</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="yuze" autoFocus />
+            <p className="muted small">By creating a server, you agree to purxu community guidelines.</p>
+            {err ? <p className="form-error">{err}</p> : null}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Back</button>
+              <button type="submit" className="btn btn-primary">Create</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function CreateServerChannelModal({ sectionName, onClose, onCreate }) {
+  const [channelType, setChannelType] = useState("text");
+  const [name, setName] = useState("");
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [err, setErr] = useState("");
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setErr("Channel name is required.");
+      return;
+    }
+    onCreate({ channelType, name, isPrivate });
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-channel-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <div>
+              <h3>Create Channel</h3>
+              <p className="muted small">in {sectionName}</p>
+            </div>
+            <button type="button" className="modal-close" onClick={onClose}>x</button>
+          </div>
+          <form className="modal-body" onSubmit={submit}>
+            <label className="field-label">Channel Type</label>
+            <div className="server-channel-type-list">
+              {[
+                ["text", "# Text", "Send messages, images, GIFs, emoji, opinions, and puns"],
+                ["voice", "speaker Voice", "Hang out together with voice, video, and screen share"],
+                ["forum", "forum Forum", "Create a space for organized discussions"]
+              ].map(([id, title, copy]) => (
+                <label key={id} className="server-channel-type-row">
+                  <input
+                    type="radio"
+                    name="channel-type"
+                    checked={channelType === id}
+                    onChange={() => setChannelType(id)}
+                  />
+                  <span>
+                    <strong>{title}</strong>
+                    <small>{copy}</small>
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            <label className="field-label">Channel Name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="new-channel" />
+
+            <label className="server-private-row">
+              <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} />
+              <span>
+                <strong>Private Channel</strong>
+                <small>Only selected members and roles will be able to view this channel.</small>
+              </span>
+            </label>
+            {err ? <p className="form-error">{err}</p> : null}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Create Channel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 // ---------------- Create Group Modal ----------------
 
 function CreateGroupModal({ currentUser, onClose, onCreate }) {
@@ -1999,7 +2406,6 @@ function CreateGroupModal({ currentUser, onClose, onCreate }) {
                     <div key={u.id} className="search-result-row">
                       <div className="search-result-info">
                         <strong>{u.name}</strong>
-                        <small>{u.email}</small>
                       </div>
                       <button
                         type="button"
@@ -2212,7 +2618,6 @@ function GroupSettingsModal({
                       <div key={u.id} className="search-result-row">
                         <div className="search-result-info">
                           <strong>{u.name}</strong>
-                          <small>{u.email}</small>
                         </div>
                         <button
                           type="button"
@@ -2279,7 +2684,6 @@ function GroupSettingsModal({
                       {m.name} {isMe ? <span className="muted small">(you)</span> : null}
                     </strong>
                     <small>
-                      {m.email} ·{" "}
                       <span className={`pill ${isMemberAdmin ? "pill-admin" : "pill-muted"} small`}>
                         {m.role}
                       </span>

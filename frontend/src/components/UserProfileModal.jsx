@@ -3,6 +3,7 @@ import ModalPortal from "./ModalPortal.jsx";
 import { mediaUrl } from "../services/api.js";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
+import AvatarWithFrame from "./AvatarWithFrame.jsx";
 
 function presenceLabel(entity) {
   const raw =
@@ -147,11 +148,12 @@ export default function UserProfileModal({
         isFriend: prefetch?.isFriend,
         incomingRequestId: prefetch?.incomingRequestId,
         outgoingRequestPending: prefetch?.outgoingRequestPending,
-        musicNowPlaying: prefetch?.musicNowPlaying
+        musicNowPlaying: prefetch?.musicNowPlaying,
+        profileFrameUrl: prefetch?.profileFrameUrl,
+        profileFrameItemId: prefetch?.profileFrameItemId
       };
 
   const isSelf = currentUser?.id === userId;
-  const avatarSrc = mediaUrl(merged.avatarUrl);
   const showPlaceholder = !merged.avatarUrl;
   const coverHref = merged.coverUrl ? mediaUrl(merged.coverUrl) : null;
   const coverIsGif = coverHref && publicUrlLooksLikeGif(coverHref);
@@ -236,11 +238,15 @@ export default function UserProfileModal({
               <div className="user-profile-avatar-block">
                 <div className="user-profile-avatar-wrap">
                   <div className="user-profile-avatar-frame">
-                    {showPlaceholder ? (
-                      <div className="user-profile-avatar placeholder">{merged.name?.charAt(0) || "?"}</div>
-                    ) : (
-                      <img className="user-profile-avatar" src={avatarSrc} alt="" decoding="async" />
-                    )}
+                    <AvatarWithFrame
+                      user={merged}
+                      src={showPlaceholder ? null : merged.avatarUrl}
+                      name={merged.name}
+                      className="user-profile-avatar-frame-host"
+                      avatarClassName="user-profile-avatar"
+                      placeholderClassName="user-profile-avatar placeholder"
+                      size="profile-card"
+                    />
                   </div>
                   <span
                     className={presenceDotClass(merged)}
@@ -307,10 +313,6 @@ export default function UserProfileModal({
                       <p className="user-profile-bio-text">{merged.bio.trim()}</p>
                     </div>
                   ) : null}
-                  {!isSelf && merged.email ? (
-                    <p className="user-profile-email muted small">{merged.email}</p>
-                  ) : null}
-
                   {error ? <p className="form-error user-profile-fetch-err">{error}</p> : null}
                   {loading ? <p className="muted small user-profile-loading">Loading profile…</p> : null}
                 </div>

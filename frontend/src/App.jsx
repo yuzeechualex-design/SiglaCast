@@ -1983,6 +1983,8 @@ export default function App() {
               onLogout={logout}
               liteMode={liteMode}
               onToggleLiteMode={toggleLiteMode}
+              theme={theme}
+              onToggleTheme={toggleTheme}
               api={api}
               token={token}
               refreshUser={refreshUserFromAuthMe}

@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
-import ThemeToggle from "./ThemeToggle.jsx";
 import FloatingQuickNav from "./FloatingQuickNav.jsx";
 import NavIcon from "./NavIcon.jsx";
 
@@ -12,8 +11,6 @@ function formatNavPing(n) {
 export default function AppShell({
   user,
   notice,
-  theme,
-  onToggleTheme,
   liteMode = false,
   onToggleLiteMode,
   onRefresh,
@@ -170,7 +167,6 @@ export default function AppShell({
           <NavLink to="/settings" className="nav-btn" title="Settings">
             <NavIcon name="settings" />
           </NavLink>
-          <ThemeToggle theme={theme} onToggle={onToggleTheme} />
         </div>
       </header>
       <main className="grid">{children}</main>
