@@ -160,7 +160,7 @@ export default function App() {
   /** `{ userId, prefetch? }` — public profile popover from avatars in Community / Messages. */
   const [userProfilePeek, setUserProfilePeek] = useState(null);
   const [bondState, setBondState] = useState({ bonds: [], wallet: { coins: 0 }, levels: [] });
-  const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 } });
+  const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 }, gacha: null });
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -268,6 +268,27 @@ export default function App() {
     }
     setNotice("Item purchased");
     await loadBondsAndShop();
+  }
+
+  async function drawShopGacha(collectionId) {
+    const res = await api(`/shop/gacha/${encodeURIComponent(collectionId)}/draw`, { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return null;
+    }
+    if (res.user) {
+      setUser(res.user);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+    }
+    if (res.wallet || res.gacha) {
+      setShopState((prev) => ({
+        ...prev,
+        wallet: res.wallet || prev.wallet,
+        gacha: res.gacha || prev.gacha
+      }));
+    }
+    await loadBondsAndShop();
+    return res;
   }
 
   async function equipProfileFrame(itemId) {
@@ -1998,8 +2019,10 @@ export default function App() {
             <ShopPage
               wallet={shopState.wallet || bondState.wallet}
               items={shopState.items}
+              gacha={shopState.gacha}
               currentUser={user}
               onBuy={buyShopItem}
+              onDrawGacha={drawShopGacha}
             />
           }
         />

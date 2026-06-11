@@ -4,6 +4,7 @@ import { mediaUrl } from "../services/api.js";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
 import AvatarWithFrame from "./AvatarWithFrame.jsx";
+import ProfileBadgeShowcase from "./ProfileBadgeShowcase.jsx";
 
 function presenceLabel(entity) {
   const raw =
@@ -150,7 +151,8 @@ export default function UserProfileModal({
         outgoingRequestPending: prefetch?.outgoingRequestPending,
         musicNowPlaying: prefetch?.musicNowPlaying,
         profileFrameUrl: prefetch?.profileFrameUrl,
-        profileFrameItemId: prefetch?.profileFrameItemId
+        profileFrameItemId: prefetch?.profileFrameItemId,
+        profileBadges: prefetch?.profileBadges
       };
 
   const isSelf = currentUser?.id === userId;
@@ -270,6 +272,7 @@ export default function UserProfileModal({
                     ) : null}
                   </p>
                   {merged.statusNote ? <p className="user-profile-custom-status">{merged.statusNote}</p> : null}
+                  <ProfileBadgeShowcase badges={merged.profileBadges} compact />
                   {merged.musicNowPlaying?.title ? (
                     <div className="profile-music-playing-card">
                       <div className="profile-music-playing-head muted small">

@@ -235,6 +235,19 @@ const SHOP_ITEMS = [
     requiredBondLevel: "partner"
   }
 ];
+const ALIEN_STAGE_GACHA_ID = "alien-stage-frame";
+const GACHA_DRAW_COSTS = [50, 100, 200, 400, 800, 1600, 3200, 3200];
+const ALIEN_STAGE_GACHA_ITEMS = [
+  { id: "alien-stage-mizisua-star", name: "Mizisua Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-mizisua-star.png" },
+  { id: "alien-stage-hyuluka-star", name: "Hyuluka Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-hyuluka-star.png" },
+  { id: "alien-stage-ivan-star", name: "Ivan Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-ivan-star.png" },
+  { id: "alien-stage-till-star", name: "Till Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-till-star.png" },
+  { id: "alien-stage-ivan-frame", name: "Ivan Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-ivan-frame.png" },
+  { id: "alien-stage-till-frame", name: "Till Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-till-frame.png" },
+  { id: "alien-stage-mizi-frame", name: "Mizi Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-mizi-frame.png" },
+  { id: "alien-stage-sua-frame", name: "Sua Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-sua-frame.png" }
+];
+const ALL_SHOP_ITEMS = [...SHOP_ITEMS, ...ALIEN_STAGE_GACHA_ITEMS];
 const FREE_SHOP_EMAILS = new Set(["alexcarloman@dorsu.edu.ph"]);
 
 function userHasFreeShop(user) {
@@ -243,7 +256,36 @@ function userHasFreeShop(user) {
 
 function shopItemUrl(itemId) {
   if (itemId === "pink-heart-bond-frame") return "/assets/bond-frame-pink.png";
+  const gachaItem = ALIEN_STAGE_GACHA_ITEMS.find((item) => item.id === itemId);
+  if (gachaItem) return gachaItem.imageUrl;
   return null;
+}
+
+function shopItemById(itemId) {
+  return ALL_SHOP_ITEMS.find((item) => item.id === itemId) || null;
+}
+
+function profileBadgeItemsFromIds(ids) {
+  return (Array.isArray(ids) ? ids : [])
+    .map((id) => ALIEN_STAGE_GACHA_ITEMS.find((item) => item.id === id && item.type === "profile_badge"))
+    .filter(Boolean)
+    .slice(0, 8);
+}
+
+function nextGachaCost(drawCount = 0) {
+  const idx = Math.max(0, Number(drawCount) || 0);
+  return GACHA_DRAW_COSTS[Math.min(idx, GACHA_DRAW_COSTS.length - 1)];
+}
+
+function pickWeightedGachaItem(items) {
+  const pool = items.filter((item) => item.weight > 0);
+  const total = pool.reduce((sum, item) => sum + item.weight, 0);
+  let roll = Math.random() * total;
+  for (const item of pool) {
+    roll -= item.weight;
+    if (roll <= 0) return item;
+  }
+  return pool[pool.length - 1] || null;
 }
 
 function bondLevelForExp(exp = 0) {
@@ -384,10 +426,10 @@ async function upsertOAuthUser({ provider, email, name, avatarUrl }) {
 
 /** Explicit `users` projections for routes that cannot use select("*") (secrets). Omit columns at runtime when DB migrations lag. */
 const USER_SEARCH_SELECT_DEFAULT =
-  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
+  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids, alien_stage_gacha_draws, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 const USER_ADMIN_LIST_SELECT_DEFAULT =
-  "id, role, name, email, course, avatar_url, cover_url, bio, availability, created_at, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
+  "id, role, name, email, course, avatar_url, cover_url, bio, availability, profile_frame_item_id, profile_badge_item_ids, alien_stage_gacha_draws, created_at, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 function parseMissingUsersColumn(errorMessage = "") {
   const msg = String(errorMessage);
@@ -2458,12 +2500,36 @@ app.get("/api/shop", authenticate, async (req, res) => {
     const freeShop = userHasFreeShop(req.user);
     res.json({
       wallet,
-      items: SHOP_ITEMS.map((item) => ({
-        ...item,
-        effectivePrice: freeShop ? 0 : item.price,
-        owned: freeShop || owned.has(item.id),
-        unlocked: freeShop || item.requiredBondLevel !== "partner" || hasPartnerBond
-      }))
+      items: [
+        ...SHOP_ITEMS.map((item) => ({
+          ...item,
+          effectivePrice: freeShop ? 0 : item.price,
+          owned: freeShop || owned.has(item.id),
+          unlocked: freeShop || item.requiredBondLevel !== "partner" || hasPartnerBond
+        })),
+        ...ALIEN_STAGE_GACHA_ITEMS.filter((item) => item.type === "profile_frame").map((item) => ({
+          ...item,
+          source: "gacha_reward",
+          price: 0,
+          effectivePrice: 0,
+          description: "Won from the Alien Stage gacha collection.",
+          owned: owned.has(item.id),
+          unlocked: owned.has(item.id)
+        }))
+      ],
+      gacha: {
+        id: ALIEN_STAGE_GACHA_ID,
+        name: "Alien Stage Frames",
+        bannerUrl: "/assets/alien-stage-banner.png",
+        description: "Draw once to win one unowned Alien Stage badge or profile frame. Won items leave the pool.",
+        drawCount: Number(req.user.alien_stage_gacha_draws) || 0,
+        nextCost: freeShop ? 0 : nextGachaCost(req.user.alien_stage_gacha_draws),
+        pool: ALIEN_STAGE_GACHA_ITEMS.map((item) => ({
+          ...item,
+          owned: owned.has(item.id),
+          chanceGroup: item.type === "profile_badge" ? "Higher chance" : "Lower chance"
+        }))
+      }
     });
   } catch (e) {
     res.status(400).json({ error: e.message });
@@ -2497,13 +2563,77 @@ app.post("/api/shop/:itemId/buy", authenticate, async (req, res) => {
   }
 });
 
+app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) => {
+  try {
+    if (req.params.collectionId !== ALIEN_STAGE_GACHA_ID) {
+      return res.status(404).json({ error: "Gacha collection not found" });
+    }
+    const { data: purchases } = await supabase
+      .from("user_shop_purchases")
+      .select("item_id")
+      .eq("user_id", req.user.id);
+    const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
+    const available = ALIEN_STAGE_GACHA_ITEMS.filter((item) => !owned.has(item.id));
+    if (!available.length) return res.status(400).json({ error: "You already own every Alien Stage reward." });
+
+    const drawCount = Number(req.user.alien_stage_gacha_draws) || 0;
+    const freeShop = userHasFreeShop(req.user);
+    const cost = freeShop ? 0 : nextGachaCost(drawCount);
+    const walletBefore = await fetchWallet(req.user.id);
+    if (walletBefore.coins < cost) return res.status(400).json({ error: "Not enough purxu coins" });
+
+    const reward = pickWeightedGachaItem(available);
+    if (!reward) return res.status(400).json({ error: "No reward available" });
+    await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: reward.id });
+    const wallet = await addWalletCoins(req.user.id, -cost);
+
+    const existingBadges = Array.isArray(req.user.profile_badge_item_ids) ? req.user.profile_badge_item_ids : [];
+    const nextBadges =
+      reward.type === "profile_badge" && !existingBadges.includes(reward.id)
+        ? [...existingBadges, reward.id].slice(0, 8)
+        : existingBadges;
+    const { data: updatedUser } = await supabase
+      .from("users")
+      .update({
+        alien_stage_gacha_draws: drawCount + 1,
+        profile_badge_item_ids: nextBadges
+      })
+      .eq("id", req.user.id)
+      .select("*")
+      .maybeSingle();
+
+    const nextOwned = new Set([...owned, reward.id]);
+    res.json({
+      wallet,
+      reward,
+      user: authUserPayload(updatedUser),
+      gacha: {
+        id: ALIEN_STAGE_GACHA_ID,
+        name: "Alien Stage Frames",
+        bannerUrl: "/assets/alien-stage-banner.png",
+        description: "Draw once to win one unowned Alien Stage badge or profile frame. Won items leave the pool.",
+        drawCount: drawCount + 1,
+        nextCost: freeShop ? 0 : nextGachaCost(drawCount + 1),
+        pool: ALIEN_STAGE_GACHA_ITEMS.map((item) => ({
+          ...item,
+          owned: nextOwned.has(item.id),
+          chanceGroup: item.type === "profile_badge" ? "Higher chance" : "Lower chance"
+        }))
+      }
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.patch("/api/profile/frame", authenticate, async (req, res) => {
   try {
     const itemId = String(req.body?.itemId || "").trim();
     const selected = itemId || null;
     if (selected) {
-      const item = SHOP_ITEMS.find((row) => row.id === selected);
+      const item = shopItemById(selected);
       if (!item) return res.status(404).json({ error: "Profile frame not found" });
+      if (item.type !== "profile_frame") return res.status(400).json({ error: "Only profile frames can be equipped here." });
       if (!userHasFreeShop(req.user)) {
         const { data: purchase } = await supabase
           .from("user_shop_purchases")

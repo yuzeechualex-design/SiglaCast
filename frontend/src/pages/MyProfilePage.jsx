@@ -7,6 +7,7 @@ import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import { PostCardBody, REACTIONS } from "./CommunityPage.jsx";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { listeningStatusLine } from "../utils/displayStatus.js";
+import ProfileBadgeShowcase from "../components/ProfileBadgeShowcase.jsx";
 
 function formatCount(n, singular, plural = `${singular}s`) {
   const value = Number(n) || 0;
@@ -263,6 +264,7 @@ export default function MyProfilePage({
               {isCharacterProfile && characterRoles ? <span>{characterRoles}</span> : null}
               {musicLine ? <span>{musicLine}</span> : null}
             </div>
+            <ProfileBadgeShowcase badges={displayUser.profileBadges} />
           </div>
         </div>
 

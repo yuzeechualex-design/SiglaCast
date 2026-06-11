@@ -7,9 +7,124 @@ function shopAssetUrl(url) {
   return mediaUrl(url);
 }
 
-export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
-  const displayItems = items.length
-    ? items
+function coinLabel(value) {
+  const n = Number(value) || 0;
+  return `${n.toLocaleString()} coins`;
+}
+
+function GachaModal({ gacha, avatarUrl, wallet, onClose, onDraw }) {
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [drawing, setDrawing] = useState(false);
+  const [reward, setReward] = useState(null);
+  const [error, setError] = useState("");
+  const availableCount = (gacha?.pool || []).filter((item) => !item.owned).length;
+  const complete = availableCount === 0;
+  const canAfford = (wallet?.coins ?? 0) >= (gacha?.nextCost ?? 0);
+  const reelItems = useMemo(() => {
+    const pool = gacha?.pool?.length ? gacha.pool : [];
+    return [...pool, ...pool, ...pool].slice(0, 24);
+  }, [gacha?.pool]);
+
+  async function draw() {
+    if (!gacha?.id || drawing || complete) return;
+    setError("");
+    setReward(null);
+    setDrawing(true);
+    const started = Date.now();
+    const res = await onDraw?.(gacha.id);
+    const wait = Math.max(0, 5000 - (Date.now() - started));
+    window.setTimeout(() => {
+      setDrawing(false);
+      if (!res || res.error) {
+        setError(res?.error || "Draw failed. Try again.");
+        return;
+      }
+      setReward(res.reward);
+    }, wait);
+  }
+
+  return (
+    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Alien Stage gacha">
+      <div className="gacha-modal">
+        <div className="gacha-modal-head">
+          <div>
+            <p>Limited Collection</p>
+            <h3>{gacha?.name || "Alien Stage Frames"}</h3>
+          </div>
+          <div className="gacha-head-actions">
+            <button type="button" className="gacha-help-btn" onClick={() => setHelpOpen((v) => !v)} aria-label="How this works">
+              ?
+            </button>
+            <button type="button" className="gacha-close-btn" onClick={onClose} aria-label="Close">
+              x
+            </button>
+          </div>
+        </div>
+
+        {helpOpen ? (
+          <div className="gacha-help-panel">
+            <strong>How draws work</strong>
+            <p>Each draw gives one unowned reward, then removes it from the next draw pool. Star badges are easier to get, while character profile frames are rarer.</p>
+          </div>
+        ) : null}
+
+        <div className="gacha-stage">
+          <div className={`gacha-reel${drawing ? " is-drawing" : ""}`}>
+            {reelItems.map((item, index) => (
+              <div key={`${item.id}-${index}`} className={`gacha-reel-tile ${item.type === "profile_frame" ? "rare" : ""}`}>
+                <img src={shopAssetUrl(item.imageUrl)} alt="" />
+              </div>
+            ))}
+          </div>
+          <div className="gacha-focus-ring" aria-hidden />
+          <div className="gacha-avatar-preview">
+            {reward?.type === "profile_frame" ? (
+              <img className="gacha-result-frame" src={shopAssetUrl(reward.imageUrl)} alt="" />
+            ) : null}
+            <img className="gacha-result-avatar" src={avatarUrl} alt="" />
+          </div>
+        </div>
+
+        <div className="gacha-pool-grid">
+          {(gacha?.pool || []).map((item) => (
+            <div key={item.id} className={`gacha-pool-item ${item.owned ? "owned" : ""} ${item.type === "profile_frame" ? "rare" : ""}`}>
+              <img src={shopAssetUrl(item.imageUrl)} alt="" />
+              <span>{item.type === "profile_badge" ? "Badge" : "Frame"}</span>
+              <strong>{item.name}</strong>
+              <small>{item.owned ? "Owned" : item.chanceGroup}</small>
+            </div>
+          ))}
+        </div>
+
+        {reward ? (
+          <div className={`gacha-result ${reward.type === "profile_frame" ? "rare" : ""}`}>
+            <img src={shopAssetUrl(reward.imageUrl)} alt="" />
+            <div>
+              <span>You won</span>
+              <strong>{reward.name}</strong>
+            </div>
+          </div>
+        ) : null}
+        {error ? <p className="form-error">{error}</p> : null}
+
+        <div className="gacha-modal-footer">
+          <div className="gacha-draw-info">
+            <span>{availableCount} rewards left</span>
+            <strong>{coinLabel(wallet?.coins ?? 0)}</strong>
+          </div>
+          <button type="button" className="btn btn-primary gacha-draw-btn" disabled={drawing || complete || !canAfford} onClick={draw}>
+            {drawing ? "Drawing..." : complete ? "Complete" : `Draw ${coinLabel(gacha?.nextCost ?? 0)}`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function ShopPage({ wallet, items = [], gacha = null, currentUser, onBuy, onDrawGacha }) {
+  const directItems = items.filter((item) => item.source !== "gacha_reward");
+  const displayItems = directItems.length
+    ? directItems
     : [
         {
           id: "pink-heart-bond-frame",
@@ -24,6 +139,7 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
       ];
   const featured = displayItems[0] || null;
   const [previewItemId, setPreviewItemId] = useState(featured?.id || "");
+  const [gachaOpen, setGachaOpen] = useState(false);
   const previewItem = displayItems.find((item) => item.id === previewItemId) || featured;
   const avatarUrl = currentUser?.avatarUrl ? mediaUrl(currentUser.avatarUrl) : "/assets/purxu-shop-logo.png";
   const previewKey = useMemo(() => `${previewItem?.id || "empty"}-${Date.now()}`, [previewItem?.id]);
@@ -33,14 +149,27 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
       <div className="shop-topbar">
         <div>
           <p className="shop-eyebrow">purxu shop</p>
-          <h2>Bond cosmetics</h2>
+          <h2>Cosmetics</h2>
         </div>
         <div className="shop-wallet">
-          <span>◆</span>
+          <span>coin</span>
           <strong>{wallet?.coins ?? 0}</strong>
           <small>coins</small>
         </div>
       </div>
+
+      {gacha ? (
+        <button type="button" className="shop-gacha-banner" onClick={() => setGachaOpen(true)}>
+          <img src={shopAssetUrl(gacha.bannerUrl)} alt="" />
+          <span className="shop-gacha-banner-shade" aria-hidden />
+          <span className="shop-gacha-banner-copy">
+            <small>Gacha Collection</small>
+            <strong>Alien Stage Frames</strong>
+            <em>Badges and rare character frames. No duplicate rewards.</em>
+          </span>
+          <span className="shop-gacha-banner-cta">Draw {coinLabel(gacha.nextCost)}</span>
+        </button>
+      ) : null}
 
       <div className="shop-hero">
         <div>
@@ -70,7 +199,7 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
               <h3>{item.name}</h3>
               <p>{item.description}</p>
               <div className="shop-card-footer">
-                <strong>{(item.effectivePrice ?? item.price) === 0 ? "Free" : `${item.effectivePrice ?? item.price} coins`}</strong>
+                <strong>{(item.effectivePrice ?? item.price) === 0 ? "Free" : coinLabel(item.effectivePrice ?? item.price)}</strong>
                 <button type="button" className="btn btn-primary" disabled={item.owned || !item.unlocked} onClick={() => onBuy?.(item.id)}>
                   {item.owned ? "Owned" : item.unlocked ? "Buy" : "Locked"}
                 </button>
@@ -80,6 +209,16 @@ export default function ShopPage({ wallet, items = [], currentUser, onBuy }) {
           </article>
         ))}
       </div>
+
+      {gachaOpen ? (
+        <GachaModal
+          gacha={gacha}
+          wallet={wallet}
+          avatarUrl={avatarUrl}
+          onClose={() => setGachaOpen(false)}
+          onDraw={onDrawGacha}
+        />
+      ) : null}
     </section>
   );
 }

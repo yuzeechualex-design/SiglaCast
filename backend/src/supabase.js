@@ -14,6 +14,9 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 export function toPublicUser(row) {
   if (!row) return null;
+  const badgeIds = Array.isArray(row.profile_badge_item_ids)
+    ? row.profile_badge_item_ids
+    : [];
   return {
     id: row.id,
     role: row.role,
@@ -26,7 +29,27 @@ export function toPublicUser(row) {
     profileFrameUrl:
       row.profile_frame_item_id === "pink-heart-bond-frame"
         ? "/assets/bond-frame-pink.png"
+        : row.profile_frame_item_id === "alien-stage-ivan-frame"
+          ? "/assets/alien-stage-ivan-frame.png"
+        : row.profile_frame_item_id === "alien-stage-till-frame"
+          ? "/assets/alien-stage-till-frame.png"
+        : row.profile_frame_item_id === "alien-stage-mizi-frame"
+          ? "/assets/alien-stage-mizi-frame.png"
+        : row.profile_frame_item_id === "alien-stage-sua-frame"
+          ? "/assets/alien-stage-sua-frame.png"
         : null,
+    profileBadgeItemIds: badgeIds,
+    profileBadges: badgeIds
+      .map((id) => {
+        const map = {
+          "alien-stage-mizisua-star": { id, name: "Mizisua Star Badge", imageUrl: "/assets/alien-stage-mizisua-star.png" },
+          "alien-stage-hyuluka-star": { id, name: "Hyuluka Star Badge", imageUrl: "/assets/alien-stage-hyuluka-star.png" },
+          "alien-stage-ivan-star": { id, name: "Ivan Star Badge", imageUrl: "/assets/alien-stage-ivan-star.png" },
+          "alien-stage-till-star": { id, name: "Till Star Badge", imageUrl: "/assets/alien-stage-till-star.png" }
+        };
+        return map[id] || null;
+      })
+      .filter(Boolean),
     statusEmoji: row.status_emoji || null,
     statusNote: row.status_note || null,
     bio: row.bio || null,
