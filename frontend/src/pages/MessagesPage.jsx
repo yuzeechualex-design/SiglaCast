@@ -27,65 +27,37 @@ const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
 }, {});
 
 const DEFAULT_SERVER_ICON = "/assets/purxu-logo.png";
-const DEFAULT_SERVERS = [
-  {
-    id: "yuze-template",
-    name: "yuze",
-    iconUrl: DEFAULT_SERVER_ICON,
-    sections: [
-      {
-        id: "information",
-        name: "Information",
-        channels: [
-          { id: "apply-now", type: "text", name: "apply-now" },
-          { id: "overview", type: "text", name: "overview" },
-          { id: "announcement-info", type: "announcement", name: "announcement" },
-          { id: "cc-rules", type: "text", name: "cc-rules" },
-          { id: "creation-guideline", type: "text", name: "creation-guideline" },
-          { id: "social-feed", type: "text", name: "social-feed" },
-          { id: "welcome", type: "text", name: "welcome" }
-        ]
-      },
-      {
-        id: "level-0",
-        name: "Level 0",
-        channels: [
-          { id: "nda", type: "text", name: "nda" },
-          { id: "announcement-level0", type: "announcement", name: "announcement" },
-          { id: "special-event", type: "announcement", name: "special-event" }
-        ]
-      },
-      {
-        id: "level-1-5",
-        name: "Level 1 - 5",
-        channels: [
-          { id: "overview-level", type: "text", name: "overview" },
-          { id: "announcement-level", type: "announcement", name: "announcement" },
-          { id: "chat-room-level", type: "text", name: "[ 2 - 5 ] chat-room" },
-          { id: "all-chat-room", type: "text", name: "[all] chat-room" },
-          { id: "event", type: "text", name: "event" }
-        ]
-      },
-      {
-        id: "voice",
-        name: "Voice Channels",
-        channels: [
-          { id: "lobby", type: "voice", name: "Lobby" },
-          { id: "gaming", type: "voice", name: "Gaming" }
-        ]
-      }
-    ]
-  }
-];
+const DEFAULT_SERVERS = [];
 
 function loadLocalServers() {
   if (typeof window === "undefined") return DEFAULT_SERVERS;
   try {
     const raw = localStorage.getItem("purxu_servers");
     const parsed = raw ? JSON.parse(raw) : null;
-    return Array.isArray(parsed) && parsed.length ? parsed : DEFAULT_SERVERS;
+    return Array.isArray(parsed)
+      ? parsed.filter((server) => server?.id !== "yuze-template")
+      : DEFAULT_SERVERS;
   } catch (_) {
     return DEFAULT_SERVERS;
+  }
+}
+
+function loadServerMessages() {
+  if (typeof window === "undefined") return {};
+  try {
+    const parsed = JSON.parse(localStorage.getItem("purxu_server_messages") || "{}");
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (_) {
+    return {};
+  }
+}
+
+function saveServerMessages(messages) {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.setItem("purxu_server_messages", JSON.stringify(messages));
+  } catch (_) {
+    // Ignore storage quota/private mode errors.
   }
 }
 
@@ -198,8 +170,12 @@ export default function MessagesPage({
   const [servers, setServers] = useState(loadLocalServers);
   const [selectedServerId, setSelectedServerId] = useState(() => loadLocalServers()[0]?.id || "");
   const [selectedChannelId, setSelectedChannelId] = useState(() => loadLocalServers()[0]?.sections?.[0]?.channels?.[0]?.id || "");
+  const [serverMessages, setServerMessages] = useState(loadServerMessages);
+  const [serverDraft, setServerDraft] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [createChannelContext, setCreateChannelContext] = useState(null);
+  const [channelMenu, setChannelMenu] = useState(null);
+  const [channelSettings, setChannelSettings] = useState(null);
   const [showGroupSettings, setShowGroupSettings] = useState(false);
   const [showAttachments, setShowAttachments] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -342,6 +318,10 @@ export default function MessagesPage({
   }, [servers]);
 
   useEffect(() => {
+    saveServerMessages(serverMessages);
+  }, [serverMessages]);
+
+  useEffect(() => {
     if (!selectedServer && servers[0]) {
       setSelectedServerId(servers[0].id);
       setSelectedChannelId(servers[0].sections?.[0]?.channels?.[0]?.id || "");
@@ -377,6 +357,61 @@ export default function MessagesPage({
     setSelectedChannelId(nextServer.sections[0].channels[0].id);
     setShowCreateServer(false);
     setChatTab("servers");
+  }
+
+  function updateChannel(channelId, updates) {
+    setServers((prev) =>
+      prev.map((server) => ({
+        ...server,
+        sections: (server.sections || []).map((section) => ({
+          ...section,
+          channels: (section.channels || []).map((channel) =>
+            channel.id === channelId ? { ...channel, ...updates } : channel
+          )
+        }))
+      }))
+    );
+  }
+
+  function deleteChannel(channelId) {
+    setServers((prev) =>
+      prev.map((server) => ({
+        ...server,
+        sections: (server.sections || []).map((section) => ({
+          ...section,
+          channels: (section.channels || []).filter((channel) => channel.id !== channelId)
+        }))
+      }))
+    );
+    setServerMessages((prev) => {
+      const next = { ...prev };
+      delete next[channelId];
+      return next;
+    });
+    if (selectedChannelId === channelId) {
+      const fallback = selectedServer?.sections
+        ?.flatMap((section) => section.channels || [])
+        ?.find((channel) => channel.id !== channelId);
+      setSelectedChannelId(fallback?.id || "");
+    }
+  }
+
+  function sendServerMessage(e) {
+    e.preventDefault();
+    const text = serverDraft.trim();
+    if (!text || !selectedChannel) return;
+    const message = {
+      id: `server-message-${Date.now()}`,
+      text,
+      author: currentUser?.name || "You",
+      avatarUrl: currentUser?.avatarUrl || null,
+      createdAt: new Date().toISOString()
+    };
+    setServerMessages((prev) => ({
+      ...prev,
+      [selectedChannel.id]: [...(prev[selectedChannel.id] || []), message]
+    }));
+    setServerDraft("");
   }
 
   function handleCreateServerChannel({ sectionId, channelType, name, isPrivate }) {
@@ -426,6 +461,13 @@ export default function MessagesPage({
     document.addEventListener("mousedown", handleDoc);
     return () => document.removeEventListener("mousedown", handleDoc);
   }, [composePlusOpen]);
+
+  useEffect(() => {
+    if (!channelMenu) return undefined;
+    const close = () => setChannelMenu(null);
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [channelMenu]);
 
   function renderAvatar(entity, size = "md", opts = {}) {
     const showPresence = !!(opts.showPresence && entity && !entity?.isGroup);
@@ -986,13 +1028,23 @@ export default function MessagesPage({
                   sectionName: section.name
                 })
               }
+              onOpenChannelMenu={(channel, x, y) => setChannelMenu({ channel, x, y })}
             />
           )}
         </aside>
 
         <div className="messages-thread">
           {chatTab === "servers" ? (
-            <ServerChannelPreview server={selectedServer} channel={selectedChannel} />
+            <ServerChannelPreview
+              server={selectedServer}
+              channel={selectedChannel}
+              messages={selectedChannel ? serverMessages[selectedChannel.id] || [] : []}
+              draft={serverDraft}
+              onDraft={setServerDraft}
+              onSend={sendServerMessage}
+              currentUser={currentUser}
+              onCreateServer={() => setShowCreateServer(true)}
+            />
           ) : !activeChat ? (
             <div className="thread-empty">
               <p>Select a chat from the left or use the ＋ menu to start a group or review friend requests.</p>
@@ -1572,6 +1624,39 @@ export default function MessagesPage({
         />
       ) : null}
 
+      {channelMenu ? (
+        <div
+          className="server-channel-context-menu"
+          style={{ left: channelMenu.x, top: channelMenu.y }}
+          role="menu"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setChannelSettings(channelMenu.channel);
+              setChannelMenu(null);
+            }}
+          >
+            Settings
+          </button>
+        </div>
+      ) : null}
+
+      {channelSettings ? (
+        <ServerChannelSettingsModal
+          channel={channelSettings}
+          onClose={() => setChannelSettings(null)}
+          onSave={(updates) => {
+            updateChannel(channelSettings.id, updates);
+            setChannelSettings(null);
+          }}
+          onDelete={() => {
+            deleteChannel(channelSettings.id);
+            setChannelSettings(null);
+          }}
+        />
+      ) : null}
+
       {showGroupSettings && isGroup ? (
         <GroupSettingsModal
           currentUser={currentUser}
@@ -2052,9 +2137,7 @@ function MessageBubble({
 // ---------------- Server Workspace ----------------
 
 function channelIcon(type) {
-  if (type === "voice") return "speaker";
-  if (type === "announcement") return "megaphone";
-  return "#";
+  return type === "voice" ? "◉" : "#";
 }
 
 function ServerWorkspace({
@@ -2064,7 +2147,8 @@ function ServerWorkspace({
   onSelectServer,
   onSelectChannel,
   onCreateServer,
-  onCreateChannel
+  onCreateChannel,
+  onOpenChannelMenu
 }) {
   return (
     <div className="servers-workspace">
@@ -2086,24 +2170,13 @@ function ServerWorkspace({
       </div>
 
       <div className="server-channel-panel">
-        <div className="server-header">
-          <strong>{selectedServer?.name || "Server"}</strong>
-          <button type="button" className="server-member-btn" title="Invite members">
-            +
-          </button>
-        </div>
-
-        <button type="button" className="server-utility-row">
-          <span>calendar</span>
-          Events
-        </button>
-        <button type="button" className="server-utility-row">
-          <span>diamond</span>
-          Server Boosts
-        </button>
-
-        <div className="server-section-list">
-          {(selectedServer?.sections || []).map((section) => (
+        {selectedServer ? (
+          <>
+            <div className="server-header">
+              <strong>{selectedServer.name}</strong>
+            </div>
+            <div className="server-section-list">
+              {(selectedServer.sections || []).map((section) => (
             <div key={section.id} className="server-section">
               <div className="server-section-title">
                 <span>{section.name}</span>
@@ -2122,21 +2195,86 @@ function ServerWorkspace({
                   type="button"
                   className={`server-channel-row${selectedChannel?.id === channel.id ? " active" : ""}`}
                   onClick={() => onSelectChannel(channel)}
+                  onContextMenu={(e) => {
+                    e.preventDefault();
+                    onOpenChannelMenu?.(channel, e.clientX, e.clientY);
+                  }}
                 >
                   <span className="server-channel-icon">{channelIcon(channel.type)}</span>
                   <span className="server-channel-name">{channel.name}</span>
-                  {selectedChannel?.id === channel.id ? <span className="server-channel-actions">+ gear</span> : null}
+                  <span className="server-channel-actions">•••</span>
                 </button>
               ))}
             </div>
-          ))}
-        </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div className="server-empty-sidebar">
+            <strong>No servers yet</strong>
+            <button type="button" className="btn btn-primary btn-sm" onClick={onCreateServer}>
+              Create server
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function ServerChannelPreview({ server, channel }) {
+function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer }) {
+  if (!server) {
+    return (
+      <div className="server-thread-preview server-thread-preview-empty">
+        <div className="server-thread-empty">
+          <h3>Create your first server</h3>
+          <p className="muted small">Tap the plus button to make a server with text and voice channels.</p>
+          <button type="button" className="btn btn-primary" onClick={onCreateServer}>
+            Create server
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (messages.length) {
+    return (
+      <div className="server-thread-preview">
+        <div className="server-thread-head">
+          <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
+          <div>
+            <strong>{channel?.name || "general"}</strong>
+            <small>{server.name}</small>
+          </div>
+        </div>
+        <div className="server-thread-messages">
+          {messages.map((message) => (
+            <div key={message.id} className="server-message-row">
+              {message.avatarUrl ? <img src={mediaUrl(message.avatarUrl)} alt="" /> : <span>{message.author?.charAt(0) || "?"}</span>}
+              <div>
+                <div className="server-message-meta">
+                  <strong>{message.author}</strong>
+                  <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+                </div>
+                <p>{message.text}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        {channel?.type === "text" ? (
+          <form className="server-thread-compose" onSubmit={onSend}>
+            <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim()}>
+              Send
+            </button>
+          </form>
+        ) : (
+          <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="server-thread-preview">
       <div className="server-thread-head">
@@ -2152,13 +2290,23 @@ function ServerChannelPreview({ server, channel }) {
         </div>
         <h3>Welcome to #{channel?.name || "general"}</h3>
         <p className="muted small">
-          This is the start of your server channel. Messaging storage can be connected after the layout feels right.
+          Send the first message in this channel.
         </p>
         <button type="button" className="server-thread-first-message">
           Send your first message
           <span>›</span>
         </button>
       </div>
+      {channel?.type === "text" ? (
+        <form className="server-thread-compose" onSubmit={onSend}>
+          <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
+          <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim()}>
+            Send
+          </button>
+        </form>
+      ) : (
+        <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
+      )}
     </div>
   );
 }
@@ -2254,8 +2402,7 @@ function CreateServerChannelModal({ sectionName, onClose, onCreate }) {
             <div className="server-channel-type-list">
               {[
                 ["text", "# Text", "Send messages, images, GIFs, emoji, opinions, and puns"],
-                ["voice", "speaker Voice", "Hang out together with voice, video, and screen share"],
-                ["forum", "forum Forum", "Create a space for organized discussions"]
+                ["voice", "◉ Voice", "Create a voice channel for future calls"]
               ].map(([id, title, copy]) => (
                 <label key={id} className="server-channel-type-row">
                   <input
@@ -2286,6 +2433,39 @@ function CreateServerChannelModal({ sectionName, onClose, onCreate }) {
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
               <button type="submit" className="btn btn-primary">Create Channel</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function ServerChannelSettingsModal({ channel, onClose, onSave, onDelete }) {
+  const [name, setName] = useState(channel?.name || "");
+
+  function submit(e) {
+    e.preventDefault();
+    const clean = name.trim().replace(/\s+/g, "-").toLowerCase();
+    if (!clean) return;
+    onSave({ name: clean });
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-channel-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>Channel settings</h3>
+            <button type="button" className="modal-close" onClick={onClose}>x</button>
+          </div>
+          <form className="modal-body" onSubmit={submit}>
+            <label className="field-label">Channel name</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            <div className="modal-footer">
+              <button type="button" className="btn btn-danger" onClick={onDelete}>Delete</button>
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Save</button>
             </div>
           </form>
         </div>

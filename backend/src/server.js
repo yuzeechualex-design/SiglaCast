@@ -489,16 +489,17 @@ async function serializeSharedPost(post) {
   if (!post) return null;
   const { data: author } = await supabase
     .from("users")
-    .select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply")
+    .select("id, name, avatar_url, profile_frame_item_id, owner_user_id, is_ai_character, ai_auto_reply")
     .eq("id", post.author_id)
     .maybeSingle();
+  const frameItemId = await profileFrameItemForAuthor(author);
   return {
     id: post.id,
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
-    authorProfileFrameItemId: author?.profile_frame_item_id || null,
-    authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id),
+    authorProfileFrameItemId: frameItemId,
+    authorProfileFrameUrl: shopItemUrl(frameItemId),
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
     authorAiAutoReply: Boolean(author?.ai_auto_reply),
@@ -508,11 +509,23 @@ async function serializeSharedPost(post) {
   };
 }
 
+async function profileFrameItemForAuthor(author) {
+  if (!author) return null;
+  if (author.profile_frame_item_id) return author.profile_frame_item_id;
+  if (!author.is_ai_character || !author.owner_user_id) return null;
+  const { data: owner } = await supabase
+    .from("users")
+    .select("profile_frame_item_id")
+    .eq("id", author.owner_user_id)
+    .maybeSingle();
+  return owner?.profile_frame_item_id || null;
+}
+
 async function serializePost(post, viewerId) {
   const [{ data: reactions }, { data: comments }, { data: author }, { data: sharedPost }] = await Promise.all([
     supabase.from("post_reactions").select("user_id, reaction").eq("post_id", post.id),
     supabase.from("post_comments").select("*").eq("post_id", post.id).order("created_at", { ascending: true }),
-    supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply").eq("id", post.author_id).maybeSingle(),
+    supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, owner_user_id, is_ai_character, ai_auto_reply").eq("id", post.author_id).maybeSingle(),
     post.shared_post_id
       ? supabase.from("posts").select("*").eq("id", post.shared_post_id).maybeSingle()
       : Promise.resolve({ data: null })
@@ -532,15 +545,24 @@ async function serializePost(post, viewerId) {
       : null;
 
   let commentAuthors = new Map();
+  let commentOwnerFrameById = new Map();
   let reactionsByCommentId = new Map();
   if (comments?.length) {
     const commentIds = comments.map((c) => c.id);
     const authorIds = [...new Set(comments.map((c) => c.author_id))];
     const [{ data: users }, { data: cra }] = await Promise.all([
-      supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, is_ai_character, ai_auto_reply").in("id", authorIds),
+      supabase.from("users").select("id, name, avatar_url, profile_frame_item_id, owner_user_id, is_ai_character, ai_auto_reply").in("id", authorIds),
       supabase.from("comment_reactions").select("comment_id, user_id, reaction").in("comment_id", commentIds)
     ]);
     commentAuthors = new Map((users || []).map((u) => [u.id, u]));
+    const ownerIds = [...new Set((users || []).filter((u) => u.is_ai_character && u.owner_user_id).map((u) => u.owner_user_id))];
+    if (ownerIds.length) {
+      const { data: owners } = await supabase
+        .from("users")
+        .select("id, profile_frame_item_id")
+        .in("id", ownerIds);
+      commentOwnerFrameById = new Map((owners || []).map((owner) => [owner.id, owner.profile_frame_item_id || null]));
+    }
     for (const r of cra || []) {
       if (!reactionsByCommentId.has(r.comment_id)) {
         reactionsByCommentId.set(r.comment_id, {
@@ -562,6 +584,7 @@ async function serializePost(post, viewerId) {
   // UI stays readable (Facebook style).
   const flat = (comments || []).map((c) => {
     const a = commentAuthors.get(c.author_id);
+    const frameItemId = a?.profile_frame_item_id || (a?.is_ai_character ? commentOwnerFrameById.get(a.owner_user_id) : null) || null;
     const rxInfo = reactionsByCommentId.get(c.id) || { breakdown: {}, mine: null, count: 0 };
     return {
       id: c.id,
@@ -569,8 +592,8 @@ async function serializePost(post, viewerId) {
       userId: c.author_id,
       author: a?.name || "Unknown",
       authorAvatar: a?.avatar_url || null,
-      authorProfileFrameItemId: a?.profile_frame_item_id || null,
-      authorProfileFrameUrl: shopItemUrl(a?.profile_frame_item_id),
+      authorProfileFrameItemId: frameItemId,
+      authorProfileFrameUrl: shopItemUrl(frameItemId),
       authorIsAiCharacter: Boolean(a?.is_ai_character),
       authorAiAutoReply: Boolean(a?.ai_auto_reply),
       text: c.content,
@@ -612,13 +635,14 @@ async function serializePost(post, viewerId) {
     });
   }
 
+  const authorFrameItemId = await profileFrameItemForAuthor(author);
   return {
     id: post.id,
     authorId: post.author_id,
     author: author?.name || "Unknown",
     authorAvatar: author?.avatar_url || null,
-    authorProfileFrameItemId: author?.profile_frame_item_id || null,
-    authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id),
+    authorProfileFrameItemId: authorFrameItemId,
+    authorProfileFrameUrl: shopItemUrl(authorFrameItemId),
     authorIsAiCharacter: Boolean(author?.is_ai_character),
     authorTag: author?.is_ai_character ? "AI Character" : null,
     authorAiAutoReply: Boolean(author?.ai_auto_reply),
