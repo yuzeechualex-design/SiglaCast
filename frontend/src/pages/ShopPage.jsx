@@ -7,9 +7,25 @@ function shopAssetUrl(url) {
   return mediaUrl(url);
 }
 
-function coinLabel(value) {
+function CoinIcon({ className = "" }) {
+  return <img className={`coin-icon${className ? ` ${className}` : ""}`} src="/assets/purxu-coin.png" alt="" aria-hidden="true" />;
+}
+
+function CoinAmount({ value, suffix = "coins", className = "" }) {
   const n = Number(value) || 0;
-  return `${n.toLocaleString()} coins`;
+  return (
+    <span className={`coin-amount${className ? ` ${className}` : ""}`}>
+      <CoinIcon />
+      <strong>{n.toLocaleString()}</strong>
+      {suffix ? <small>{suffix}</small> : null}
+    </span>
+  );
+}
+
+function PriceLabel({ value }) {
+  const n = Number(value) || 0;
+  if (n === 0) return <span className="coin-price-free">Free</span>;
+  return <CoinAmount value={n} />;
 }
 
 function GachaModal({ gacha, wallet, onClose, onDraw }) {
@@ -117,7 +133,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
             {(reward || pendingReward) ? (
               <>
                 <img src={shopAssetUrl((reward || pendingReward).imageUrl)} alt="" />
-                <span>{reward ? "You got" : "Landing on"}</span>
+                {reward ? <span>You got</span> : null}
                 <strong>{(reward || pendingReward).name}</strong>
               </>
             ) : (
@@ -151,10 +167,15 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
         <div className="gacha-modal-footer">
           <div className="gacha-draw-info">
             <span>{availableCount} rewards left</span>
-            <strong>{coinLabel(wallet?.coins ?? 0)}</strong>
+            <CoinAmount value={wallet?.coins ?? 0} />
           </div>
           <button type="button" className="btn btn-primary gacha-draw-btn" disabled={drawing || complete || !canAfford} onClick={draw}>
-            {drawing ? "Drawing..." : complete ? "Complete" : `Draw ${coinLabel(gacha?.nextCost ?? 0)}`}
+            {drawing ? "Drawing..." : complete ? "Complete" : (
+              <>
+                <span>Draw</span>
+                <CoinAmount value={gacha?.nextCost ?? 0} suffix="" className="coin-amount-inline" />
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -193,9 +214,7 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
           <h2>Cosmetics</h2>
         </div>
         <div className="shop-wallet">
-          <span>coin</span>
-          <strong>{wallet?.coins ?? 0}</strong>
-          <small>coins</small>
+          <CoinAmount value={wallet?.coins ?? 0} />
         </div>
       </div>
 
@@ -208,7 +227,9 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
             <strong>Alien Stage Frames</strong>
             <em>Badges and rare character frames. No duplicate rewards.</em>
           </span>
-          <span className="shop-gacha-banner-cta">Draw {coinLabel(gacha.nextCost)}</span>
+          <span className="shop-gacha-banner-cta">
+            Draw <CoinAmount value={gacha.nextCost} suffix="" className="coin-amount-inline" />
+          </span>
         </button>
       ) : null}
 
@@ -240,7 +261,7 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
               <h3>{item.name}</h3>
               <p>{item.description}</p>
               <div className="shop-card-footer">
-                <strong>{(item.effectivePrice ?? item.price) === 0 ? "Free" : coinLabel(item.effectivePrice ?? item.price)}</strong>
+                <PriceLabel value={item.effectivePrice ?? item.price} />
                 <button type="button" className="btn btn-primary" disabled={item.owned || !item.unlocked} onClick={() => onBuy?.(item.id)}>
                   {item.owned ? "Owned" : item.unlocked ? "Buy" : "Locked"}
                 </button>

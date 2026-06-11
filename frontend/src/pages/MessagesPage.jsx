@@ -28,6 +28,7 @@ const CHAT_REACTION_MAP = CHAT_REACTIONS.reduce((acc, r) => {
 
 const DEFAULT_SERVER_ICON = "/assets/purxu-logo.png";
 const DEFAULT_SERVERS = [];
+const SERVER_INVITE_PARAM = "serverInvite";
 
 function loadLocalServers() {
   if (typeof window === "undefined") return DEFAULT_SERVERS;
@@ -68,6 +69,60 @@ function saveLocalServers(servers) {
   } catch (_) {
     // Ignore storage quota/private mode errors.
   }
+}
+
+function encodeServerInvite(server) {
+  if (!server?.id || !server?.name) return "";
+  const payload = {
+    id: server.id,
+    name: server.name,
+    iconUrl: server.iconUrl || DEFAULT_SERVER_ICON,
+    sections: server.sections || []
+  };
+  try {
+    return btoa(unescape(encodeURIComponent(JSON.stringify(payload))))
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+  } catch (_) {
+    return "";
+  }
+}
+
+function decodeServerInvite(raw) {
+  if (!raw) return null;
+  try {
+    const normalized = String(raw).replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const payload = JSON.parse(decodeURIComponent(escape(atob(padded))));
+    if (!payload?.id || !payload?.name) return null;
+    const sections = Array.isArray(payload.sections) && payload.sections.length
+      ? payload.sections
+      : [
+          { id: "text", name: "Text Channels", channels: [{ id: `general-${payload.id}`, type: "text", name: "general" }] },
+          { id: "voice", name: "Voice Channels", channels: [{ id: `lobby-${payload.id}`, type: "voice", name: "Lobby" }] }
+        ];
+    return {
+      id: String(payload.id),
+      name: String(payload.name).slice(0, 80),
+      iconUrl: payload.iconUrl || DEFAULT_SERVER_ICON,
+      sections
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+function serverInviteUrl(server) {
+  const code = encodeServerInvite(server);
+  if (!code || typeof window === "undefined") return "";
+  return `${window.location.origin}/messages?${SERVER_INVITE_PARAM}=${encodeURIComponent(code)}`;
+}
+
+function findServerInvite(text) {
+  const match = String(text || "").match(/[^\s]*(?:\?|&)serverInvite=([A-Za-z0-9_-]+)/);
+  if (!match) return null;
+  return decodeServerInvite(match[1]);
 }
 
 function presenceDotAttrs(entity) {
@@ -173,6 +228,8 @@ export default function MessagesPage({
   const [serverMessages, setServerMessages] = useState(loadServerMessages);
   const [serverDraft, setServerDraft] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
+  const [inviteServer, setInviteServer] = useState(null);
+  const [pendingServerInvite, setPendingServerInvite] = useState(null);
   const [createChannelContext, setCreateChannelContext] = useState(null);
   const [channelMenu, setChannelMenu] = useState(null);
   const [channelSettings, setChannelSettings] = useState(null);
@@ -193,6 +250,25 @@ export default function MessagesPage({
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkDm = searchParams.get("dm");
   const deepLinkGroup = searchParams.get("group");
+  const deepLinkServerInvite = searchParams.get(SERVER_INVITE_PARAM);
+
+  useEffect(() => {
+    if (!deepLinkServerInvite) return undefined;
+    const invite = decodeServerInvite(deepLinkServerInvite);
+    if (invite) {
+      setPendingServerInvite(invite);
+      setChatTab("servers");
+    }
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete(SERVER_INVITE_PARAM);
+        return next;
+      },
+      { replace: true }
+    );
+    return undefined;
+  }, [deepLinkServerInvite, setSearchParams]);
 
   useEffect(() => {
     if (!deepLinkDm && !deepLinkGroup) return undefined;
@@ -357,6 +433,19 @@ export default function MessagesPage({
     setSelectedChannelId(nextServer.sections[0].channels[0].id);
     setShowCreateServer(false);
     setChatTab("servers");
+  }
+
+  function joinInvitedServer(server) {
+    if (!server?.id) return;
+    setServers((prev) => {
+      const existing = prev.find((row) => row.id === server.id);
+      if (existing) return prev;
+      return [server, ...prev];
+    });
+    setSelectedServerId(server.id);
+    setSelectedChannelId(server.sections?.[0]?.channels?.[0]?.id || "");
+    setChatTab("servers");
+    setPendingServerInvite(null);
   }
 
   function updateChannel(channelId, updates) {
@@ -1028,6 +1117,7 @@ export default function MessagesPage({
                   sectionName: section.name
                 })
               }
+              onInviteServer={(server) => setInviteServer(server)}
               onOpenChannelMenu={(channel, x, y) => setChannelMenu({ channel, x, y })}
             />
           )}
@@ -1044,6 +1134,7 @@ export default function MessagesPage({
               onSend={sendServerMessage}
               currentUser={currentUser}
               onCreateServer={() => setShowCreateServer(true)}
+              onJoinServerInvite={joinInvitedServer}
             />
           ) : !activeChat ? (
             <div className="thread-empty">
@@ -1374,6 +1465,7 @@ export default function MessagesPage({
                       onUnsend={handleUnsend}
                       onOpenReactors={(id) => setReactionModal({ open: true, messageId: id })}
                       onOpenUserProfile={onOpenUserProfile}
+                      onJoinServerInvite={joinInvitedServer}
                       liteMode={liteMode}
                     />
                     ))}
@@ -1694,6 +1786,18 @@ export default function MessagesPage({
         />
       ) : null}
 
+      {inviteServer ? (
+        <ServerInviteModal server={inviteServer} onClose={() => setInviteServer(null)} />
+      ) : null}
+
+      {pendingServerInvite ? (
+        <ServerJoinModal
+          server={pendingServerInvite}
+          onClose={() => setPendingServerInvite(null)}
+          onJoin={() => joinInvitedServer(pendingServerInvite)}
+        />
+      ) : null}
+
       {reactionModal.open && reactionModal.messageId ? (
         <ReactionActorsModal
           title="Reactions"
@@ -1797,6 +1901,7 @@ function MessageBubble({
   onUnsend,
   onOpenReactors,
   onOpenUserProfile,
+  onJoinServerInvite,
   liteMode = false
 }) {
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -1979,6 +2084,7 @@ function MessageBubble({
   }
 
   const profilePeek = senderProfilePeek();
+  const serverInvite = !unsent ? findServerInvite(m.text) : null;
 
   function renderIncomingAvatar() {
     const avatarInner = m.authorAvatar ? (
@@ -2055,6 +2161,9 @@ function MessageBubble({
               <>
                 {m.attachment ? <MessageAttachment att={m.attachment} liteMode={liteMode} /> : null}
                 {m.text ? <p><MentionText text={m.text} /></p> : null}
+                {serverInvite ? (
+                  <ServerInviteCard server={serverInvite} onJoin={() => onJoinServerInvite?.(serverInvite)} />
+                ) : null}
               </>
             )}
             <div className="bubble-meta-row">
@@ -2140,6 +2249,96 @@ function channelIcon(type) {
   return type === "voice" ? "◉" : "#";
 }
 
+function ServerInviteCard({ server, onJoin }) {
+  if (!server) return null;
+  const memberText = "Local server invite";
+  return (
+    <div className="server-invite-card">
+      <div className="server-invite-card-banner" aria-hidden />
+      <div className="server-invite-card-body">
+        <span className="server-invite-card-icon">
+          {server.iconUrl ? <img src={server.iconUrl} alt="" /> : <span>{server.name?.charAt(0) || "S"}</span>}
+        </span>
+        <div className="server-invite-card-copy">
+          <strong>{server.name}</strong>
+          <small>{memberText}</small>
+        </div>
+        {onJoin ? (
+          <button type="button" className="btn btn-primary btn-sm" onClick={onJoin}>
+            Join Server
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function ServerInviteModal({ server, onClose }) {
+  const [copied, setCopied] = useState(false);
+  const link = serverInviteUrl(server);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+    } catch (_) {
+      setCopied(false);
+    }
+  }
+
+  if (!server) return null;
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-invite-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <div>
+              <h3>Invite to {server.name}</h3>
+              <p className="muted small">Paste this link in any chat and it will show a Join Server card.</p>
+            </div>
+            <button type="button" className="modal-close" onClick={onClose} title="Close">x</button>
+          </div>
+          <div className="modal-body">
+            <ServerInviteCard server={server} />
+            <div className="server-invite-copy-row">
+              <input value={link} readOnly />
+              <button type="button" className="btn btn-primary" onClick={copy}>
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function ServerJoinModal({ server, onClose, onJoin }) {
+  if (!server) return null;
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-invite-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <div>
+              <h3>Join server</h3>
+              <p className="muted small">This invite will add the server to your Servers tab.</p>
+            </div>
+            <button type="button" className="modal-close" onClick={onClose} title="Close">x</button>
+          </div>
+          <div className="modal-body">
+            <ServerInviteCard server={server} />
+            <div className="server-invite-actions">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button type="button" className="btn btn-primary" onClick={onJoin}>Join Server</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
 function ServerWorkspace({
   servers,
   selectedServer,
@@ -2148,6 +2347,7 @@ function ServerWorkspace({
   onSelectChannel,
   onCreateServer,
   onCreateChannel,
+  onInviteServer,
   onOpenChannelMenu
 }) {
   return (
@@ -2174,6 +2374,14 @@ function ServerWorkspace({
           <>
             <div className="server-header">
               <strong>{selectedServer.name}</strong>
+              <button
+                type="button"
+                className="server-invite-btn"
+                onClick={() => onInviteServer?.(selectedServer)}
+                title="Invite to server"
+              >
+                Invite
+              </button>
             </div>
             <div className="server-section-list">
               {(selectedServer.sections || []).map((section) => (
@@ -2222,7 +2430,7 @@ function ServerWorkspace({
   );
 }
 
-function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer }) {
+function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer, onJoinServerInvite }) {
   if (!server) {
     return (
       <div className="server-thread-preview server-thread-preview-empty">
@@ -2257,6 +2465,12 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
                   <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
                 </div>
                 <p>{message.text}</p>
+                {findServerInvite(message.text) ? (
+                  <ServerInviteCard
+                    server={findServerInvite(message.text)}
+                    onJoin={() => onJoinServerInvite?.(findServerInvite(message.text))}
+                  />
+                ) : null}
               </div>
             </div>
           ))}

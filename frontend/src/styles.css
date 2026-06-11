@@ -5353,6 +5353,21 @@ textarea.profile-bio-input::placeholder {
   border-bottom: 1px solid rgba(196, 181, 253, 0.16);
 }
 
+.server-invite-btn {
+  border: 1px solid rgba(196, 181, 253, 0.28);
+  border-radius: 8px;
+  padding: 6px 9px;
+  background: rgba(139, 92, 246, 0.18);
+  color: #f8f5ff;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.server-invite-btn:hover {
+  background: rgba(139, 92, 246, 0.32);
+}
+
 .server-member-btn,
 .server-channel-add {
   border: 0;
@@ -5576,6 +5591,93 @@ textarea.profile-bio-input::placeholder {
 .server-message-row p {
   margin: 2px 0 0;
   color: rgba(255, 255, 255, 0.88);
+}
+
+.server-invite-card {
+  width: min(320px, 100%);
+  overflow: hidden;
+  margin-top: 8px;
+  border: 1px solid rgba(196, 181, 253, 0.22);
+  border-radius: 14px;
+  background: rgba(25, 20, 35, 0.82);
+  color: #fff;
+}
+
+.server-invite-card-banner {
+  height: 72px;
+  background:
+    radial-gradient(circle at 75% 12%, rgba(255, 255, 255, 0.22), transparent 8rem),
+    linear-gradient(135deg, #2e1065, #7c3aed 58%, #f472b6);
+}
+
+.server-invite-card-body {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  padding: 0 12px 12px;
+}
+
+.server-invite-card-body .btn {
+  grid-column: 1 / -1;
+  margin-top: 8px;
+}
+
+.server-invite-card-icon {
+  width: 54px;
+  height: 54px;
+  margin-top: -24px;
+  border: 4px solid rgba(25, 20, 35, 0.98);
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background: #2f2d38;
+  color: #fff;
+  font-weight: 1000;
+}
+
+.server-invite-card-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.server-invite-card-copy {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.server-invite-card-copy strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.server-invite-card-copy small {
+  color: rgba(255, 255, 255, 0.68);
+}
+
+.server-invite-modal {
+  width: min(520px, 94vw);
+}
+
+.server-invite-copy-row,
+.server-invite-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.server-invite-copy-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.server-invite-actions {
+  justify-content: flex-end;
 }
 
 .server-thread-compose {
@@ -12199,13 +12301,47 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   box-shadow: var(--shadow-soft);
 }
 
-.shop-wallet span {
-  color: var(--blue-700);
+.coin-amount {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--ink-900);
+  font-weight: 1000;
+  white-space: nowrap;
 }
 
-.shop-wallet small {
+.coin-amount-inline {
+  color: inherit;
+}
+
+.coin-amount small {
   color: var(--ink-600);
   font-weight: 800;
+}
+
+.coin-amount-inline small,
+.shop-gacha-banner-cta .coin-amount small,
+.gacha-draw-btn .coin-amount small {
+  color: inherit;
+}
+
+.coin-icon {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: 0 3px 10px rgba(124, 58, 237, 0.32);
+}
+
+.shop-wallet .coin-icon {
+  width: 30px;
+  height: 30px;
+}
+
+.coin-price-free {
+  color: var(--blue-700);
+  font-weight: 1000;
 }
 
 .shop-hero {
@@ -12815,6 +12951,10 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .gacha-draw-btn {
   min-width: 190px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
 }
 
 @media (max-width: 720px) {
