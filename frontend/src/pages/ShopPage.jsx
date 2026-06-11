@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { mediaUrl } from "../services/api.js";
 
 function shopAssetUrl(url) {
@@ -12,35 +12,63 @@ function coinLabel(value) {
   return `${n.toLocaleString()} coins`;
 }
 
-function GachaModal({ gacha, avatarUrl, wallet, onClose, onDraw }) {
+function GachaModal({ gacha, wallet, onClose, onDraw }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [drawing, setDrawing] = useState(false);
   const [reward, setReward] = useState(null);
+  const [pendingReward, setPendingReward] = useState(null);
+  const [reelKey, setReelKey] = useState(0);
+  const [reelStop, setReelStop] = useState("-58%");
   const [error, setError] = useState("");
+  const stageRef = useRef(null);
   const availableCount = (gacha?.pool || []).filter((item) => !item.owned).length;
   const complete = availableCount === 0;
   const canAfford = (wallet?.coins ?? 0) >= (gacha?.nextCost ?? 0);
   const reelItems = useMemo(() => {
     const pool = gacha?.pool?.length ? gacha.pool : [];
-    return [...pool, ...pool, ...pool].slice(0, 24);
-  }, [gacha?.pool]);
+    const visualPool = pool.length ? pool : [];
+    const base = [...visualPool, ...visualPool, ...visualPool, ...visualPool, ...visualPool];
+    const target = pendingReward || reward;
+    if (!target || !visualPool.length) return base.slice(0, 40);
+    const rewardIndex = visualPool.findIndex((item) => item.id === target.id);
+    if (rewardIndex < 0) return base.slice(0, 40);
+    const landingIndex = visualPool.length * 3 + rewardIndex;
+    return base.slice(0, Math.max(landingIndex + visualPool.length, 32));
+  }, [gacha?.pool, pendingReward, reward]);
+
+  function calculateReelStop(target) {
+    const pool = gacha?.pool?.length ? gacha.pool : [];
+    const rewardIndex = pool.findIndex((item) => item.id === target?.id);
+    if (rewardIndex < 0) return "-58%";
+    const stageWidth = stageRef.current?.getBoundingClientRect?.().width || 900;
+    const tileWidth = 96;
+    const gap = 14;
+    const pad = 24;
+    const landingIndex = pool.length * 3 + rewardIndex;
+    const tileCenter = pad + landingIndex * (tileWidth + gap) + tileWidth / 2;
+    return `${Math.round(stageWidth / 2 - tileCenter)}px`;
+  }
 
   async function draw() {
     if (!gacha?.id || drawing || complete) return;
     setError("");
     setReward(null);
-    setDrawing(true);
-    const started = Date.now();
+    setPendingReward(null);
     const res = await onDraw?.(gacha.id);
-    const wait = Math.max(0, 5000 - (Date.now() - started));
+    if (!res || res.error) {
+      setError(res?.error || "Draw failed. Try again.");
+      setDrawing(false);
+      return;
+    }
+    setPendingReward(res.reward);
+    setReelStop(calculateReelStop(res.reward));
+    setReelKey((key) => key + 1);
+    window.requestAnimationFrame(() => setDrawing(true));
     window.setTimeout(() => {
       setDrawing(false);
-      if (!res || res.error) {
-        setError(res?.error || "Draw failed. Try again.");
-        return;
-      }
       setReward(res.reward);
-    }, wait);
+      setPendingReward(null);
+    }, 5000);
   }
 
   return (
@@ -68,20 +96,33 @@ function GachaModal({ gacha, avatarUrl, wallet, onClose, onDraw }) {
           </div>
         ) : null}
 
-        <div className="gacha-stage">
-          <div className={`gacha-reel${drawing ? " is-drawing" : ""}`}>
+        <div className="gacha-stage" ref={stageRef}>
+          <div
+            key={reelKey}
+            className={`gacha-reel${drawing ? " is-drawing" : ""}`}
+            style={{ "--gacha-reel-stop": reelStop }}
+          >
             {reelItems.map((item, index) => (
-              <div key={`${item.id}-${index}`} className={`gacha-reel-tile ${item.type === "profile_frame" ? "rare" : ""}`}>
+              <div
+                key={`${item.id}-${index}`}
+                className={`gacha-reel-tile ${item.type === "profile_frame" ? "rare" : ""}${(pendingReward || reward)?.id === item.id ? " is-result" : ""}`}
+              >
                 <img src={shopAssetUrl(item.imageUrl)} alt="" />
               </div>
             ))}
           </div>
           <div className="gacha-focus-ring" aria-hidden />
-          <div className="gacha-avatar-preview">
-            {reward?.type === "profile_frame" ? (
-              <img className="gacha-result-frame" src={shopAssetUrl(reward.imageUrl)} alt="" />
-            ) : null}
-            <img className="gacha-result-avatar" src={avatarUrl} alt="" />
+          <div className="gacha-pointer" aria-hidden />
+          <div className="gacha-win-indicator">
+            {(reward || pendingReward) ? (
+              <>
+                <img src={shopAssetUrl((reward || pendingReward).imageUrl)} alt="" />
+                <span>{reward ? "You got" : "Landing on"}</span>
+                <strong>{(reward || pendingReward).name}</strong>
+              </>
+            ) : (
+              <span>Reward lands here</span>
+            )}
           </div>
         </div>
 
@@ -214,7 +255,6 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
         <GachaModal
           gacha={gacha}
           wallet={wallet}
-          avatarUrl={avatarUrl}
           onClose={() => setGachaOpen(false)}
           onDraw={onDrawGacha}
         />

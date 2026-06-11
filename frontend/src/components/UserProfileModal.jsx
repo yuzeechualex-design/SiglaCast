@@ -152,7 +152,8 @@ export default function UserProfileModal({
         musicNowPlaying: prefetch?.musicNowPlaying,
         profileFrameUrl: prefetch?.profileFrameUrl,
         profileFrameItemId: prefetch?.profileFrameItemId,
-        profileBadges: prefetch?.profileBadges
+        profileBadges: prefetch?.profileBadges,
+        profileBonds: prefetch?.profileBonds
       };
 
   const isSelf = currentUser?.id === userId;
@@ -273,6 +274,23 @@ export default function UserProfileModal({
                   </p>
                   {merged.statusNote ? <p className="user-profile-custom-status">{merged.statusNote}</p> : null}
                   <ProfileBadgeShowcase badges={merged.profileBadges} compact />
+                  {Array.isArray(merged.profileBonds) && merged.profileBonds.length ? (
+                    <div className="user-profile-bonds-card">
+                      <span className="muted small">Bonds</span>
+                      <div className="profile-bonds-mini-list user-profile-bonds-list">
+                        {merged.profileBonds.slice(0, 3).map((bond) => (
+                          <span
+                            key={bond.targetUserId}
+                            title={`${bond.target?.name || "Unknown"} · ${bond.levelLabel} Bond`}
+                            className="profile-bond-mini-avatar"
+                          >
+                            {bond.target?.avatarUrl ? <img src={mediaUrl(bond.target.avatarUrl)} alt="" /> : <span>{bond.target?.name?.charAt(0) || "?"}</span>}
+                            <small>{bond.levelLabel}</small>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                   {merged.musicNowPlaying?.title ? (
                     <div className="profile-music-playing-card">
                       <div className="profile-music-playing-head muted small">

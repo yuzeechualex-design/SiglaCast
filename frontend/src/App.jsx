@@ -308,6 +308,23 @@ export default function App() {
     return true;
   }
 
+  async function equipProfileBadges(itemIds) {
+    const res = await api("/profile/badges", {
+      method: "PATCH",
+      body: { itemIds: Array.isArray(itemIds) ? itemIds : [] }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return false;
+    }
+    if (res.user) {
+      setUser(res.user);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+    }
+    setNotice(itemIds?.length ? "Profile badges updated" : "Profile badges removed");
+    return true;
+  }
+
   function startSocialLogin(provider) {
     if (loadingAuth) return;
     const callbackUrl = `${window.location.origin}/auth/callback`;
@@ -1947,6 +1964,7 @@ export default function App() {
               onTogglePinnedBond={togglePinnedBond}
               shopItems={shopState.items}
               onEquipProfileFrame={equipProfileFrame}
+              onEquipProfileBadges={equipProfileBadges}
             />
           }
         />

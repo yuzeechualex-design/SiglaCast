@@ -311,6 +311,23 @@ function serializeBond(row, target) {
   };
 }
 
+async function publicPinnedBondsForUser(userId) {
+  const { data: rows, error } = await supabase
+    .from("user_bonds")
+    .select("*")
+    .eq("user_id", userId)
+    .eq("pinned", true)
+    .gte("exp", 200)
+    .order("updated_at", { ascending: false })
+    .limit(3);
+  if (error || !rows?.length) return [];
+  const targetIds = [...new Set(rows.map((row) => row.target_user_id).filter(Boolean))];
+  if (!targetIds.length) return [];
+  const { data: users } = await supabase.from("users").select("*").in("id", targetIds);
+  const byId = new Map((users || []).map((user) => [user.id, user]));
+  return rows.map((row) => serializeBond(row, byId.get(row.target_user_id))).filter((bond) => bond.target);
+}
+
 async function fetchWallet(userId) {
   const { data, error } = await supabase.from("user_wallets").select("*").eq("user_id", userId).maybeSingle();
   if (error) return { userId, coins: 0 };
@@ -2515,6 +2532,15 @@ app.get("/api/shop", authenticate, async (req, res) => {
           description: "Won from the Alien Stage gacha collection.",
           owned: owned.has(item.id),
           unlocked: owned.has(item.id)
+        })),
+        ...ALIEN_STAGE_GACHA_ITEMS.filter((item) => item.type === "profile_badge").map((item) => ({
+          ...item,
+          source: "gacha_reward",
+          price: 0,
+          effectivePrice: 0,
+          description: "Won from the Alien Stage gacha collection.",
+          owned: owned.has(item.id),
+          unlocked: owned.has(item.id)
         }))
       ],
       gacha: {
@@ -2587,16 +2613,10 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
     await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: reward.id });
     const wallet = await addWalletCoins(req.user.id, -cost);
 
-    const existingBadges = Array.isArray(req.user.profile_badge_item_ids) ? req.user.profile_badge_item_ids : [];
-    const nextBadges =
-      reward.type === "profile_badge" && !existingBadges.includes(reward.id)
-        ? [...existingBadges, reward.id].slice(0, 8)
-        : existingBadges;
     const { data: updatedUser } = await supabase
       .from("users")
       .update({
-        alien_stage_gacha_draws: drawCount + 1,
-        profile_badge_item_ids: nextBadges
+        alien_stage_gacha_draws: drawCount + 1
       })
       .eq("id", req.user.id)
       .select("*")
@@ -2621,6 +2641,38 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
         }))
       }
     });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.patch("/api/profile/badges", authenticate, async (req, res) => {
+  try {
+    const rawIds = Array.isArray(req.body?.itemIds) ? req.body.itemIds : [];
+    const selected = [...new Set(rawIds.map((id) => String(id || "").trim()).filter(Boolean))].slice(0, 8);
+    const badgeItems = selected.map((id) => shopItemById(id));
+    if (badgeItems.some((item) => !item)) return res.status(404).json({ error: "Profile badge not found" });
+    if (badgeItems.some((item) => item.type !== "profile_badge")) {
+      return res.status(400).json({ error: "Only profile badges can be equipped here." });
+    }
+    if (!userHasFreeShop(req.user) && selected.length) {
+      const { data: purchases } = await supabase
+        .from("user_shop_purchases")
+        .select("item_id")
+        .eq("user_id", req.user.id)
+        .in("item_id", selected);
+      const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
+      const missing = selected.find((id) => !owned.has(id));
+      if (missing) return res.status(403).json({ error: "Win this badge before adding it to your profile." });
+    }
+    const { data, error } = await supabase
+      .from("users")
+      .update({ profile_badge_item_ids: selected })
+      .eq("id", req.user.id)
+      .select("*")
+      .maybeSingle();
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ user: authUserPayload(data) });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
@@ -4290,6 +4342,7 @@ app.get("/api/users/:userId", authenticate, async (req, res) => {
 
     const profile = {
       ...publicProfileWithPresence(row, me, onlineSet),
+      profileBonds: await publicPinnedBondsForUser(targetId),
       isFriend,
       incomingRequestId,
       outgoingRequestPending

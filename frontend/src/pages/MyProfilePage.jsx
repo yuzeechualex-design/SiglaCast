@@ -117,7 +117,8 @@ export default function MyProfilePage({
   bonds = [],
   onTogglePinnedBond,
   shopItems = [],
-  onEquipProfileFrame
+  onEquipProfileFrame,
+  onEquipProfileBadges
 }) {
   const [profileMode, setProfileMode] = useState("profile");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
@@ -133,11 +134,13 @@ export default function MyProfilePage({
   const statusLine = [displayUser.statusEmoji, displayUser.statusNote].filter(Boolean).join(" ");
   const musicLine = displayUser.isAiCharacter ? "" : listeningStatusLine(displayUser);
   const [rxModal, setRxModal] = useState({ open: false, path: "", title: "" });
-  const [framePickerOpen, setFramePickerOpen] = useState(false);
+  const [cosmeticPickerOpen, setCosmeticPickerOpen] = useState(false);
+  const [cosmeticTab, setCosmeticTab] = useState("frames");
   const [bondPickerOpen, setBondPickerOpen] = useState(false);
   const [bondViewerOpen, setBondViewerOpen] = useState(false);
   const [bondSearch, setBondSearch] = useState("");
   const [selectedFrameId, setSelectedFrameId] = useState(displayUser.profileFrameItemId || "");
+  const [selectedBadgeIds, setSelectedBadgeIds] = useState(displayUser.profileBadgeItemIds || []);
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
@@ -157,8 +160,11 @@ export default function MyProfilePage({
       : [];
   const frameItems = (shopItems.length ? shopItems : frameFallback).filter((item) => item.type === "profile_frame");
   const ownedFrameItems = frameItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const badgeItems = shopItems.filter((item) => item.type === "profile_badge");
+  const ownedBadgeItems = badgeItems.filter((item) => item.owned || item.effectivePrice === 0);
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
-  const eligibleBonds = isOwnProfile ? bonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target) : [];
+  const displayBonds = isOwnProfile ? bonds : displayUser.profileBonds || [];
+  const eligibleBonds = displayBonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target);
   const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
   const normalizedBondSearch = bondSearch.trim().toLowerCase();
   const filteredEligibleBonds = eligibleBonds.filter((bond) => {
@@ -246,7 +252,9 @@ export default function MyProfilePage({
                 title="Choose profile frame"
                 onClick={() => {
                   setSelectedFrameId(displayUser.profileFrameItemId || ownedFrameItems[0]?.id || "");
-                  setFramePickerOpen(true);
+                  setSelectedBadgeIds(displayUser.profileBadgeItemIds || []);
+                  setCosmeticTab("frames");
+                  setCosmeticPickerOpen(true);
                 }}
               >
                 +
@@ -274,26 +282,30 @@ export default function MyProfilePage({
           <a href="#profile-status">Status</a>
         </nav>
 
-        {isOwnProfile ? (
+        {isOwnProfile || pinnedBonds.length ? (
           <div className="profile-bonds-mini">
             <div className="profile-bonds-mini-head">
               <strong>Bonds</strong>
-              <button
-                type="button"
-                className="profile-bonds-add-btn"
-                title="Add bond"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setBondPickerOpen(true);
-                }}
-              >
-                +
-              </button>
+              {isOwnProfile ? (
+                <button
+                  type="button"
+                  className="profile-bonds-add-btn"
+                  title="Add bond"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setBondPickerOpen(true);
+                  }}
+                >
+                  +
+                </button>
+              ) : null}
             </div>
             <button
               type="button"
               className="profile-bonds-mini-list"
-              onClick={() => setBondViewerOpen(true)}
+              onClick={() => {
+                if (eligibleBonds.length) setBondViewerOpen(true);
+              }}
               title="View bonds"
             >
               {pinnedBonds.length ? pinnedBonds.map((bond) => (
@@ -315,7 +327,7 @@ export default function MyProfilePage({
 
       {bondViewerOpen ? (
         <BondLibraryModal
-          title="Your bonds"
+          title={isOwnProfile ? "Your bonds" : `${displayUser.name || "User"}'s bonds`}
           bonds={eligibleBonds}
           onClose={() => setBondViewerOpen(false)}
           onTogglePinnedBond={onTogglePinnedBond}
@@ -335,20 +347,36 @@ export default function MyProfilePage({
         />
       ) : null}
 
-      {framePickerOpen ? (
-        <div className="profile-frame-modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose profile frame">
+      {cosmeticPickerOpen ? (
+        <div className="profile-frame-modal-backdrop" role="dialog" aria-modal="true" aria-label="Choose profile cosmetics">
           <div className="profile-frame-modal">
             <div className="profile-frame-modal-head">
               <div>
-                <p>Avatar frames</p>
-                <h3>Choose your profile frame</h3>
+                <p>Profile cosmetics</p>
+                <h3>Choose what shows on your profile</h3>
               </div>
-              <button type="button" onClick={() => setFramePickerOpen(false)} aria-label="Close">
+              <button type="button" onClick={() => setCosmeticPickerOpen(false)} aria-label="Close">
                 ×
               </button>
             </div>
-            <div className="profile-frame-modal-body">
-              <div className="profile-frame-preview">
+            <div className="profile-cosmetic-tabs" role="tablist" aria-label="Profile cosmetics">
+              <button
+                type="button"
+                className={cosmeticTab === "frames" ? "active" : ""}
+                onClick={() => setCosmeticTab("frames")}
+              >
+                Frames
+              </button>
+              <button
+                type="button"
+                className={cosmeticTab === "badges" ? "active" : ""}
+                onClick={() => setCosmeticTab("badges")}
+              >
+                Badges
+              </button>
+            </div>
+            <div className={`profile-frame-modal-body profile-cosmetic-body is-${cosmeticTab}`}>
+              <div className="profile-frame-preview profile-cosmetic-frame-pane">
                 {selectedFrameId ? (
                   <img
                     className="profile-frame-preview-frame"
@@ -358,7 +386,7 @@ export default function MyProfilePage({
                 ) : null}
                 {avatarSrc ? <img className="profile-frame-preview-avatar" src={avatarSrc} alt="" /> : <span>{displayUser.name?.charAt(0) || "?"}</span>}
               </div>
-              <div className="profile-frame-list">
+              <div className="profile-frame-list profile-cosmetic-frame-pane">
                 <button
                   type="button"
                   className={!selectedFrameId ? "active" : ""}
@@ -379,17 +407,51 @@ export default function MyProfilePage({
                   </button>
                 ))}
               </div>
+              <div className="profile-badge-preview-panel profile-cosmetic-badge-pane">
+                <strong>Badges</strong>
+                <ProfileBadgeShowcase badges={ownedBadgeItems.filter((item) => selectedBadgeIds.includes(item.id))} />
+                <small className="muted">Pick up to 8 badges to show beside your name.</small>
+              </div>
+              <div className="profile-frame-list profile-badge-list profile-cosmetic-badge-pane">
+                {ownedBadgeItems.length ? ownedBadgeItems.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={selectedBadgeIds.includes(item.id) ? "active" : ""}
+                    onClick={() => {
+                      setSelectedBadgeIds((ids) => {
+                        if (ids.includes(item.id)) return ids.filter((id) => id !== item.id);
+                        if (ids.length >= 8) return ids;
+                        return [...ids, item.id];
+                      });
+                    }}
+                  >
+                    <img src={item.imageUrl} alt="" />
+                    <strong>{item.name}</strong>
+                  </button>
+                )) : (
+                  <p className="muted small profile-badge-empty">Win badges from Alien Stage Frames first.</p>
+                )}
+              </div>
             </div>
             <div className="profile-frame-modal-actions">
-              <button type="button" className="btn btn-ghost" onClick={() => setFramePickerOpen(false)}>
+              <button type="button" className="btn btn-ghost" onClick={() => setCosmeticPickerOpen(false)}>
                 Cancel
               </button>
+              {cosmeticTab === "badges" ? (
+                <button type="button" className="btn btn-secondary" onClick={() => setSelectedBadgeIds([])}>
+                  Clear badges
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn btn-primary"
                 onClick={async () => {
-                  const ok = await onEquipProfileFrame?.(selectedFrameId);
-                  if (ok !== false) setFramePickerOpen(false);
+                  const ok =
+                    cosmeticTab === "frames"
+                      ? await onEquipProfileFrame?.(selectedFrameId)
+                      : await onEquipProfileBadges?.(selectedBadgeIds);
+                  if (ok !== false) setCosmeticPickerOpen(false);
                 }}
               >
                 Confirm

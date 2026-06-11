@@ -11835,6 +11835,20 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   text-align: left;
 }
 
+.user-profile-bonds-card {
+  display: grid;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.user-profile-bonds-list {
+  width: fit-content;
+  min-height: 46px;
+  justify-content: flex-start;
+  padding: 7px;
+  background: rgba(139, 92, 246, 0.1);
+}
+
 .profile-bond-mini-avatar,
 .profile-bonds-empty-pill {
   width: auto;
@@ -12013,11 +12027,67 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   font-size: 1.3rem;
 }
 
+.profile-cosmetic-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px 18px 0;
+}
+
+.profile-cosmetic-tabs button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 14px;
+  background: var(--surface);
+  color: var(--ink-700);
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.profile-cosmetic-tabs button.active {
+  border-color: #a78bfa;
+  background: rgba(139, 92, 246, 0.18);
+  color: var(--ink-900);
+}
+
 .profile-frame-modal-body {
   display: grid;
   grid-template-columns: minmax(220px, 0.8fr) minmax(260px, 1fr);
   gap: 18px;
   padding: 18px;
+}
+
+.profile-cosmetic-body.is-frames .profile-cosmetic-badge-pane,
+.profile-cosmetic-body.is-badges .profile-cosmetic-frame-pane {
+  display: none;
+}
+
+.profile-badge-preview-panel {
+  min-height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+  padding: 18px;
+  text-align: center;
+  background:
+    radial-gradient(circle at 50% 35%, rgba(250, 204, 21, 0.14), transparent 8rem),
+    linear-gradient(135deg, rgba(46, 16, 101, 0.88), rgba(124, 58, 237, 0.72));
+  color: #fff;
+}
+
+.profile-badge-preview-panel .profile-badge-showcase {
+  justify-content: center;
+}
+
+.profile-badge-list button {
+  grid-template-columns: 52px minmax(0, 1fr);
+}
+
+.profile-badge-empty {
+  align-self: center;
+  padding: 14px;
 }
 
 .profile-frame-preview {
@@ -12560,6 +12630,10 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   background: linear-gradient(135deg, rgba(251, 191, 36, 0.2), rgba(236, 72, 153, 0.16));
 }
 
+.gacha-reel-tile.is-result {
+  box-shadow: 0 0 0 2px rgba(250, 204, 21, 0.72), 0 0 26px rgba(250, 204, 21, 0.34);
+}
+
 .gacha-reel-tile img {
   width: 86%;
   height: 86%;
@@ -12568,39 +12642,65 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .gacha-focus-ring {
   position: absolute;
-  inset: 28px auto auto 50%;
-  width: 178px;
-  height: 178px;
+  inset: auto auto 22px 50%;
+  width: 116px;
+  height: 116px;
   transform: translateX(-50%);
   border: 2px solid rgba(255, 255, 255, 0.24);
-  border-radius: 26px;
+  border-radius: 22px;
   box-shadow: 0 0 44px rgba(192, 132, 252, 0.5);
 }
 
-.gacha-avatar-preview {
-  position: relative;
-  z-index: 1;
-  width: 170px;
-  height: 170px;
-  display: grid;
-  place-items: center;
-}
-
-.gacha-result-avatar {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: #130820;
-}
-
-.gacha-result-frame {
+.gacha-pointer {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  left: 50%;
+  bottom: 144px;
+  z-index: 2;
+  width: 0;
+  height: 0;
+  transform: translateX(-50%);
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-top: 16px solid #facc15;
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.56));
+}
+
+.gacha-win-indicator {
+  position: absolute;
+  top: 26px;
+  left: 50%;
+  z-index: 2;
+  min-width: min(320px, calc(100% - 32px));
+  transform: translateX(-50%);
+  border: 1px solid rgba(216, 180, 254, 0.32);
+  border-radius: 16px;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  color: #fff;
+  background: rgba(21, 8, 38, 0.78);
+  backdrop-filter: blur(14px);
+}
+
+.gacha-win-indicator img {
+  grid-row: span 2;
+  width: 44px;
+  height: 44px;
   object-fit: contain;
-  animation: shop-frame-float 3.8s ease-in-out infinite;
+}
+
+.gacha-win-indicator span {
+  color: #c4b5fd;
+  font-size: 0.74rem;
+  font-weight: 1000;
+  text-transform: uppercase;
+}
+
+.gacha-win-indicator strong {
+  font-size: 0.95rem;
+  line-height: 1.1;
 }
 
 @keyframes gacha-reel-spin {
@@ -12615,7 +12715,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
     filter: blur(1px);
   }
   100% {
-    transform: translateX(-58%);
+    transform: translateX(var(--gacha-reel-stop, -58%));
     filter: blur(0);
   }
 }
