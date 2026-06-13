@@ -13086,7 +13086,9 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   left: 50%;
   z-index: 2;
   min-width: min(320px, calc(100% - 32px));
-  transform: translateX(-50%);
+  transform: translateX(-50%) scale(0.86);
+  opacity: 0;
+  pointer-events: none;
   border: 1px solid rgba(216, 180, 254, 0.32);
   border-radius: 16px;
   display: grid;
@@ -13097,6 +13099,10 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   color: #fff;
   background: rgba(21, 8, 38, 0.78);
   backdrop-filter: blur(14px);
+}
+
+.gacha-win-indicator.is-visible {
+  animation: gacha-win-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 .gacha-win-indicator img {
@@ -13116,6 +13122,21 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 .gacha-win-indicator strong {
   font-size: 0.95rem;
   line-height: 1.1;
+}
+
+@keyframes gacha-win-pop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px) scale(0.78);
+  }
+  64% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-2px) scale(1.04);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
 }
 
 @keyframes gacha-reel-spin {

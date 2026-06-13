@@ -185,12 +185,12 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
           </div>
           <div className="gacha-focus-ring" aria-hidden />
           <div className="gacha-pointer" aria-hidden />
-          <div className="gacha-win-indicator">
-            {(reward || pendingReward) ? (
+          <div className={`gacha-win-indicator${reward ? " is-visible" : ""}`}>
+            {reward ? (
               <>
-                <img src={shopAssetUrl((reward || pendingReward).imageUrl)} alt="" />
-                {reward ? <span>You got</span> : null}
-                <strong>{(reward || pendingReward).name}</strong>
+                <img src={shopAssetUrl(reward.imageUrl)} alt="" />
+                <span>You got</span>
+                <strong>{reward.name}</strong>
               </>
             ) : (
               <span>Reward lands here</span>
