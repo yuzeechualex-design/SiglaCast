@@ -39,28 +39,85 @@ export default function AuthPage({
     return () => controller.abort();
   }, []);
 
-  function onSubmit(event) {
+  const [showEmailForm, setShowEmailForm] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [verificationCode, setVerificationCode] = useState("");
+  const [sendingCode, setSendingCode] = useState(false);
+  const [localError, setLocalError] = useState("");
+
+  useEffect(() => {
+    setFieldErrors({});
+    setShowEmailForm(false);
+    setOtpSent(false);
+    setVerificationCode("");
+    setSendingCode(false);
+    setLocalError("");
+  }, [mode]);
+
+  async function handleResendCode() {
+    setLocalError("");
+    setSendingCode(true);
+    try {
+      const res = await fetch(`${DEFAULT_API_BASE_URL}/api/auth/register/send-code`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: normalizeRegistrationEmail(email) })
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to send code");
+      }
+      setLocalError("success:Code resent successfully!");
+    } catch (err) {
+      setLocalError(err.message);
+    } finally {
+      setSendingCode(false);
+    }
+  }
+
+  async function onSubmit(event) {
     event.preventDefault();
     if (mode === "login") {
       onLogin();
       return;
     }
     clearNotice?.();
+    setLocalError("");
+
     const v = validateRegisterForm({ name, email, password });
     if (!v.ok) {
       setFieldErrors(v.fieldErrors);
       return;
     }
     setFieldErrors({});
-    onRegister(v.normalized);
+
+    if (!otpSent) {
+      setSendingCode(true);
+      try {
+        const res = await fetch(`${DEFAULT_API_BASE_URL}/api/auth/register/send-code`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: v.normalized.email })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Failed to send verification code.");
+        }
+        setOtpSent(true);
+      } catch (err) {
+        setLocalError(err.message);
+      } finally {
+        setSendingCode(false);
+      }
+    } else {
+      const codeClean = String(verificationCode).trim();
+      if (codeClean.length < 6) {
+        setLocalError("Please enter the 6-digit verification code.");
+        return;
+      }
+      onRegister({ ...v.normalized, code: codeClean });
+    }
   }
-
-  const [showEmailForm, setShowEmailForm] = useState(false);
-
-  useEffect(() => {
-    setFieldErrors({});
-    setShowEmailForm(false);
-  }, [mode]);
 
   return (
     <div className="auth-page-container">
@@ -153,90 +210,152 @@ export default function AuthPage({
               <span>Back to sign-in options</span>
             </button>
 
-            <div className="auth-tabs">
-              <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
-                Login
-              </button>
-              <button
-                type="button"
-                className={mode === "register" ? "active" : ""}
-                onClick={() => setMode("register")}
-              >
-                Register
-              </button>
-            </div>
+            {otpSent ? (
+              <div style={{ display: "flex", flexDirection: "column", width: "100%", gap: "16px" }}>
+                <button
+                  type="button"
+                  className="auth-back-link"
+                  onClick={() => {
+                    setOtpSent(false);
+                    setLocalError("");
+                  }}
+                  style={{ alignSelf: "flex-start", border: "none", background: "none", color: "rgba(255,255,255,0.6)", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.9rem", padding: "0" }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="19" y1="12" x2="5" y2="12" />
+                    <polyline points="12,19 5,12 12,5" />
+                  </svg>
+                  <span>Edit details</span>
+                </button>
 
-            {mode === "register" && (
-              <>
+                <h2 className="auth-social-title" style={{ marginTop: "8px" }}>
+                  Verify your email
+                </h2>
+                <p className="auth-social-subtitle" style={{ marginBottom: "8px" }}>
+                  We sent a 6-digit verification code to <strong>{email}</strong>
+                </p>
+
                 <input
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Full name"
-                  name="name"
-                  autoComplete="name"
-                  aria-invalid={!!fieldErrors.name}
-                  aria-describedby={fieldErrors.name ? "err-name" : undefined}
+                  type="text"
+                  maxLength={6}
+                  value={verificationCode}
+                  onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, ""))}
+                  placeholder="6-digit code"
+                  style={{ textAlign: "center", fontSize: "1.2rem", letterSpacing: "4px" }}
+                  required
                 />
-                {fieldErrors.name ? (
-                  <p id="err-name" className="auth-field-error" role="alert">
-                    {fieldErrors.name}
+
+                <button type="submit" disabled={loading || sendingCode}>
+                  {loading ? "Registering..." : sendingCode ? "Sending Code..." : "Verify & Create Account"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendCode}
+                  disabled={sendingCode}
+                  style={{ border: "none", background: "none", color: "#a855f7", cursor: "pointer", fontSize: "0.85rem", textDecoration: "underline", padding: "4px" }}
+                >
+                  Resend Code
+                </button>
+              </div>
+            ) : (
+              <>
+                <div className="auth-tabs">
+                  <button type="button" className={mode === "login" ? "active" : ""} onClick={() => setMode("login")}>
+                    Login
+                  </button>
+                  <button
+                    type="button"
+                    className={mode === "register" ? "active" : ""}
+                    onClick={() => setMode("register")}
+                  >
+                    Register
+                  </button>
+                </div>
+
+                {mode === "register" && (
+                  <>
+                    <input
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Full name"
+                      name="name"
+                      autoComplete="name"
+                      aria-invalid={!!fieldErrors.name}
+                      aria-describedby={fieldErrors.name ? "err-name" : undefined}
+                    />
+                    {fieldErrors.name ? (
+                      <p id="err-name" className="auth-field-error" role="alert">
+                        {fieldErrors.name}
+                      </p>
+                    ) : null}
+                  </>
+                )}
+
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onBlur={(e) => setEmail(normalizeRegistrationEmail(e.target.value))}
+                  placeholder="Gmail address"
+                  name="email"
+                  inputMode="email"
+                  autoComplete={mode === "login" ? "email" : "username"}
+                  aria-invalid={!!fieldErrors.email}
+                  aria-describedby={fieldErrors.email ? "hint-email err-email" : "hint-email"}
+                />
+                <p id="hint-email" className="auth-field-hint">
+                  {emailDomain ? <>Use an email ending in <strong>@{emailDomain}</strong>.</> : "Enter a valid email address."}
+                </p>
+                {fieldErrors.email ? (
+                  <p id="err-email" className="auth-field-error" role="alert">
+                    {fieldErrors.email}
                   </p>
                 ) : null}
+
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={mode === "login" ? "Password" : "Create a strong password"}
+                  name="password"
+                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  aria-invalid={!!fieldErrors.password}
+                  aria-describedby={mode === "register" ? "password-hints" : fieldErrors.password ? "err-pass" : undefined}
+                />
+                {mode === "register" ? (
+                  <ul id="password-hints" className="auth-password-hints" aria-label="Password requirements">
+                    {passwordChecks.map((row) => (
+                      <li key={row.key} className={row.ok ? "ok" : ""}>
+                        {row.label}
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {fieldErrors.password ? (
+                  <p id="err-pass" className="auth-field-error" role="alert">
+                    {fieldErrors.password}
+                  </p>
+                ) : null}
+
+                <button type="submit" disabled={loading || sendingCode}>
+                  {loading ? "Please wait..." : sendingCode ? "Sending Code..." : mode === "login" ? "Sign In" : "Create Account"}
+                </button>
               </>
             )}
-
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              onBlur={(e) => setEmail(normalizeRegistrationEmail(e.target.value))}
-              placeholder="Gmail address"
-              name="email"
-              inputMode="email"
-              autoComplete={mode === "login" ? "email" : "username"}
-              aria-invalid={!!fieldErrors.email}
-              aria-describedby={fieldErrors.email ? "hint-email err-email" : "hint-email"}
-            />
-            <p id="hint-email" className="auth-field-hint">
-              {emailDomain ? <>Use an email ending in <strong>@{emailDomain}</strong>.</> : "Enter a valid email address."}
-            </p>
-            {fieldErrors.email ? (
-              <p id="err-email" className="auth-field-error" role="alert">
-                {fieldErrors.email}
-              </p>
-            ) : null}
-
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder={mode === "login" ? "Password" : "Create a strong password"}
-              name="password"
-              autoComplete={mode === "login" ? "current-password" : "new-password"}
-              aria-invalid={!!fieldErrors.password}
-              aria-describedby={mode === "register" ? "password-hints" : fieldErrors.password ? "err-pass" : undefined}
-            />
-            {mode === "register" ? (
-              <ul id="password-hints" className="auth-password-hints" aria-label="Password requirements">
-                {passwordChecks.map((row) => (
-                  <li key={row.key} className={row.ok ? "ok" : ""}>
-                    {row.label}
-                  </li>
-                ))}
-              </ul>
-            ) : null}
-            {fieldErrors.password ? (
-              <p id="err-pass" className="auth-field-error" role="alert">
-                {fieldErrors.password}
-              </p>
-            ) : null}
-
-            <button type="submit" disabled={loading}>
-              {loading ? "Please wait..." : mode === "login" ? "Sign In" : "Create Account"}
-            </button>
           </div>
         )}
 
+        {localError ? (
+          <span
+            className="badge auth-notice"
+            style={{
+              background: localError.startsWith("success:") ? "#22c55e" : "#ef4444",
+            }}
+          >
+            {localError.startsWith("success:") ? localError.substring(8) : localError}
+          </span>
+        ) : null}
         {notice ? <span className="badge auth-notice">{notice}</span> : null}
       </form>
     </div>

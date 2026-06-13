@@ -1008,7 +1008,7 @@ export default function App() {
     const { name: regName, email: regEmail, password: regPassword, course: regCourse } = v.normalized;
     const res = await api("/auth/register", {
       method: "POST",
-      body: { name: regName, email: regEmail, password: regPassword, course: regCourse || "" }
+      body: { name: regName, email: regEmail, password: regPassword, course: regCourse || "", code: registrationPayload?.code || "" }
     });
     if (res.error) {
       setNotice(res.error);

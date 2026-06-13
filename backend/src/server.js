@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import multer from "multer";
+import nodemailer from "nodemailer";
 
 import { supabase, toPublicUser, toEvent, toCandidate, uploadToBucket, uploadAttachment } from "./supabase.js";
 import { validateRegisterForm } from "./registerValidation.js";
@@ -27,6 +28,56 @@ import {
   SPOTIFY_CLIENT_ID,
   SPOTIFY_FRONTEND_AFTER_LINK
 } from "./spotifyMusic.js";
+
+const verificationCodes = new Map();
+
+async function sendVerificationEmail(email, code) {
+  const smtpHost = process.env.SMTP_HOST;
+  const smtpPort = parseInt(process.env.SMTP_PORT || "587");
+  const smtpUser = process.env.SMTP_USER;
+  const smtpPass = process.env.SMTP_PASS;
+  const smtpFrom = process.env.SMTP_FROM || smtpUser || "no-reply@purxu.com";
+
+  console.log(`[AUTH] Verification code for ${email}: ${code}`);
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    console.log("[AUTH] SMTP not configured. Verification email printed to console only.");
+    return;
+  }
+
+  try {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+    });
+
+    const mailOptions = {
+      from: `"purxu" <${smtpFrom}>`,
+      to: email,
+      subject: "Verify your purxu account",
+      text: `Your verification code is: ${code}. It is valid for 10 minutes.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 500px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px; background: #0c0f1d; color: #ffffff;">
+          <h2 style="color: #a855f7; text-align: center;">Verify Your Account</h2>
+          <p>Thanks for signing up to <strong>purxu</strong>. Use the verification code below to complete your registration:</p>
+          <div style="font-size: 32px; font-weight: bold; letter-spacing: 4px; text-align: center; margin: 30px 0; color: #a855f7; background: rgba(168, 85, 247, 0.1); padding: 15px; border-radius: 8px;">
+            ${code}
+          </div>
+          <p style="font-size: 14px; color: #9ca3af; text-align: center;">This code will expire in 10 minutes.</p>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+  } catch (error) {
+    console.error("[AUTH] Error sending verification email:", error);
+  }
+}
 
 const { xsltProcess, xmlParse } = xsltProcessor;
 
@@ -2372,9 +2423,41 @@ function requireAdmin(req, res, next) {
 }
 
 // Auth
+app.post("/api/auth/register/send-code", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    const normEmail = String(email || "").trim().toLowerCase();
+    
+    if (!normEmail) {
+      return res.status(400).json({ error: "Email address is required." });
+    }
+    
+    const existing = await fetchUserByEmail(normEmail);
+    if (existing) {
+      return res.status(400).json({ error: "Email already registered" });
+    }
+    
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    verificationCodes.set(normEmail, { code, expiresAt });
+    
+    await sendVerificationEmail(normEmail, code);
+    
+    res.json({ message: "Verification code sent to email." });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.post("/api/auth/register", async (req, res) => {
   try {
     const body = req.body || {};
+    const code = String(body.code || "").trim();
+    if (!code) {
+      return res.status(400).json({ error: "Verification code is required." });
+    }
+
     const v = validateRegisterForm({
       name: body.name,
       email: body.email,
@@ -2386,8 +2469,15 @@ app.post("/api/auth/register", async (req, res) => {
       return res.status(400).json({ error: messages.join(" ") });
     }
     const { name, email, password, course } = v.normalized;
+
+    const saved = verificationCodes.get(email);
+    if (!saved || saved.code !== code || saved.expiresAt < Date.now()) {
+      return res.status(400).json({ error: "Invalid or expired verification code." });
+    }
+
     const existing = await fetchUserByEmail(email);
     if (existing) return res.status(400).json({ error: "Email already registered" });
+
     const { count } = await supabase.from("users").select("id", { count: "exact", head: true }).eq("role", "student");
     const id = `s${(count || 0) + 1}-${Date.now().toString(36)}`;
     const password_hash = await bcrypt.hash(password, 10);
@@ -2395,6 +2485,9 @@ app.post("/api/auth/register", async (req, res) => {
       id, role: "student", name, email, password_hash, course, permissions: []
     });
     if (error) return res.status(400).json({ error: error.message });
+
+    verificationCodes.delete(email);
+
     res.status(201).json({ message: "Registered successfully" });
   } catch (e) {
     res.status(400).json({ error: e.message });
