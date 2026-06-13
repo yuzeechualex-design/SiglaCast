@@ -7,6 +7,7 @@ const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
 const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
 const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
 const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || "purxu";
+const CLOUDINARY_MAX_UPLOAD_BYTES = Number(process.env.CLOUDINARY_MAX_UPLOAD_BYTES || 10 * 1024 * 1024);
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("[supabase] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Set them in backend/.env");
@@ -37,6 +38,9 @@ function cloudinarySignature(params) {
 export async function uploadToCloudinary(file, options = {}) {
   if (!cloudinaryEnabled()) {
     throw new Error("Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.");
+  }
+  if (CLOUDINARY_MAX_UPLOAD_BYTES > 0 && file.size > CLOUDINARY_MAX_UPLOAD_BYTES) {
+    throw new Error(`Cloudinary upload skipped: file is ${file.size} bytes, limit is ${CLOUDINARY_MAX_UPLOAD_BYTES} bytes.`);
   }
   const ext = (file.originalname || "media").split(".").pop().toLowerCase();
   const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;

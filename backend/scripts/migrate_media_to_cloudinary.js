@@ -144,6 +144,7 @@ async function main() {
   console.log(`Found ${updates.length} Supabase media URL(s) to migrate.`);
   const migratedByUrl = new Map();
   const deleteObjects = new Map();
+  const failures = [];
 
   for (const item of updates) {
     if (!COMMIT) {
@@ -154,7 +155,14 @@ async function main() {
     let newUrl = migratedByUrl.get(item.oldUrl);
     if (!newUrl) {
       console.log(`Uploading ${item.oldUrl}`);
-      newUrl = await uploadUrlToCloudinary(item.oldUrl, item.source.bucket);
+      try {
+        newUrl = await uploadUrlToCloudinary(item.oldUrl, item.source.bucket);
+      } catch (err) {
+        const message = err?.message || String(err);
+        failures.push({ ...item, error: message });
+        console.warn(`  failed: ${message}`);
+        continue;
+      }
       if (!newUrl) {
         console.log(`  skipped non-media: ${item.oldUrl}`);
         continue;
@@ -182,6 +190,14 @@ async function main() {
       console.log(`Deleting ${paths.length} object(s) from Supabase bucket ${bucket}`);
       const { error } = await supabase.storage.from(bucket).remove(paths);
       if (error) throw new Error(`delete failed for bucket ${bucket}: ${error.message}`);
+    }
+  }
+
+  if (failures.length) {
+    console.log(`Skipped ${failures.length} file(s):`);
+    for (const failure of failures) {
+      console.log(`  ${failure.table}.${failure.column} ${failure.id}: ${failure.error}`);
+      console.log(`    ${failure.oldUrl}`);
     }
   }
 
