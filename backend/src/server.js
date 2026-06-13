@@ -449,7 +449,7 @@ function frontendAuthCallbackUrl(rawRedirectTo) {
 
 function oauthProviderFromValue(value) {
   const provider = String(value || "").toLowerCase();
-  return provider === "google" || provider === "apple" ? provider : null;
+  return provider === "google" || provider === "apple" || provider === "discord" ? provider : null;
 }
 
 function oauthUserEmailAllowed(provider, email) {
@@ -2455,7 +2455,15 @@ app.post("/api/auth/oauth/session", async (req, res) => {
 
     const email = String(supabaseUser.email || "").trim().toLowerCase();
     if (!oauthUserEmailAllowed(provider, email)) {
-      return res.status(400).json({ error: provider === "google" ? "Use a Gmail account to continue with Google." : "Your Apple account did not return a usable email address." });
+      let errorMsg = `Your ${provider} account did not return a usable email address.`;
+      if (provider === "google") {
+        errorMsg = "Use a Gmail account to continue with Google.";
+      } else if (provider === "discord") {
+        errorMsg = "Your Discord account did not return a usable email address.";
+      } else if (provider === "apple") {
+        errorMsg = "Your Apple account did not return a usable email address.";
+      }
+      return res.status(400).json({ error: errorMsg });
     }
 
     const meta = supabaseUser.user_metadata || {};

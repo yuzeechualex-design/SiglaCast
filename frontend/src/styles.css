@@ -13954,15 +13954,16 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   transform: translateY(-1px);
 }
 
-.btn-social-apple {
-  background: #ffffff;
-  color: #000000;
-  border: 1px solid #ffffff;
+.btn-social-discord {
+  background: #5865F2;
+  color: #ffffff;
+  border: 1px solid #5865F2;
 }
 
-.btn-social-apple:hover {
-  background: #f3f4f6;
-  box-shadow: 0 4px 12px rgba(255, 255, 255, 0.15);
+.btn-social-discord:hover {
+  background: #4752C4;
+  border-color: #4752C4;
+  box-shadow: 0 4px 12px rgba(88, 101, 242, 0.3);
   transform: translateY(-1px);
 }
 
