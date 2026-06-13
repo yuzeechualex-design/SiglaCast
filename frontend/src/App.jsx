@@ -280,11 +280,12 @@ export default function App() {
       setUser(res.user);
       localStorage.setItem("siglacast_user", JSON.stringify(res.user));
     }
-    if (res.wallet || res.gacha) {
+    if (res.wallet || res.gacha || res.gachas) {
       setShopState((prev) => ({
         ...prev,
         wallet: res.wallet || prev.wallet,
-        gacha: res.gacha || prev.gacha
+        gacha: res.gacha || prev.gacha,
+        gachas: res.gachas || prev.gachas
       }));
     }
     await loadBondsAndShop();
@@ -2038,6 +2039,7 @@ export default function App() {
               wallet={shopState.wallet || bondState.wallet}
               items={shopState.items}
               gacha={shopState.gacha}
+              gachas={shopState.gachas}
               currentUser={user}
               onBuy={buyShopItem}
               onDrawGacha={drawShopGacha}

@@ -28,6 +28,48 @@ function PriceLabel({ value }) {
   return <CoinAmount value={n} />;
 }
 
+const coinPackages = [
+  { coins: 100, price: "$1.99", imageUrl: "/assets/purxu-coins-small.png" },
+  { coins: 300, price: "$4.90", imageUrl: "/assets/purxu-coins-small.png" },
+  { coins: 500, price: "$7.99", imageUrl: "/assets/purxu-coins-small.png" },
+  { coins: 1000, price: "$16.40", imageUrl: "/assets/purxu-coins-large.png" },
+  { coins: 5000, price: "$82.20", imageUrl: "/assets/purxu-coins-large.png" },
+  { coins: 10000, price: "$164.40", imageUrl: "/assets/purxu-coins-large.png" }
+];
+
+function ShopSectionTitle({ children }) {
+  return <h3 className="shop-section-title">{children}</h3>;
+}
+
+function BundleModal({ onClose }) {
+  return (
+    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Purxu monthly card bundle benefits">
+      <div className="bundle-modal">
+        <div className="gacha-modal-head">
+          <div>
+            <p>Monthly Bundle</p>
+            <h3>Purxu Monthly Card Bundle</h3>
+          </div>
+          <button type="button" className="gacha-close-btn" onClick={onClose} aria-label="Close">
+            x
+          </button>
+        </div>
+        <img className="bundle-modal-art" src="/assets/purxu-monthly-card-bundle.png" alt="" />
+        <div className="bundle-benefits">
+          <strong>Benefits</strong>
+          <p>- get upto 900 coins in total</p>
+          <p>- obtain 300 coins after purchase</p>
+          <p>- you can claim 20 coins daily</p>
+        </div>
+        <div className="bundle-modal-footer">
+          <strong>$9.69</strong>
+          <button type="button" className="btn btn-primary" onClick={onClose}>Buy Bundle</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function GachaModal({ gacha, wallet, onClose, onDraw }) {
   const [helpOpen, setHelpOpen] = useState(false);
   const [drawing, setDrawing] = useState(false);
@@ -88,7 +130,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
   }
 
   return (
-    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Alien Stage gacha">
+    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label={`${gacha?.name || "Limited"} gacha`}>
       <div className="gacha-modal">
         <div className="gacha-modal-head">
           <div>
@@ -108,7 +150,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
         {helpOpen ? (
           <div className="gacha-help-panel">
             <strong>How draws work</strong>
-            <p>Each draw gives one unowned reward, then removes it from the next draw pool. Star badges are easier to get, while character profile frames are rarer.</p>
+            <p>{gacha?.description || "Each draw gives one unowned reward, then removes it from the next draw pool."}</p>
           </div>
         ) : null}
 
@@ -183,7 +225,11 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
   );
 }
 
-export default function ShopPage({ wallet, items = [], gacha = null, currentUser, onBuy, onDrawGacha }) {
+export default function ShopPage({ wallet, items = [], gacha = null, gachas = [], currentUser, onBuy, onDrawGacha }) {
+  const [activeTab, setActiveTab] = useState("cosmetics");
+  const [selectedGacha, setSelectedGacha] = useState(null);
+  const [bundleOpen, setBundleOpen] = useState(false);
+  const limitedCollections = gachas.length ? gachas : (gacha ? [gacha] : []);
   const directItems = items.filter((item) => item.source !== "gacha_reward");
   const displayItems = directItems.length
     ? directItems
@@ -201,7 +247,6 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
       ];
   const featured = displayItems[0] || null;
   const [previewItemId, setPreviewItemId] = useState(featured?.id || "");
-  const [gachaOpen, setGachaOpen] = useState(false);
   const previewItem = displayItems.find((item) => item.id === previewItemId) || featured;
   const avatarUrl = currentUser?.avatarUrl ? mediaUrl(currentUser.avatarUrl) : "/assets/purxu-shop-logo.png";
   const previewKey = useMemo(() => `${previewItem?.id || "empty"}-${Date.now()}`, [previewItem?.id]);
@@ -212,74 +257,132 @@ export default function ShopPage({ wallet, items = [], gacha = null, currentUser
         <div>
           <p className="shop-eyebrow">purxu shop</p>
           <h2>Cosmetics</h2>
+          <div className="shop-tabs" role="tablist" aria-label="Shop sections">
+            {[
+              ["cosmetics", "Cosmetics"],
+              ["coins", "Coins Shop"],
+              ["bundles", "Bundles"]
+            ].map(([id, label]) => (
+              <button key={id} type="button" className={activeTab === id ? "active" : ""} onClick={() => setActiveTab(id)}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="shop-wallet">
           <CoinAmount value={wallet?.coins ?? 0} />
         </div>
       </div>
 
-      {gacha ? (
-        <button type="button" className="shop-gacha-banner" onClick={() => setGachaOpen(true)}>
-          <img src={shopAssetUrl(gacha.bannerUrl)} alt="" />
-          <span className="shop-gacha-banner-shade" aria-hidden />
-          <span className="shop-gacha-banner-copy">
-            <small>Gacha Collection</small>
-            <strong>Alien Stage Frames</strong>
-            <em>Badges and rare character frames. No duplicate rewards.</em>
-          </span>
-          <span className="shop-gacha-banner-cta">
-            Draw <CoinAmount value={gacha.nextCost} suffix="" className="coin-amount-inline" />
-          </span>
-        </button>
+      {activeTab === "cosmetics" ? (
+        <>
+          <ShopSectionTitle>Limited Cosmetics</ShopSectionTitle>
+          <div className="shop-limited-grid">
+            {limitedCollections.map((collection) => (
+              <button key={collection.id} type="button" className="shop-gacha-banner" onClick={() => setSelectedGacha(collection)}>
+                <img src={shopAssetUrl(collection.bannerUrl)} alt="" />
+                <span className="shop-gacha-banner-shade" aria-hidden />
+                <span className="shop-gacha-banner-copy">
+                  <small>Gacha Collection</small>
+                  <strong>{collection.name}</strong>
+                  <em>{collection.description}</em>
+                </span>
+                <span className="shop-gacha-banner-cta">
+                  Draw <CoinAmount value={collection.nextCost} suffix="" className="coin-amount-inline" />
+                </span>
+              </button>
+            ))}
+          </div>
+
+          <ShopSectionTitle>Purchasable</ShopSectionTitle>
+          <div className="shop-hero">
+            <div>
+              <p>Featured Collection</p>
+              <h3>Heart Bond Frames</h3>
+              <span>Click a frame to preview the animation with your profile icon before buying.</span>
+            </div>
+            {previewItem ? (
+              <div key={previewKey} className="shop-profile-preview animated">
+                <img className="shop-preview-frame" src={shopAssetUrl(previewItem.imageUrl)} alt="" />
+                <img className="shop-preview-avatar" src={avatarUrl} alt="" />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="shop-grid">
+            {displayItems.map((item) => (
+              <article key={item.id} className={`shop-card ${item.owned ? "owned" : ""} ${previewItem?.id === item.id ? "active" : ""}`}>
+                <button type="button" className="shop-card-art" onClick={() => setPreviewItemId(item.id)}>
+                  <div className="shop-card-preview">
+                    <img className="shop-card-frame" src={shopAssetUrl(item.imageUrl)} alt="" />
+                    <img className="shop-card-logo" src="/assets/purxu-shop-logo.png" alt="" />
+                  </div>
+                </button>
+                <div className="shop-card-body">
+                  <span>{item.type?.replace(/_/g, " ")}</span>
+                  <h3>{item.name}</h3>
+                  <p>{item.description}</p>
+                  <div className="shop-card-footer">
+                    <PriceLabel value={item.effectivePrice ?? item.price} />
+                    <button type="button" className="btn btn-primary" disabled={item.owned || !item.unlocked} onClick={() => onBuy?.(item.id)}>
+                      {item.owned ? "Owned" : item.unlocked ? "Buy" : "Locked"}
+                    </button>
+                  </div>
+                  {!item.unlocked ? <small className="shop-lock-note">Reach Partner Bond Level first.</small> : null}
+                </div>
+              </article>
+            ))}
+          </div>
+        </>
       ) : null}
 
-      <div className="shop-hero">
-        <div>
-          <p>Featured Collection</p>
-          <h3>Heart Bond Frames</h3>
-          <span>Click a frame to preview the animation with your profile icon before buying.</span>
-        </div>
-        {previewItem ? (
-          <div key={previewKey} className="shop-profile-preview animated">
-            <img className="shop-preview-frame" src={shopAssetUrl(previewItem.imageUrl)} alt="" />
-            <img className="shop-preview-avatar" src={avatarUrl} alt="" />
+      {activeTab === "coins" ? (
+        <>
+          <ShopSectionTitle>Coins Shop</ShopSectionTitle>
+          <div className="coin-shop-grid">
+            {coinPackages.map((pack) => (
+              <article key={pack.coins} className="coin-shop-card">
+                <img src={pack.imageUrl} alt="" />
+                <div>
+                  <CoinAmount value={pack.coins} />
+                  <strong>{pack.price} usd</strong>
+                </div>
+                <button type="button" className="btn btn-primary">Purchase</button>
+              </article>
+            ))}
           </div>
-        ) : null}
-      </div>
+        </>
+      ) : null}
 
-      <div className="shop-grid">
-        {displayItems.map((item) => (
-          <article key={item.id} className={`shop-card ${item.owned ? "owned" : ""} ${previewItem?.id === item.id ? "active" : ""}`}>
-            <button type="button" className="shop-card-art" onClick={() => setPreviewItemId(item.id)}>
-              <div className="shop-card-preview">
-                <img className="shop-card-frame" src={shopAssetUrl(item.imageUrl)} alt="" />
-                <img className="shop-card-logo" src="/assets/purxu-shop-logo.png" alt="" />
-              </div>
+      {activeTab === "bundles" ? (
+        <>
+          <ShopSectionTitle>Bundles</ShopSectionTitle>
+          <div className="bundle-grid">
+            <button type="button" className="bundle-card" onClick={() => setBundleOpen(true)}>
+              <img src="/assets/purxu-monthly-card-bundle.png" alt="" />
+              <span>
+                <small>Monthly Bundle</small>
+                <strong>Purxu Monthly Card Bundle</strong>
+                <em>$9.69</em>
+              </span>
             </button>
-            <div className="shop-card-body">
-              <span>{item.type?.replace(/_/g, " ")}</span>
-              <h3>{item.name}</h3>
-              <p>{item.description}</p>
-              <div className="shop-card-footer">
-                <PriceLabel value={item.effectivePrice ?? item.price} />
-                <button type="button" className="btn btn-primary" disabled={item.owned || !item.unlocked} onClick={() => onBuy?.(item.id)}>
-                  {item.owned ? "Owned" : item.unlocked ? "Buy" : "Locked"}
-                </button>
-              </div>
-              {!item.unlocked ? <small className="shop-lock-note">Reach Partner Bond Level first.</small> : null}
-            </div>
-          </article>
-        ))}
-      </div>
+          </div>
+        </>
+      ) : null}
 
-      {gachaOpen ? (
+      {selectedGacha ? (
         <GachaModal
-          gacha={gacha}
+          gacha={selectedGacha}
           wallet={wallet}
-          onClose={() => setGachaOpen(false)}
-          onDraw={onDrawGacha}
+          onClose={() => setSelectedGacha(null)}
+          onDraw={async (collectionId) => {
+            const res = await onDrawGacha?.(collectionId);
+            if (res?.gacha) setSelectedGacha(res.gacha);
+            return res;
+          }}
         />
       ) : null}
+      {bundleOpen ? <BundleModal onClose={() => setBundleOpen(false)} /> : null}
     </section>
   );
 }
