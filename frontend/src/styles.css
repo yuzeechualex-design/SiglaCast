@@ -12270,14 +12270,21 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .shop-page {
+  grid-column: 1 / -1;
   display: grid;
   gap: 18px;
   width: 100%;
+  max-width: none;
+  justify-self: stretch;
+  align-self: start;
 }
 
 .shop-topbar {
+  display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
+  width: 100%;
 }
 
 .shop-eyebrow {
@@ -12385,6 +12392,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .shop-hero {
   min-height: 240px;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -12477,8 +12485,9 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .shop-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   gap: 16px;
+  width: 100%;
 }
 
 .shop-card {
@@ -12597,11 +12606,13 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
+  width: 100%;
 }
 
 .shop-gacha-banner {
   position: relative;
-  min-height: 260px;
+  min-height: clamp(260px, 24vw, 360px);
+  aspect-ratio: 16 / 7;
   overflow: hidden;
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 24px;
@@ -12646,7 +12657,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .shop-gacha-banner-copy {
-  max-width: 560px;
+  max-width: min(560px, 78%);
   display: grid;
   gap: 8px;
 }
@@ -12660,7 +12671,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .shop-gacha-banner-copy strong {
-  font-size: clamp(1.9rem, 4.6vw, 3.8rem);
+  font-size: clamp(2rem, 3.4vw, 4rem);
   line-height: 0.9;
 }
 
@@ -12685,43 +12696,75 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 
 .coin-shop-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 16px;
+  width: 100%;
 }
 
 .coin-shop-card {
   border: 1px solid var(--line);
   border-radius: 18px;
   display: grid;
+  grid-template-rows: auto 1fr auto;
   gap: 14px;
+  min-width: 0;
   padding: 16px;
   background: var(--card);
   box-shadow: var(--shadow-soft);
 }
 
-.coin-shop-card img {
+.coin-shop-card > img {
   width: 100%;
+  max-height: 220px;
   aspect-ratio: 1;
   border-radius: 14px;
-  object-fit: cover;
+  object-fit: contain;
   background: rgba(139, 92, 246, 0.12);
 }
 
 .coin-shop-card > div {
-  display: grid;
-  gap: 5px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-radius: 12px;
+  padding: 8px 0 0;
+}
+
+.coin-shop-card .coin-amount {
+  min-width: 0;
+  flex-wrap: wrap;
+  white-space: normal;
+}
+
+.coin-shop-card .coin-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.coin-shop-card .coin-amount strong,
+.coin-shop-card .coin-amount small {
+  line-height: 1;
 }
 
 .coin-shop-card > div > strong {
+  flex: 0 0 auto;
   color: var(--ink-700);
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.coin-shop-card .btn {
+  width: 100%;
 }
 
 .bundle-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 520px));
   gap: 16px;
+  width: 100%;
 }
 
 .bundle-card {
@@ -12729,7 +12772,7 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 18px;
   display: grid;
-  padding: 0;
+  padding: 10px;
   color: #fff;
   text-align: left;
   cursor: pointer;
@@ -12737,16 +12780,17 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   box-shadow: 0 24px 62px rgba(76, 29, 149, 0.28);
 }
 
-.bundle-card img {
+.bundle-card > img {
   width: 100%;
   aspect-ratio: 16 / 9;
+  border-radius: 14px;
   object-fit: cover;
 }
 
 .bundle-card span {
   display: grid;
   gap: 6px;
-  padding: 16px;
+  padding: 12px 6px 4px;
 }
 
 .bundle-card small,

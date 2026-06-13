@@ -37,6 +37,20 @@ const coinPackages = [
   { coins: 10000, price: "$164.40", imageUrl: "/assets/purxu-coins-large.png" }
 ];
 
+const fallbackChiikawaGacha = {
+  id: "chiikawa-frame",
+  name: "Chiikawa Frames",
+  bannerUrl: "/assets/chiikawa-banner-bg.png",
+  description: "Draw once for 300 coins to win one unowned Chiikawa profile frame. Won frames leave the pool.",
+  nextCost: 300,
+  pool: [
+    { id: "chiikawa-hachiware-frame", name: "Hachiware Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-hachiware-frame.png", chanceGroup: "Equal chance" },
+    { id: "chiikawa-usagi-frame", name: "Usagi Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-usagi-frame.png", chanceGroup: "Equal chance" },
+    { id: "chiikawa-momonga-frame", name: "Momonga Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-momonga-frame.png", chanceGroup: "Equal chance" },
+    { id: "chiikawa-chiikawa-frame", name: "Chiikawa Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-chiikawa-frame.png", chanceGroup: "Equal chance" }
+  ]
+};
+
 function ShopSectionTitle({ children }) {
   return <h3 className="shop-section-title">{children}</h3>;
 }
@@ -229,7 +243,12 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
   const [activeTab, setActiveTab] = useState("cosmetics");
   const [selectedGacha, setSelectedGacha] = useState(null);
   const [bundleOpen, setBundleOpen] = useState(false);
-  const limitedCollections = gachas.length ? gachas : (gacha ? [gacha] : []);
+  const limitedCollections = useMemo(() => {
+    const collections = gachas.length ? gachas : (gacha ? [gacha] : []);
+    return collections.some((collection) => collection.id === fallbackChiikawaGacha.id)
+      ? collections
+      : [...collections, fallbackChiikawaGacha];
+  }, [gacha, gachas]);
   const directItems = items.filter((item) => item.source !== "gacha_reward");
   const displayItems = directItems.length
     ? directItems
@@ -377,7 +396,8 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
           onClose={() => setSelectedGacha(null)}
           onDraw={async (collectionId) => {
             const res = await onDrawGacha?.(collectionId);
-            if (res?.gacha) setSelectedGacha(res.gacha);
+            const nextGacha = res?.gachas?.find((collection) => collection.id === collectionId) || res?.gacha;
+            if (nextGacha) setSelectedGacha(nextGacha);
             return res;
           }}
         />
