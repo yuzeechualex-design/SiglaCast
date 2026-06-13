@@ -5665,6 +5665,7 @@ textarea.profile-bio-input::placeholder {
   min-height: 0;
   flex: 1;
   display: flex;
+  position: relative;
   background: rgba(21, 11, 38, 0.78);
 }
 
@@ -5675,14 +5676,20 @@ textarea.profile-bio-input::placeholder {
 }
 
 .server-member-panel {
-  display: none;
   position: relative;
+  display: block;
+  width: min(250px, 30%);
+  flex: 0 0 min(250px, 30%);
   min-width: 0;
   border-left: 1px solid rgba(196, 181, 253, 0.16);
   padding: 12px 10px;
   overflow-y: auto;
   background: rgba(17, 13, 26, 0.62);
   color: rgba(238, 231, 255, 0.82);
+}
+
+.server-online-swipe-hint {
+  display: none;
 }
 
 .server-member-count {
@@ -13664,13 +13671,54 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   }
 
   .server-thread-layout {
-    grid-template-columns: 1fr;
+    overflow: hidden;
   }
 
   .server-member-panel {
-    max-height: 280px;
-    border-left: 0;
-    border-top: 1px solid rgba(196, 181, 253, 0.16);
+    position: absolute;
+    inset: 0 0 0 auto;
+    z-index: 4;
+    display: block;
+    width: min(78vw, 290px);
+    max-height: none;
+    border-left: 1px solid rgba(196, 181, 253, 0.18);
+    border-top: 0;
+    transform: translateX(100%);
+    transition: transform 0.22s ease;
+    box-shadow: -20px 0 44px rgba(0, 0, 0, 0.34);
+  }
+
+  .server-thread-layout.online-open .server-member-panel {
+    transform: translateX(0);
+  }
+
+  .server-thread-layout.online-open::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    background: rgba(8, 4, 16, 0.38);
+    pointer-events: none;
+  }
+
+  .server-online-swipe-hint {
+    position: absolute;
+    right: 10px;
+    top: 72px;
+    z-index: 2;
+    display: block;
+    border: 1px solid rgba(196, 181, 253, 0.22);
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: rgba(238, 231, 255, 0.72);
+    background: rgba(255, 255, 255, 0.06);
+    font-size: 0.72rem;
+    font-weight: 850;
+    pointer-events: none;
+  }
+
+  .server-thread-layout.online-open .server-online-swipe-hint {
+    display: none;
   }
 }
 

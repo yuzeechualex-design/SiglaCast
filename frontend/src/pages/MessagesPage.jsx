@@ -703,16 +703,7 @@ export default function MessagesPage({
       )
     );
     if (!res?.error) {
-      window.setTimeout(() => {
-        setOptimisticMessages((prev) =>
-          prev.map((message) =>
-            message.id === optimisticId ? { ...message, deliveryStatus: "Delivered" } : message
-          )
-        );
-      }, 350);
-      window.setTimeout(() => {
-        setOptimisticMessages((prev) => prev.filter((message) => message.id !== optimisticId));
-      }, 950);
+      setOptimisticMessages((prev) => prev.filter((message) => message.id !== optimisticId));
     }
   }
 
@@ -2639,6 +2630,30 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
 }
 
 function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer, onJoinServerInvite, members = [], onOpenUserProfile }) {
+  const [onlinePanelOpen, setOnlinePanelOpen] = useState(false);
+  const swipeStartXRef = useRef(null);
+  const swipeStartYRef = useRef(null);
+
+  function handleOnlineTouchStart(e) {
+    const touch = e.touches?.[0];
+    if (!touch) return;
+    swipeStartXRef.current = touch.clientX;
+    swipeStartYRef.current = touch.clientY;
+  }
+
+  function handleOnlineTouchEnd(e) {
+    if (swipeStartXRef.current == null || swipeStartYRef.current == null) return;
+    const touch = e.changedTouches?.[0];
+    if (!touch) return;
+    const dx = touch.clientX - swipeStartXRef.current;
+    const dy = touch.clientY - swipeStartYRef.current;
+    swipeStartXRef.current = null;
+    swipeStartYRef.current = null;
+    if (Math.abs(dx) < 58 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    if (dx < 0) setOnlinePanelOpen(true);
+    else setOnlinePanelOpen(false);
+  }
+
   if (!server) {
     return (
       <div className="server-thread-preview server-thread-preview-empty">
@@ -2655,14 +2670,44 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
 
   if (messages.length) {
     return (
-      <div className="server-thread-layout">
+      <div
+        className={`server-thread-layout${onlinePanelOpen ? " online-open" : ""}`}
+        onTouchStart={handleOnlineTouchStart}
+        onTouchEnd={handleOnlineTouchEnd}
+      >
       <div className="server-thread-preview">
-        <div className="server-thread-head">
-          <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
-          <div>
-            <strong>{channel?.name || "general"}</strong>
-            <small>{server.name}</small>
+        <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
+            <div>
+              <strong>{channel?.name || "general"}</strong>
+              <small>{server.name}</small>
+            </div>
           </div>
+          <button
+            type="button"
+            className={`server-member-toggle-btn${onlinePanelOpen ? " active" : ""}`}
+            onClick={() => setOnlinePanelOpen(!onlinePanelOpen)}
+            title="Toggle member list"
+            aria-label="Toggle member list"
+            style={{
+              background: "transparent",
+              border: "none",
+              color: "rgba(238, 231, 255, 0.76)",
+              fontSize: "1.2rem",
+              cursor: "pointer",
+              padding: "8px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
+              transition: "background 0.2s"
+            }}
+            onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"}
+            onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+          >
+            👥
+          </button>
         </div>
         <div className="server-thread-messages">
           {messages.map((message) => {
@@ -2696,20 +2741,51 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
           <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
         )}
       </div>
+      <div className="server-online-swipe-hint" aria-hidden>Swipe left for Online</div>
       <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
       </div>
     );
   }
 
   return (
-    <div className="server-thread-layout">
+    <div
+      className={`server-thread-layout${onlinePanelOpen ? " online-open" : ""}`}
+      onTouchStart={handleOnlineTouchStart}
+      onTouchEnd={handleOnlineTouchEnd}
+    >
     <div className="server-thread-preview">
-      <div className="server-thread-head">
-        <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
-        <div>
-          <strong>{channel?.name || "general"}</strong>
-          <small>{server?.name || "Server"}</small>
+      <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
+          <div>
+            <strong>{channel?.name || "general"}</strong>
+            <small>{server?.name || "Server"}</small>
+          </div>
         </div>
+        <button
+          type="button"
+          className={`server-member-toggle-btn${onlinePanelOpen ? " active" : ""}`}
+          onClick={() => setOnlinePanelOpen(!onlinePanelOpen)}
+          title="Toggle member list"
+          aria-label="Toggle member list"
+          style={{
+            background: "transparent",
+            border: "none",
+            color: "rgba(238, 231, 255, 0.76)",
+            fontSize: "1.2rem",
+            cursor: "pointer",
+            padding: "8px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            transition: "background 0.2s"
+          }}
+          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"}
+          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
+        >
+          👥
+        </button>
       </div>
       <div className="server-thread-empty">
         <div className="server-thread-orb">
@@ -2735,6 +2811,7 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
         <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
       )}
     </div>
+    <div className="server-online-swipe-hint" aria-hidden>Swipe left for Online</div>
     <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
     </div>
   );
