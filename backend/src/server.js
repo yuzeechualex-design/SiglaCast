@@ -5822,6 +5822,401 @@ app.get("/api/xml/events.html", authenticate, async (_, res) => {
   res.type("text/html").send(html);
 });
 
+// Shared Servers and Channels Endpoints
+app.get("/api/servers", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { data: memberRows, error: memberError } = await supabase
+      .from("server_members")
+      .select("server_id")
+      .eq("user_id", userId);
+    if (memberError) throw memberError;
+    if (!memberRows || memberRows.length === 0) {
+      return res.json([]);
+    }
+    const serverIds = memberRows.map(r => r.server_id);
+    const { data: servers, error: serversError } = await supabase
+      .from("servers")
+      .select("*")
+      .in("id", serverIds);
+    if (serversError) throw serversError;
+
+    const { data: allMembers, error: allMembersError } = await supabase
+      .from("server_members")
+      .select("server_id, user_id, role, joined_at")
+      .in("server_id", serverIds);
+    if (allMembersError) throw allMembersError;
+
+    const memberUserIds = [...new Set(allMembers.map(m => m.user_id))];
+    const { data: users, error: usersError } = await supabase
+      .from("users")
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids")
+      .in("id", memberUserIds);
+    if (usersError) throw usersError;
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+    
+    const membersByServer = {};
+    for (const m of allMembers) {
+      if (!membersByServer[m.server_id]) {
+        membersByServer[m.server_id] = [];
+      }
+      const userObj = userMap.get(m.user_id);
+      if (userObj) {
+        membersByServer[m.server_id].push({
+          ...userObj,
+          role: m.role,
+          joined_at: m.joined_at
+        });
+      }
+    }
+
+    const response = servers.map(srv => ({
+      ...srv,
+      members: membersByServer[srv.id] || []
+    }));
+
+    res.json(response);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/servers", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { name, iconUrl } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Server name is required" });
+    }
+    const serverId = `srv-${crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
+    const defaultStructure = [
+      {
+        id: `sec-text-${Date.now().toString(36)}`,
+        name: "TEXT CHANNELS",
+        channels: [
+          { id: `chan-general-${Date.now().toString(36)}`, name: "general", type: "text" },
+          { id: `chan-media-${Date.now().toString(36)}`, name: "media", type: "text" }
+        ]
+      },
+      {
+        id: `sec-voice-${Date.now().toString(36)}`,
+        name: "VOICE CHANNELS",
+        channels: [
+          { id: `chan-lobby-${Date.now().toString(36)}`, name: "Lobby", type: "voice" }
+        ]
+      }
+    ];
+
+    const { data: server, error: createError } = await supabase
+      .from("servers")
+      .insert({
+        id: serverId,
+        name: name.trim(),
+        icon_url: iconUrl || null,
+        structure: defaultStructure,
+        owner_id: userId
+      })
+      .select("*")
+      .maybeSingle();
+
+    if (createError) throw createError;
+
+    const { error: memberError } = await supabase
+      .from("server_members")
+      .insert({
+        server_id: serverId,
+        user_id: userId,
+        role: "owner"
+      });
+
+    if (memberError) throw memberError;
+
+    res.status(201).json({
+      ...server,
+      members: [{
+        ...req.user,
+        role: "owner"
+      }]
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/servers/:serverId/channels", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId } = req.params;
+    const { name, type, sectionId } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: "Channel name is required" });
+    }
+    const chanType = type === "voice" ? "voice" : "text";
+
+    const { data: member, error: memberErr } = await supabase
+      .from("server_members")
+      .select("role")
+      .eq("server_id", serverId)
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (memberErr || !member) {
+      return res.status(403).json({ error: "Only members can manage channels" });
+    }
+
+    const { data: server, error: fetchErr } = await supabase
+      .from("servers")
+      .select("structure")
+      .eq("id", serverId)
+      .maybeSingle();
+    if (fetchErr || !server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    let structure = Array.isArray(server.structure) ? server.structure : [];
+    const newChanId = `chan-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}-${Date.now().toString(36)}`;
+    const newChannel = { id: newChanId, name: name.trim().toLowerCase(), type: chanType };
+
+    let targetSec = structure.find(s => s.id === sectionId);
+    if (!targetSec && structure.length > 0) {
+      targetSec = structure.find(s => s.name.toLowerCase().includes(chanType)) || structure[0];
+    }
+
+    if (targetSec) {
+      if (!Array.isArray(targetSec.channels)) targetSec.channels = [];
+      targetSec.channels.push(newChannel);
+    } else {
+      const newSecId = `sec-${chanType}-${Date.now().toString(36)}`;
+      structure.push({
+        id: newSecId,
+        name: chanType === "voice" ? "VOICE CHANNELS" : "TEXT CHANNELS",
+        channels: [newChannel]
+      });
+    }
+
+    const { data: updatedServer, error: updateErr } = await supabase
+      .from("servers")
+      .update({ structure })
+      .eq("id", serverId)
+      .select("*")
+      .maybeSingle();
+
+    if (updateErr) throw updateErr;
+    res.json(updatedServer);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/servers/:serverId/join", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId } = req.params;
+
+    const { data: server, error: serverErr } = await supabase
+      .from("servers")
+      .select("id, name, icon_url")
+      .eq("id", serverId)
+      .maybeSingle();
+
+    if (serverErr || !server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+
+    const { data: existing, error: existErr } = await supabase
+      .from("server_members")
+      .select("role")
+      .eq("server_id", serverId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existing) {
+      return res.status(400).json({ error: "Already a member of this server" });
+    }
+
+    const { error: joinErr } = await supabase
+      .from("server_members")
+      .insert({
+        server_id: serverId,
+        user_id: userId,
+        role: "member"
+      });
+
+    if (joinErr) throw joinErr;
+
+    const { data: fullServer } = await supabase
+      .from("servers")
+      .select("*")
+      .eq("id", serverId)
+      .maybeSingle();
+
+    const { data: allMembers } = await supabase
+      .from("server_members")
+      .select("server_id, user_id, role, joined_at")
+      .eq("server_id", serverId);
+
+    const memberUserIds = (allMembers || []).map(m => m.user_id);
+    const { data: users } = await supabase
+      .from("users")
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids")
+      .in("id", memberUserIds);
+
+    const userMap = new Map((users || []).map(u => [u.id, u]));
+    const membersList = (allMembers || []).map(m => {
+      const userObj = userMap.get(m.user_id);
+      return userObj ? { ...userObj, role: m.role, joined_at: m.joined_at } : null;
+    }).filter(Boolean);
+
+    res.json({
+      ...fullServer,
+      members: membersList
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/servers/:serverId/channels/:channelId/messages", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId, channelId } = req.params;
+
+    const { data: member, error: memberErr } = await supabase
+      .from("server_members")
+      .select("role")
+      .eq("server_id", serverId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (memberErr || !member) {
+      return res.status(403).json({ error: "Only server members can view channel messages" });
+    }
+
+    const { data: messages, error: msgsErr } = await supabase
+      .from("server_messages")
+      .select("*")
+      .eq("server_id", serverId)
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: true })
+      .limit(100);
+
+    if (msgsErr) throw msgsErr;
+
+    if (!messages || messages.length === 0) {
+      return res.json([]);
+    }
+
+    const authorIds = [...new Set(messages.map(m => m.author_id))];
+    const { data: users, error: usersErr } = await supabase
+      .from("users")
+      .select("id, name, email, avatar_url, profile_frame_item_id, profile_badge_item_ids")
+      .in("id", authorIds);
+
+    if (usersErr) throw usersErr;
+
+    const userMap = new Map(users.map(u => [u.id, u]));
+    const decorated = messages.map(m => {
+      const author = userMap.get(m.author_id);
+      return {
+        id: m.id,
+        serverId: m.server_id,
+        channelId: m.channel_id,
+        text: m.text,
+        authorId: m.author_id,
+        createdAt: m.created_at,
+        author: author?.name || "Unknown",
+        authorAvatar: author?.avatar_url || null,
+        authorProfileFrameItemId: author?.profile_frame_item_id || null,
+        authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id)
+      };
+    });
+
+    res.json(decorated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/servers/:serverId/channels/:channelId/messages", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId, channelId } = req.params;
+    const text = String(req.body?.text || "").trim();
+    if (!text) {
+      return res.status(400).json({ error: "Message text is required" });
+    }
+
+    const { data: member, error: memberErr } = await supabase
+      .from("server_members")
+      .select("role")
+      .eq("server_id", serverId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (memberErr || !member) {
+      return res.status(403).json({ error: "Only server members can post messages" });
+    }
+
+    const msgId = `smsg-${crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
+    const { data: msg, error: insertErr } = await supabase
+      .from("server_messages")
+      .insert({
+        id: msgId,
+        server_id: serverId,
+        channel_id: channelId,
+        text: text,
+        author_id: userId
+      })
+      .select("*")
+      .maybeSingle();
+
+    if (insertErr) throw insertErr;
+
+    res.status(201).json({
+      id: msg.id,
+      serverId: msg.server_id,
+      channelId: msg.channel_id,
+      text: msg.text,
+      authorId: msg.author_id,
+      createdAt: msg.created_at,
+      author: req.user.name,
+      authorAvatar: req.user.avatar_url,
+      authorProfileFrameItemId: req.user.profile_frame_item_id || null,
+      authorProfileFrameUrl: shopItemUrl(req.user.profile_frame_item_id)
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/users/in-servers", authenticate, async (req, res) => {
+  try {
+    const { data: members, error: membersErr } = await supabase
+      .from("server_members")
+      .select("user_id");
+
+    if (membersErr) throw membersErr;
+    if (!members || members.length === 0) {
+      return res.json([]);
+    }
+
+    const userIds = [...new Set(members.map(m => m.user_id))];
+    
+    const { data: users, error: usersErr } = await supabase
+      .from("users")
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids");
+
+    if (usersErr) throw usersErr;
+    
+    const inServerSet = new Set(userIds);
+    const serverUsersList = users.filter(u => inServerSet.has(u.id));
+
+    res.json(serverUsersList);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.listen(Number(process.env.PORT || 4000), () => {
   console.log(`purxu backend on http://localhost:${process.env.PORT || 4000}`);
 });

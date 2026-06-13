@@ -161,6 +161,7 @@ export default function App() {
   const [userProfilePeek, setUserProfilePeek] = useState(null);
   const [bondState, setBondState] = useState({ bonds: [], wallet: { coins: 0 }, levels: [] });
   const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 }, gacha: null });
+  const [serverUsers, setServerUsers] = useState([]);
 
   const [theme, setTheme] = useState(() => {
     try {
@@ -560,8 +561,16 @@ export default function App() {
     setNotifications(Array.isArray(no) ? no : []);
   }
 
+  async function loadServerUsers() {
+    if (!token) return;
+    const res = await api("/users/in-servers");
+    if (!res.error && Array.isArray(res)) {
+      setServerUsers(res);
+    }
+  }
+
   async function loadAll() {
-    await Promise.all([loadCore(), loadComms(), loadAdminUsers()]);
+    await Promise.all([loadCore(), loadComms(), loadAdminUsers(), loadServerUsers()]);
   }
 
   useEffect(() => {
@@ -2083,6 +2092,8 @@ export default function App() {
           element={
             <MessagesPage
               currentUser={user}
+              serverUsers={serverUsers}
+              onRefreshServerUsers={loadServerUsers}
               conversations={conversationsForSidebar}
               messagesArchivedView={messagesArchivedView}
               onToggleMessagesArchived={() => setMessagesArchivedView((v) => !v)}

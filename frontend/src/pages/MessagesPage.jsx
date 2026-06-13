@@ -7,7 +7,7 @@ import MentionText from "../components/MentionText.jsx";
 import ReactionActorsModal from "../components/ReactionActorsModal.jsx";
 import ModalPortal from "../components/ModalPortal.jsx";
 import EmojiPickerButton from "../components/EmojiPickerButton.jsx";
-import CommunityStoriesRail from "../components/CommunityStories.jsx";
+import AvatarWithFrame from "../components/AvatarWithFrame.jsx";
 import { useImageLightbox } from "../components/ImageLightboxContext.jsx";
 import OverflowMarqueeText from "../components/OverflowMarqueeText.jsx";
 import { listeningStatusLine } from "../utils/displayStatus.js";
@@ -166,6 +166,8 @@ function StatusEmojiChip({ emoji }) {
 export default function MessagesPage({
   token,
   currentUser,
+  serverUsers = [],
+  onRefreshServerUsers,
   conversations,
   messagesArchivedView = false,
   onToggleMessagesArchived,
@@ -224,10 +226,10 @@ export default function MessagesPage({
   const [optimisticMessages, setOptimisticMessages] = useState([]);
   const [chatTab, setChatTab] = useState("users");
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [servers, setServers] = useState(loadLocalServers);
-  const [selectedServerId, setSelectedServerId] = useState(() => loadLocalServers()[0]?.id || "");
-  const [selectedChannelId, setSelectedChannelId] = useState(() => loadLocalServers()[0]?.sections?.[0]?.channels?.[0]?.id || "");
-  const [serverMessages, setServerMessages] = useState(loadServerMessages);
+  const [servers, setServers] = useState([]);
+  const [selectedServerId, setSelectedServerId] = useState("");
+  const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [channelMessages, setChannelMessages] = useState([]);
   const [serverDraft, setServerDraft] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
@@ -281,6 +283,69 @@ export default function MessagesPage({
       : [];
     return [...me, ...friendInviteTargets.map((friend) => ({ ...friend, presence: friend.presence || "online" }))];
   }, [currentUser, friendInviteTargets]);
+
+  async function loadServers() {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const list = await res.json();
+      if (Array.isArray(list)) {
+        const normalized = list.map(s => ({
+          ...s,
+          sections: s.structure || s.sections || []
+        }));
+        setServers(normalized);
+        if (normalized.length > 0 && !selectedServerId) {
+          setSelectedServerId(normalized[0].id);
+          const firstChan = normalized[0].sections?.[0]?.channels?.[0]?.id || "";
+          setSelectedChannelId(firstChan);
+        }
+      }
+    } catch (err) {
+      console.error("loadServers error:", err);
+    }
+  }
+
+  async function loadActiveChannelMessages() {
+    if (!token || !selectedServerId || !selectedChannelId) {
+      setChannelMessages([]);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const list = await res.json();
+      if (Array.isArray(list)) {
+        const normalized = list.map(m => ({
+          ...m,
+          avatarUrl: m.avatarUrl || m.authorAvatar || null
+        }));
+        setChannelMessages(normalized);
+      }
+    } catch (err) {
+      console.error("loadActiveChannelMessages error:", err);
+    }
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    void loadServers();
+  }, [token]);
+
+  useEffect(() => {
+    if (!token || !selectedServerId || !selectedChannelId) {
+      setChannelMessages([]);
+      return;
+    }
+    void loadActiveChannelMessages();
+    const interval = setInterval(() => {
+      void loadActiveChannelMessages();
+    }, 6000);
+    return () => clearInterval(interval);
+  }, [token, selectedServerId, selectedChannelId]);
 
   useEffect(() => {
     if (!deepLinkServerInvite) return undefined;
@@ -438,31 +503,36 @@ export default function MessagesPage({
     }
   }, [selectedChannel, selectedServer, servers]);
 
-  function handleCreateServer({ name, iconUrl }) {
+  async function handleCreateServer({ name, iconUrl }) {
     const trimmed = name.trim();
     if (!trimmed) return;
-    const nextServer = {
-      id: `server-${Date.now()}`,
-      name: trimmed,
-      iconUrl: iconUrl || DEFAULT_SERVER_ICON,
-      sections: [
-        {
-          id: "text",
-          name: "Text Channels",
-          channels: [{ id: `general-${Date.now()}`, type: "text", name: "general" }]
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
         },
-        {
-          id: "voice",
-          name: "Voice Channels",
-          channels: [{ id: `lobby-${Date.now()}`, type: "voice", name: "Lobby" }]
-        }
-      ]
-    };
-    setServers((prev) => [nextServer, ...prev]);
-    setSelectedServerId(nextServer.id);
-    setSelectedChannelId(nextServer.sections[0].channels[0].id);
-    setShowCreateServer(false);
-    setChatTab("servers");
+        body: JSON.stringify({ name: trimmed, iconUrl })
+      });
+      const data = await res.json();
+      if (!data.error) {
+        const normalizedServer = {
+          ...data,
+          sections: data.structure || data.sections || []
+        };
+        setServers((prev) => [normalizedServer, ...prev]);
+        setSelectedServerId(normalizedServer.id);
+        setSelectedChannelId(normalizedServer.sections?.[0]?.channels?.[0]?.id || "");
+        setShowCreateServer(false);
+        setChatTab("servers");
+        onRefreshServerUsers?.();
+      } else {
+        window.alert(data.error);
+      }
+    } catch (err) {
+      console.error("handleCreateServer error:", err);
+    }
   }
 
   function handleUpdateServer({ name, iconUrl }) {
@@ -479,17 +549,36 @@ export default function MessagesPage({
     setServerSettingsOpen(false);
   }
 
-  function joinInvitedServer(server) {
+  async function joinInvitedServer(server) {
     if (!server?.id) return;
-    setServers((prev) => {
-      const existing = prev.find((row) => row.id === server.id);
-      if (existing) return prev;
-      return [server, ...prev];
-    });
-    setSelectedServerId(server.id);
-    setSelectedChannelId(server.sections?.[0]?.channels?.[0]?.id || "");
-    setChatTab("servers");
-    setPendingServerInvite(null);
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${server.id}/join`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      const data = await res.json();
+      if (!data.error) {
+        const normalizedServer = {
+          ...data,
+          sections: data.structure || data.sections || []
+        };
+        setServers((prev) => {
+          const filtered = prev.filter((s) => s.id !== normalizedServer.id);
+          return [normalizedServer, ...filtered];
+        });
+        setSelectedServerId(normalizedServer.id);
+        setSelectedChannelId(normalizedServer.sections?.[0]?.channels?.[0]?.id || "");
+        setChatTab("servers");
+        setPendingServerInvite(null);
+        onRefreshServerUsers?.();
+      } else {
+        window.alert(data.error);
+      }
+    } catch (err) {
+      console.error("joinInvitedServer error:", err);
+    }
   }
 
   function updateChannel(channelId, updates) {
@@ -516,11 +605,6 @@ export default function MessagesPage({
         }))
       }))
     );
-    setServerMessages((prev) => {
-      const next = { ...prev };
-      delete next[channelId];
-      return next;
-    });
     if (selectedChannelId === channelId) {
       const fallback = selectedServer?.sections
         ?.flatMap((section) => section.channels || [])
@@ -529,47 +613,64 @@ export default function MessagesPage({
     }
   }
 
-  function sendServerMessage(e) {
+  async function sendServerMessage(e) {
     e.preventDefault();
     const text = serverDraft.trim();
-    if (!text || !selectedChannel) return;
-    const message = {
-      id: `server-message-${Date.now()}`,
-      text,
-      author: currentUser?.name || "You",
-      avatarUrl: currentUser?.avatarUrl || null,
-      createdAt: new Date().toISOString()
-    };
-    setServerMessages((prev) => ({
-      ...prev,
-      [selectedChannel.id]: [...(prev[selectedChannel.id] || []), message]
-    }));
+    if (!text || !selectedChannel || !selectedServerId) return;
     setServerDraft("");
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ text })
+      });
+      const newMsg = await res.json();
+      if (!newMsg.error) {
+        setChannelMessages(prev => [...prev, {
+          ...newMsg,
+          avatarUrl: newMsg.avatarUrl || newMsg.authorAvatar || null
+        }]);
+      }
+    } catch (err) {
+      console.error("sendServerMessage error:", err);
+    }
   }
 
-  function handleCreateServerChannel({ sectionId, channelType, name, isPrivate }) {
+  async function handleCreateServerChannel({ sectionId, channelType, name, isPrivate }) {
     if (!selectedServer || !sectionId || !name.trim()) return;
-    const channel = {
-      id: `channel-${Date.now()}`,
-      type: channelType,
-      name: name.trim().replace(/\s+/g, "-").toLowerCase(),
-      private: Boolean(isPrivate)
-    };
-    setServers((prev) =>
-      prev.map((server) => {
-        if (server.id !== selectedServer.id) return server;
-        return {
-          ...server,
-          sections: server.sections.map((section) =>
-            section.id === sectionId
-              ? { ...section, channels: [...section.channels, channel] }
-              : section
-          )
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ name: name.trim(), type: channelType, sectionId })
+      });
+      const data = await res.json();
+      if (!data.error) {
+        const normalizedServer = {
+          ...data,
+          sections: data.structure || data.sections || []
         };
-      })
-    );
-    setSelectedChannelId(channel.id);
-    setCreateChannelContext(null);
+        setServers((prev) =>
+          prev.map((s) => s.id === selectedServerId ? normalizedServer : s)
+        );
+        const allChans = normalizedServer.sections.flatMap(s => s.channels || []);
+        const newChan = allChans.find(c => c.name === name.trim().toLowerCase()) || allChans[allChans.length - 1];
+        if (newChan) {
+          setSelectedChannelId(newChan.id);
+        }
+        setCreateChannelContext(null);
+      } else {
+        window.alert(data.error);
+      }
+    } catch (err) {
+      console.error("handleCreateServerChannel error:", err);
+    }
   }
 
   useEffect(() => {
@@ -733,21 +834,7 @@ export default function MessagesPage({
       className={`panel single messages-panel ${mobileThreadFullscreen ? "messages-mobile-fullscreen" : ""}`}
     >
       <div className="messages-layout">
-        {chatTab === "users" && isNarrowViewport && token && !liteMode ? (
-          <div
-            className={`messages-mobile-stories${
-              mobileThreadFullscreen ? " messages-mobile-stories--hidden-fullscreen" : ""
-            }`}
-          >
-            <CommunityStoriesRail
-              token={token}
-              currentUser={currentUser}
-              characters={characters}
-              variant="horizontal"
-              onOpenUserProfile={onOpenUserProfile}
-            />
-          </div>
-        ) : null}
+
         <aside className="messages-sidebar">
           <div className="sidebar-top-row">
             <p className="sidebar-title">Chats</p>
@@ -1057,111 +1144,129 @@ export default function MessagesPage({
               ) : null}
 
               <div className="conv-list">
-                {!(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && messagesArchivedView ? (
-                  <p className="empty-hint muted small archive-empty-msg">No archived chats. Tap Active chats.</p>
-                ) : !(conversations || []).some((c) => c.kind === "dm" || c.kind === "group") && !messagesArchivedView ? (
-                  <p className="empty-hint">No conversations yet. Search someone or use the ＋ menu.</p>
-                ) : null}
-                {(conversations || []).map((c) => {
-                    const isDmOrPhone = c.kind === "dm" || c.kind === "userphone";
-                    const target = c.kind === "group" ? c.group : c.user;
-                    const isActive =
-                      (c.kind === "group" && activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id) ||
-                      (c.kind === "dm" && activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id) ||
-                      (c.kind === "userphone" && activeChat?.kind === "userphone");
-
-                    function openThisConversation() {
-                      if (c.kind === "userphone") return onOpenChat?.("userphone", "userphone");
-                      return onOpenChat?.(c.kind, isDmOrPhone && c.kind === "dm" ? c.user.id : c.group.id);
+                {/* Always prepend Userphone option so they can still access it */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`conv-item conv-userphone ${activeChat?.kind === "userphone" ? "active" : ""}`}
+                  onClick={() => onOpenChat?.("userphone", "userphone")}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onOpenChat?.("userphone", "userphone");
                     }
+                  }}
+                >
+                  <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
+                    📞
+                  </div>
+                  <div className="conv-item-body">
+                    <strong>
+                      Userphone <span className="pill pill-muted small">anonymous</span>
+                    </strong>
+                    <span className="conv-preview">Tap Call anonymous to match</span>
+                  </div>
+                </div>
 
+                {/* Prepend purxu AI chatbot assistant */}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  className={`conv-item ${activeChat?.kind === "dm" && activeChat?.user?.id === SIGLACAST_AI_USER_ID ? "active" : ""}`}
+                  onClick={() => onOpenChat?.("dm", SIGLACAST_AI_USER_ID)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onOpenChat?.("dm", SIGLACAST_AI_USER_ID);
+                    }
+                  }}
+                >
+                  <div className="msg-avatar sm placeholder chatbot-avatar" aria-hidden>
+                    🤖
+                  </div>
+                  <div className="conv-item-body">
+                    <strong>
+                      purxu AI <span className="pill pill-muted small">assistant</span>
+                    </strong>
+                    <span className="conv-preview">Ask anything</span>
+                  </div>
+                </div>
+
+                {/* Render active group chats that the user belongs to */}
+                {conversations
+                  .filter((c) => c.kind === "group")
+                  .map((c) => {
+                    const isActive = activeChat?.kind === "group" && activeChat?.group?.id === c.group?.id;
                     return (
                       <div
                         key={c.id}
                         role="button"
                         tabIndex={0}
-                        className={`conv-item ${c.kind === "userphone" ? "conv-userphone" : ""} ${isActive ? "active" : ""}`}
-                        onClick={openThisConversation}
+                        className={`conv-item ${isActive ? "active" : ""}`}
+                        onClick={() => onOpenChat?.("group", c.group.id)}
                         onKeyDown={(e) => {
                           if (e.key === "Enter" || e.key === " ") {
                             e.preventDefault();
-                            openThisConversation();
+                            onOpenChat?.("group", c.group.id);
                           }
                         }}
                       >
-                        {c.kind === "userphone" ? (
-                          <div className="msg-avatar sm placeholder conv-userphone-avatar" aria-hidden>
-                            📞
-                          </div>
-                        ) : c.kind === "dm" ? (
-                          renderAvatar(target, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })
-                        ) : (
-                          renderAvatar(target, "sm")
-                        )}
+                        {renderAvatar(c.group, "sm")}
                         <div className="conv-item-body">
-                          <strong className={c.kind === "dm" ? "user-line-name" : undefined}>
-                            {target?.name || "Unknown"}{" "}
-                            {!isDmOrPhone ? <span className="pill pill-muted small">group</span> : null}
-                            {c.kind === "userphone" ? (
-                              <span className="pill pill-muted small">anonymous</span>
-                            ) : null}
-                            {c.kind === "dm" ? <StatusEmojiChip emoji={target?.statusEmoji} /> : null}
+                          <strong>
+                            {c.group?.name || "Group"} <span className="pill pill-muted small">group</span>
                           </strong>
-                          {c.kind === "dm" ? (
-                            (() => {
-                              const line = listeningStatusLine(target);
-                              return line ? (
-                                <span className="conv-status-sub" title={line}>
-                                  <OverflowMarqueeText text={line} />
-                                </span>
-                              ) : null;
-                            })()
-                          ) : null}
                           <span className="conv-preview">
-                            {c.lastMessage
-                              ? `${c.lastMessage.fromMe ? "You: " : ""}${findServerInvite(c.lastMessage.text) ? "Server invite" : c.lastMessage.text || ""}`
-                              : "No messages yet"}
+                            {c.lastMessage ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text}` : "Group chat"}
                           </span>
-                        </div>
-                        <div className="conv-item-tail">
-                          {!messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm conv-row-archive-btn"
-                              aria-label="Archive chat"
-                              title="Archive"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                void (c.kind === "group"
-                                  ? onArchiveConversation?.({ conversationId: c.group.id })
-                                  : onArchiveConversation?.({ dmPeerId: c.user.id }));
-                              }}
-                            >
-                              <span className="ui-icon ui-icon-box" aria-hidden="true" />
-                            </button>
-                          ) : messagesArchivedView && (c.kind === "dm" || c.kind === "group") ? (
-                            <button
-                              type="button"
-                              className="btn btn-ghost btn-sm conv-row-archive-btn"
-                              aria-label="Restore chat"
-                              title="Restore to active"
-                              onClick={(e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                void (c.kind === "group"
-                                  ? onUnarchiveConversation?.({ conversationId: c.group.id })
-                                  : onUnarchiveConversation?.({ dmPeerId: c.user.id }));
-                              }}
-                            >
-                              <span className="ui-icon ui-icon-box" aria-hidden="true" />
-                            </button>
-                          ) : null}
-                          {c.unreadCount > 0 ? <span className="unread-dot">{c.unreadCount}</span> : null}
                         </div>
                       </div>
                     );
                   })}
+
+                {/* Render server users */}
+                {(!serverUsers || serverUsers.length === 0) ? (
+                  <p className="empty-hint" style={{ padding: "12px", textAlign: "center", color: "var(--ink-600)" }}>
+                    No server members found. Join a server to see members list!
+                  </p>
+                ) : (
+                  serverUsers
+                    .filter((u) => u.id !== currentUser?.id && u.id !== SIGLACAST_AI_USER_ID)
+                    .map((u) => {
+                      const isActive = activeChat?.kind === "dm" && activeChat?.user?.id === u.id;
+                      return (
+                        <div
+                          key={u.id}
+                          role="button"
+                          tabIndex={0}
+                          className={`conv-item ${isActive ? "active" : ""}`}
+                          onClick={() => onOpenChat?.("dm", u.id)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              onOpenChat?.("dm", u.id);
+                            }
+                          }}
+                        >
+                          {renderAvatar(u, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })}
+                          <div className="conv-item-body">
+                            <strong className="user-line-name">
+                              {u.name} <StatusEmojiChip emoji={u.statusEmoji} />
+                            </strong>
+                            {u.statusNote ? (
+                              <span className="conv-status-sub" title={u.statusNote}>
+                                <OverflowMarqueeText text={u.statusNote} />
+                              </span>
+                            ) : u.bio ? (
+                              <span className="conv-preview">{u.bio}</span>
+                            ) : (
+                              <span className="conv-preview">Click to open direct message</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })
+                )}
               </div>
             </>
           ) : (
@@ -1739,18 +1844,7 @@ export default function MessagesPage({
           )}
         </div>
 
-        {chatTab === "users" && !isNarrowViewport && token && !liteMode ? (
-          <aside className="messages-stories-sidebar" aria-label="Stories">
-            <CommunityStoriesRail
-              token={token}
-              currentUser={currentUser}
-              characters={characters}
-              variant="vertical"
-              onOpenUserProfile={onOpenUserProfile}
-              onUnauthorizedRetry={onUnauthorizedRetry}
-            />
-          </aside>
-        ) : null}
+
       </div>
 
       {showCreateGroup ? (
@@ -2587,8 +2681,8 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
               className={`server-member-row${selectedMember?.id === member.id ? " active" : ""}`}
               onClick={() => setSelectedMember(member)}
             >
-              <span className="server-member-avatar">
-                {member.avatarUrl ? <img src={mediaUrl(member.avatarUrl)} alt="" /> : <span>{member.name?.charAt(0) || "?"}</span>}
+              <span className="server-member-avatar" style={{ position: "relative", display: "inline-block" }}>
+                <AvatarWithFrame user={member} size="sm" />
                 <i className={presence.className} title={presence.title} />
               </span>
               <span className="server-member-copy">
@@ -2601,21 +2695,41 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
       </div>
       {selectedMember ? (
         <div className="server-member-card">
-          <div className="server-member-card-cover" />
+          <div
+            className="server-member-card-cover"
+            style={
+              selectedMember.coverUrl
+                ? { backgroundImage: `url(${mediaUrl(selectedMember.coverUrl)})`, backgroundSize: "cover", backgroundPosition: "center" }
+                : undefined
+            }
+          />
           <button
             type="button"
             className="server-member-card-avatar"
             onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}
             title="View profile"
+            style={{ display: "grid", placeItems: "center", overflow: "visible" }}
           >
-            {selectedMember.avatarUrl ? <img src={mediaUrl(selectedMember.avatarUrl)} alt="" /> : <span>{selectedMember.name?.charAt(0) || "?"}</span>}
+            <AvatarWithFrame user={selectedMember} size="md" />
           </button>
           <div className="server-member-card-body">
             <strong>{selectedMember.name || "Member"}</strong>
             <small>{selectedMember.isCurrentUser ? "You" : "purxu profile"}</small>
-            <p>{selectedMember.statusNote || selectedMember.bio || "No status yet."}</p>
+            {selectedMember.availability ? (
+              <small style={{ color: "var(--ink-500)", textTransform: "capitalize" }}>
+                Availability: {selectedMember.availability}
+              </small>
+            ) : null}
+            {selectedMember.statusNote ? (
+              <p style={{ fontWeight: "bold", margin: "4px 0" }}>Status: {selectedMember.statusNote}</p>
+            ) : null}
+            <p>{selectedMember.bio || "No bio yet."}</p>
             <div className="server-member-card-actions">
-              <button type="button" className="btn btn-primary btn-sm" onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}
+              >
                 View profile
               </button>
               <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedMember(null)}>
