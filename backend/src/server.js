@@ -86,7 +86,10 @@ const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "24h";
 const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET || "siglacast-dev-refresh-secret";
 const REFRESH_TOKEN_EXPIRES_IN = process.env.REFRESH_TOKEN_EXPIRES_IN || "365d";
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || "*";
-const OAUTH_REDIRECT_ORIGIN = process.env.OAUTH_REDIRECT_ORIGIN || (FRONTEND_ORIGIN !== "*" ? FRONTEND_ORIGIN.split(",")[0].trim() : "http://localhost:5173");
+const PUBLIC_FRONTEND_ORIGIN = process.env.PUBLIC_FRONTEND_ORIGIN || "https://siglacast.vercel.app";
+const OAUTH_REDIRECT_ORIGIN =
+  process.env.OAUTH_REDIRECT_ORIGIN ||
+  (FRONTEND_ORIGIN !== "*" ? FRONTEND_ORIGIN.split(",")[0].trim() : PUBLIC_FRONTEND_ORIGIN);
 const MOBILE_APP_ORIGINS = ["capacitor://localhost", "http://localhost", "https://localhost"];
 
 /** purxu Assistant (Groq) — key must be supplied via environment only, never committed. */
@@ -477,19 +480,25 @@ async function awardBondInteraction(userId, targetUserId, { hasAttachment = fals
   return { expGained, coinsGained, bond, wallet };
 }
 
-function frontendAuthCallbackUrl(rawRedirectTo) {
+function isLocalRequest(req) {
+  const host = String(req?.hostname || req?.headers?.host || "").split(":")[0].toLowerCase();
+  return host === "localhost" || host === "127.0.0.1";
+}
+
+function frontendAuthCallbackUrl(rawRedirectTo, req) {
   const fallback = `${OAUTH_REDIRECT_ORIGIN.replace(/\/$/, "")}/auth/callback`;
   if (!rawRedirectTo) return fallback;
   try {
     const url = new URL(String(rawRedirectTo));
     const allowedOrigins = new Set(
-      [OAUTH_REDIRECT_ORIGIN, FRONTEND_ORIGIN, "http://localhost:5173", "http://127.0.0.1:5173"]
+      [PUBLIC_FRONTEND_ORIGIN, OAUTH_REDIRECT_ORIGIN, FRONTEND_ORIGIN]
         .flatMap((value) => String(value || "").split(","))
         .map((value) => value.trim().replace(/\/$/, ""))
         .filter((value) => value && value !== "*")
     );
     const isLocalhost = ["localhost", "127.0.0.1"].includes(url.hostname);
-    if ((url.protocol === "http:" || url.protocol === "https:") && (allowedOrigins.has(url.origin) || isLocalhost)) {
+    const localRedirectAllowed = isLocalhost && (isLocalRequest(req) || process.env.NODE_ENV !== "production");
+    if ((url.protocol === "http:" || url.protocol === "https:") && (allowedOrigins.has(url.origin) || localRedirectAllowed)) {
       return url.toString();
     }
   } catch (_) {
@@ -2515,7 +2524,7 @@ app.get("/api/auth/oauth/:provider/start", async (req, res) => {
     const provider = oauthProviderFromValue(req.params.provider);
     if (!provider) return res.status(400).json({ error: "Unsupported OAuth provider" });
 
-    const redirectTo = frontendAuthCallbackUrl(req.query.redirectTo);
+    const redirectTo = frontendAuthCallbackUrl(req.query.redirectTo, req);
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {

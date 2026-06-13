@@ -377,7 +377,8 @@ export default function App() {
       navigate("/login", { replace: true });
       return;
     }
-    const selectedProvider = inferredProvider === "apple" ? "apple" : "google";
+    const selectedProvider =
+      inferredProvider === "apple" || inferredProvider === "discord" ? inferredProvider : "google";
     void completeSocialLogin(selectedProvider, accessToken);
   }, [location.pathname]);
 

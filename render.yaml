@@ -25,5 +25,7 @@ services:
         value: 365d
       - key: FRONTEND_ORIGIN
         sync: false
+      - key: PUBLIC_FRONTEND_ORIGIN
+        value: https://siglacast.vercel.app
       - key: BROKER
         value: ""
