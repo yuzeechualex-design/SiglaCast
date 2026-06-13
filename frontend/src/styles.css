@@ -12639,14 +12639,14 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 .shop-limited-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: clamp(18px, 2vw, 28px);
   width: 100%;
 }
 
 .shop-gacha-banner {
   position: relative;
-  min-height: clamp(260px, 24vw, 360px);
-  aspect-ratio: 16 / 7;
+  min-width: 0;
+  height: clamp(260px, 24vw, 360px);
   overflow: hidden;
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 24px;
@@ -12724,15 +12724,35 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   position: absolute;
   top: 18px;
   right: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 36px;
+  min-width: 104px;
   margin-left: 0;
   align-self: auto;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
-  padding: 12px 16px;
+  padding: 7px 11px 7px 13px;
   background: rgba(255, 255, 255, 0.15);
   color: #fff;
+  font-size: 0.86rem;
   font-weight: 1000;
   backdrop-filter: blur(14px);
+}
+
+.shop-gacha-banner-cta .coin-amount,
+.gacha-draw-btn .coin-amount {
+  flex-direction: row-reverse;
+  gap: 5px;
+}
+
+.shop-gacha-banner-cta .coin-icon,
+.gacha-draw-btn .coin-icon {
+  width: 18px;
+  height: 18px;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.28);
 }
 
 .coin-shop-grid {
