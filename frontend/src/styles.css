@@ -5717,6 +5717,54 @@ textarea.profile-bio-input::placeholder {
   min-width: 0;
 }
 
+.server-invite-friend-list {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.server-invite-friend-head {
+  display: grid;
+  gap: 3px;
+}
+
+.server-invite-friend-head small {
+  color: var(--ink-600);
+}
+
+.server-invite-friend-row {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 9px;
+  background: var(--surface);
+}
+
+.server-invite-friend-row > img,
+.server-invite-friend-row > span {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  background: rgba(124, 58, 237, 0.16);
+  color: var(--blue-700);
+  font-weight: 1000;
+}
+
+.server-invite-friend-row > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .server-invite-actions {
   justify-content: flex-end;
 }

@@ -184,6 +184,7 @@ export default function MessagesPage({
   onAddFriend,
   onOpenChat, // (kind, id)  kind: "dm" | "group" | "userphone"
   onSendMessage,         // (text, file) routed by App based on activeChat.kind
+  onSendDirectMessage,   // (userId, text) sends a DM without switching threads
   onRefreshConversations,
   onCreateGroup,         // ({ name, memberIds, photoFile })
   onUpdateGroup,         // (groupId, { name, photoFile })
@@ -251,6 +252,14 @@ export default function MessagesPage({
   const deepLinkDm = searchParams.get("dm");
   const deepLinkGroup = searchParams.get("group");
   const deepLinkServerInvite = searchParams.get(SERVER_INVITE_PARAM);
+  const friendInviteTargets = useMemo(() => {
+    const byId = new Map();
+    (conversations || []).forEach((conversation) => {
+      if (conversation?.kind !== "dm" || !conversation.user?.id) return;
+      byId.set(conversation.user.id, conversation.user);
+    });
+    return [...byId.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  }, [conversations]);
 
   useEffect(() => {
     if (!deepLinkServerInvite) return undefined;
@@ -1054,7 +1063,7 @@ export default function MessagesPage({
                           ) : null}
                           <span className="conv-preview">
                             {c.lastMessage
-                              ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text || ""}`
+                              ? `${c.lastMessage.fromMe ? "You: " : ""}${findServerInvite(c.lastMessage.text) ? "Server invite" : c.lastMessage.text || ""}`
                               : "No messages yet"}
                           </span>
                         </div>
@@ -1787,7 +1796,12 @@ export default function MessagesPage({
       ) : null}
 
       {inviteServer ? (
-        <ServerInviteModal server={inviteServer} onClose={() => setInviteServer(null)} />
+        <ServerInviteModal
+          server={inviteServer}
+          friends={friendInviteTargets}
+          onSendInvite={onSendDirectMessage}
+          onClose={() => setInviteServer(null)}
+        />
       ) : null}
 
       {pendingServerInvite ? (
@@ -2160,9 +2174,10 @@ function MessageBubble({
             ) : (
               <>
                 {m.attachment ? <MessageAttachment att={m.attachment} liteMode={liteMode} /> : null}
-                {m.text ? <p><MentionText text={m.text} /></p> : null}
                 {serverInvite ? (
                   <ServerInviteCard server={serverInvite} onJoin={() => onJoinServerInvite?.(serverInvite)} />
+                ) : m.text ? (
+                  <p><MentionText text={m.text} /></p>
                 ) : null}
               </>
             )}
@@ -2273,8 +2288,10 @@ function ServerInviteCard({ server, onJoin }) {
   );
 }
 
-function ServerInviteModal({ server, onClose }) {
+function ServerInviteModal({ server, friends = [], onSendInvite, onClose }) {
   const [copied, setCopied] = useState(false);
+  const [sentIds, setSentIds] = useState(() => new Set());
+  const [sendingId, setSendingId] = useState("");
   const link = serverInviteUrl(server);
 
   async function copy() {
@@ -2283,6 +2300,16 @@ function ServerInviteModal({ server, onClose }) {
       setCopied(true);
     } catch (_) {
       setCopied(false);
+    }
+  }
+
+  async function sendToFriend(friend) {
+    if (!friend?.id || !onSendInvite || sendingId) return;
+    setSendingId(friend.id);
+    const res = await onSendInvite(friend.id, link);
+    setSendingId("");
+    if (!res?.error) {
+      setSentIds((prev) => new Set([...prev, friend.id]));
     }
   }
 
@@ -2305,6 +2332,33 @@ function ServerInviteModal({ server, onClose }) {
               <button type="button" className="btn btn-primary" onClick={copy}>
                 {copied ? "Copied" : "Copy"}
               </button>
+            </div>
+            <div className="server-invite-friend-list">
+              <div className="server-invite-friend-head">
+                <strong>Invite friends</strong>
+                <small>{friends.length ? "Send this invite directly to their messages." : "Start a DM with friends first to invite them here."}</small>
+              </div>
+              {friends.map((friend) => {
+                const sent = sentIds.has(friend.id);
+                return (
+                  <div key={friend.id} className="server-invite-friend-row">
+                    {friend.avatarUrl ? (
+                      <img src={mediaUrl(friend.avatarUrl)} alt="" />
+                    ) : (
+                      <span>{friend.name?.charAt(0) || "?"}</span>
+                    )}
+                    <strong>{friend.name || "Friend"}</strong>
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-sm"
+                      disabled={sent || sendingId === friend.id || !onSendInvite}
+                      onClick={() => sendToFriend(friend)}
+                    >
+                      {sendingId === friend.id ? "Sending..." : sent ? "Sent" : "Invite"}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2456,24 +2510,25 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
           </div>
         </div>
         <div className="server-thread-messages">
-          {messages.map((message) => (
-            <div key={message.id} className="server-message-row">
-              {message.avatarUrl ? <img src={mediaUrl(message.avatarUrl)} alt="" /> : <span>{message.author?.charAt(0) || "?"}</span>}
-              <div>
-                <div className="server-message-meta">
-                  <strong>{message.author}</strong>
-                  <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+          {messages.map((message) => {
+            const invite = findServerInvite(message.text);
+            return (
+              <div key={message.id} className="server-message-row">
+                {message.avatarUrl ? <img src={mediaUrl(message.avatarUrl)} alt="" /> : <span>{message.author?.charAt(0) || "?"}</span>}
+                <div>
+                  <div className="server-message-meta">
+                    <strong>{message.author}</strong>
+                    <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
+                  </div>
+                  {invite ? (
+                    <ServerInviteCard server={invite} onJoin={() => onJoinServerInvite?.(invite)} />
+                  ) : (
+                    <p>{message.text}</p>
+                  )}
                 </div>
-                <p>{message.text}</p>
-                {findServerInvite(message.text) ? (
-                  <ServerInviteCard
-                    server={findServerInvite(message.text)}
-                    onJoin={() => onJoinServerInvite?.(findServerInvite(message.text))}
-                  />
-                ) : null}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
         {channel?.type === "text" ? (
           <form className="server-thread-compose" onSubmit={onSend}>

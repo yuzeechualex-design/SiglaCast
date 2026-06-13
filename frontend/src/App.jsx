@@ -1525,6 +1525,24 @@ export default function App() {
     await loadMessages();
   }
 
+  async function sendDirectMessageToUser(userId, text) {
+    if (!userId || !String(text || "").trim()) return { error: "Choose a friend and an invite first." };
+    const formData = new FormData();
+    formData.append("text", String(text).trim());
+    const res = await apiForm(`/messages/with/${userId}`, formData);
+    if (res.error) {
+      setNotice(res.error);
+      return res;
+    }
+    setNotice("Invite sent");
+    if (activeChat?.kind === "dm" && activeChat.user?.id === userId) {
+      const refreshed = await api(`/messages/with/${userId}`);
+      if (!refreshed.error) setActiveChat({ ...refreshed, kind: "dm" });
+    }
+    await loadMessages();
+    return res;
+  }
+
   /** purxu AI replies inside this thread — everyone in the chat sees assistant bubbles like a participant. */
   async function sendSiglaInActiveThread(text, replyToId = null) {
     if (!activeChat) return;
@@ -2082,6 +2100,7 @@ export default function App() {
               onAddFriend={addFriend}
               onOpenChat={openChat}
               onSendMessage={sendChatMessage}
+              onSendDirectMessage={sendDirectMessageToUser}
               onRefreshConversations={loadMessages}
               onCreateGroup={createGroupChat}
               onUpdateGroup={updateGroupChat}
