@@ -698,7 +698,7 @@ export default function MessagesPage({
       className={`panel single messages-panel ${mobileThreadFullscreen ? "messages-mobile-fullscreen" : ""}`}
     >
       <div className="messages-layout">
-        {isNarrowViewport && token && !liteMode ? (
+        {chatTab === "users" && isNarrowViewport && token && !liteMode ? (
           <div
             className={`messages-mobile-stories${
               mobileThreadFullscreen ? " messages-mobile-stories--hidden-fullscreen" : ""
@@ -958,7 +958,7 @@ export default function MessagesPage({
                   placeholder="Search people…"
                   aria-label="Search people by name or email"
                 />
-                <button type="submit" className="btn btn-secondary btn-sm">
+                <button type="submit" className="friend-search-btn" aria-label="Search">
                   🔍
                 </button>
                 {peopleSearchHint ? (
@@ -1704,7 +1704,7 @@ export default function MessagesPage({
           )}
         </div>
 
-        {!isNarrowViewport && token && !liteMode ? (
+        {chatTab === "users" && !isNarrowViewport && token && !liteMode ? (
           <aside className="messages-stories-sidebar" aria-label="Stories">
             <CommunityStoriesRail
               token={token}
