@@ -3756,6 +3756,9 @@ body.community-thread-overlay-open {
 }
 
 .my-profile-avatar-wrap {
+  --profile-frame-scale: 1.16;
+  --profile-frame-x: 0px;
+  --profile-frame-y: 0px;
   margin-top: -58px;
   position: relative;
   z-index: 2;
@@ -3782,13 +3785,28 @@ body.community-thread-overlay-open {
 
 .my-profile-avatar-frame {
   position: absolute;
-  inset: -16px;
+  left: 50%;
+  top: 50%;
   z-index: 3;
-  width: calc(100% + 32px);
-  height: calc(100% + 32px);
+  width: calc(100% * var(--profile-frame-scale));
+  height: calc(100% * var(--profile-frame-scale));
   object-fit: contain;
+  transform: translate(-50%, -50%) translate(var(--profile-frame-x), var(--profile-frame-y));
   pointer-events: none;
   filter: drop-shadow(0 10px 22px rgba(76, 29, 149, 0.35));
+}
+
+.my-profile-avatar-wrap.frame-fit-alien-stage {
+  --profile-frame-scale: 1.12;
+}
+
+.my-profile-avatar-wrap.frame-fit-chiikawa {
+  --profile-frame-scale: 1.1;
+  --profile-frame-y: -1px;
+}
+
+.my-profile-avatar-wrap.frame-fit-bond {
+  --profile-frame-scale: 1.14;
 }
 
 .my-profile-frame-add {
@@ -5474,6 +5492,9 @@ textarea.profile-bio-input::placeholder {
 }
 
 .avatar-frame-host {
+  --avatar-frame-scale: 1.22;
+  --avatar-frame-x: 0px;
+  --avatar-frame-y: 0px;
   position: relative;
   display: inline-grid;
   place-items: center;
@@ -5483,12 +5504,27 @@ textarea.profile-bio-input::placeholder {
 
 .avatar-frame-host .avatar-frame-img {
   position: absolute;
-  inset: -28%;
-  width: 156%;
-  height: 156%;
+  left: 50%;
+  top: 50%;
+  width: calc(100% * var(--avatar-frame-scale));
+  height: calc(100% * var(--avatar-frame-scale));
   object-fit: contain;
+  transform: translate(-50%, -50%) translate(var(--avatar-frame-x), var(--avatar-frame-y));
   z-index: 2;
   pointer-events: none;
+}
+
+.avatar-frame-host.frame-fit-alien-stage {
+  --avatar-frame-scale: 1.18;
+}
+
+.avatar-frame-host.frame-fit-chiikawa {
+  --avatar-frame-scale: 1.16;
+  --avatar-frame-y: -0.5px;
+}
+
+.avatar-frame-host.frame-fit-bond {
+  --avatar-frame-scale: 1.2;
 }
 
 .avatar-frame-host > :not(.avatar-frame-img) {
@@ -6510,9 +6546,8 @@ textarea.profile-bio-input::placeholder {
 }
 
 .user-profile-avatar-frame-host .avatar-frame-img {
-  inset: -30%;
-  width: 160%;
-  height: 160%;
+  width: calc(100% * var(--avatar-frame-scale));
+  height: calc(100% * var(--avatar-frame-scale));
 }
 
 .user-profile-avatar {
@@ -7208,9 +7243,8 @@ button.comment-profile-avatar-btn:focus-visible {
 }
 
 .comment-avatar-frame-host .avatar-frame-img {
-  inset: -34%;
-  width: 168%;
-  height: 168%;
+  width: calc(100% * var(--avatar-frame-scale));
+  height: calc(100% * var(--avatar-frame-scale));
 }
 
 .comment-body {
@@ -12626,6 +12660,10 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   box-shadow: 0 26px 70px rgba(76, 29, 149, 0.28);
 }
 
+.shop-gacha-banner .shop-gacha-banner-copy {
+  padding-right: 132px;
+}
+
 .shop-gacha-banner img,
 .shop-gacha-banner-shade {
   position: absolute;
@@ -12683,8 +12721,11 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
 }
 
 .shop-gacha-banner-cta {
-  margin-left: auto;
-  align-self: center;
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  margin-left: 0;
+  align-self: auto;
   border: 1px solid rgba(255, 255, 255, 0.28);
   border-radius: 999px;
   padding: 12px 16px;
@@ -13212,8 +13253,8 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   }
 
   .shop-gacha-banner-cta {
-    margin-left: 0;
-    margin-top: 18px;
+    top: 14px;
+    right: 14px;
   }
 
   .gacha-modal-footer {

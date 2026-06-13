@@ -8,6 +8,7 @@ import { PostCardBody, REACTIONS } from "./CommunityPage.jsx";
 import { publicUrlLooksLikeGif } from "../utils/imageUrlKind.js";
 import { listeningStatusLine } from "../utils/displayStatus.js";
 import ProfileBadgeShowcase from "../components/ProfileBadgeShowcase.jsx";
+import { profileFrameFitClass } from "../components/AvatarWithFrame.jsx";
 
 function formatCount(n, singular, plural = `${singular}s`) {
   const value = Number(n) || 0;
@@ -163,6 +164,7 @@ export default function MyProfilePage({
   const badgeItems = shopItems.filter((item) => item.type === "profile_badge");
   const ownedBadgeItems = badgeItems.filter((item) => item.owned || item.effectivePrice === 0);
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
+  const activeFrameFitClass = profileFrameFitClass(activeFrame || displayUser.profileFrameUrl || displayUser.profileFrameItemId);
   const displayBonds = isOwnProfile ? bonds : displayUser.profileBonds || [];
   const eligibleBonds = displayBonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target);
   const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
@@ -236,7 +238,7 @@ export default function MyProfilePage({
         </div>
 
         <div className="my-profile-identity">
-          <div className="my-profile-avatar-wrap">
+          <div className={`my-profile-avatar-wrap${activeFrameFitClass}`}>
             {activeFrame?.imageUrl || displayUser.profileFrameUrl ? (
               <img className="my-profile-avatar-frame" src={activeFrame?.imageUrl || displayUser.profileFrameUrl} alt="" />
             ) : null}
