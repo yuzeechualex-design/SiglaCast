@@ -489,10 +489,6 @@ export default function MessagesPage({
   }, [servers]);
 
   useEffect(() => {
-    saveServerMessages(serverMessages);
-  }, [serverMessages]);
-
-  useEffect(() => {
     if (!selectedServer && servers[0]) {
       setSelectedServerId(servers[0].id);
       setSelectedChannelId(servers[0].sections?.[0]?.channels?.[0]?.id || "");
@@ -1299,7 +1295,7 @@ export default function MessagesPage({
             <ServerChannelPreview
               server={selectedServer}
               channel={selectedChannel}
-              messages={selectedChannel ? serverMessages[selectedChannel.id] || [] : []}
+              messages={selectedChannel ? channelMessages : []}
               draft={serverDraft}
               onDraft={setServerDraft}
               onSend={sendServerMessage}
