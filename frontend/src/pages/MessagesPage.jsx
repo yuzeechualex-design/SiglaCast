@@ -229,6 +229,7 @@ export default function MessagesPage({
   const [serverMessages, setServerMessages] = useState(loadServerMessages);
   const [serverDraft, setServerDraft] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
+  const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [inviteServer, setInviteServer] = useState(null);
   const [pendingServerInvite, setPendingServerInvite] = useState(null);
   const [createChannelContext, setCreateChannelContext] = useState(null);
@@ -260,6 +261,12 @@ export default function MessagesPage({
     });
     return [...byId.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }, [conversations]);
+  const serverMembers = useMemo(() => {
+    const me = currentUser
+      ? [{ ...currentUser, id: currentUser.id || "me", name: currentUser.name || "You", presence: "online", isCurrentUser: true }]
+      : [];
+    return [...me, ...friendInviteTargets.map((friend) => ({ ...friend, presence: friend.presence || "online" }))];
+  }, [currentUser, friendInviteTargets]);
 
   useEffect(() => {
     if (!deepLinkServerInvite) return undefined;
@@ -442,6 +449,20 @@ export default function MessagesPage({
     setSelectedChannelId(nextServer.sections[0].channels[0].id);
     setShowCreateServer(false);
     setChatTab("servers");
+  }
+
+  function handleUpdateServer({ name, iconUrl }) {
+    if (!selectedServer) return;
+    const trimmed = String(name || "").trim();
+    if (!trimmed) return;
+    setServers((prev) =>
+      prev.map((server) =>
+        server.id === selectedServer.id
+          ? { ...server, name: trimmed, iconUrl: iconUrl || DEFAULT_SERVER_ICON }
+          : server
+      )
+    );
+    setServerSettingsOpen(false);
   }
 
   function joinInvitedServer(server) {
@@ -1127,6 +1148,7 @@ export default function MessagesPage({
                 })
               }
               onInviteServer={(server) => setInviteServer(server)}
+              onOpenServerSettings={() => setServerSettingsOpen(true)}
               onOpenChannelMenu={(channel, x, y) => setChannelMenu({ channel, x, y })}
             />
           )}
@@ -1142,8 +1164,10 @@ export default function MessagesPage({
               onDraft={setServerDraft}
               onSend={sendServerMessage}
               currentUser={currentUser}
+              members={serverMembers}
               onCreateServer={() => setShowCreateServer(true)}
               onJoinServerInvite={joinInvitedServer}
+              onOpenUserProfile={onOpenUserProfile}
             />
           ) : !activeChat ? (
             <div className="thread-empty">
@@ -1709,6 +1733,14 @@ export default function MessagesPage({
         <CreateServerModal
           onClose={() => setShowCreateServer(false)}
           onCreate={handleCreateServer}
+        />
+      ) : null}
+
+      {serverSettingsOpen && selectedServer ? (
+        <ServerSettingsModal
+          server={selectedServer}
+          onClose={() => setServerSettingsOpen(false)}
+          onSave={handleUpdateServer}
         />
       ) : null}
 
@@ -2402,6 +2434,7 @@ function ServerWorkspace({
   onCreateServer,
   onCreateChannel,
   onInviteServer,
+  onOpenServerSettings,
   onOpenChannelMenu
 }) {
   return (
@@ -2428,14 +2461,26 @@ function ServerWorkspace({
           <>
             <div className="server-header">
               <strong>{selectedServer.name}</strong>
-              <button
-                type="button"
-                className="server-invite-btn"
-                onClick={() => onInviteServer?.(selectedServer)}
-                title="Invite to server"
-              >
-                Invite
-              </button>
+              <div className="server-header-actions">
+                <button
+                  type="button"
+                  className="server-icon-action"
+                  onClick={() => onInviteServer?.(selectedServer)}
+                  title="Invite to server"
+                  aria-label="Invite to server"
+                >
+                  <span className="ui-icon ui-icon-user-plus" aria-hidden="true" />
+                </button>
+                <button
+                  type="button"
+                  className="server-icon-action"
+                  onClick={() => onOpenServerSettings?.(selectedServer)}
+                  title="Server settings"
+                  aria-label="Server settings"
+                >
+                  <span className="ui-icon ui-icon-settings" aria-hidden="true" />
+                </button>
+              </div>
             </div>
             <div className="server-section-list">
               {(selectedServer.sections || []).map((section) => (
@@ -2484,7 +2529,66 @@ function ServerWorkspace({
   );
 }
 
-function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer, onJoinServerInvite }) {
+function ServerMemberPanel({ members = [], onOpenUserProfile }) {
+  const [selectedMember, setSelectedMember] = useState(null);
+  const onlineCount = members.length;
+
+  return (
+    <aside className="server-member-panel">
+      <div className="server-member-count">Online — {onlineCount}</div>
+      <div className="server-member-list">
+        {members.map((member) => {
+          const presence = presenceDotAttrs(member);
+          return (
+            <button
+              key={member.id}
+              type="button"
+              className={`server-member-row${selectedMember?.id === member.id ? " active" : ""}`}
+              onClick={() => setSelectedMember(member)}
+            >
+              <span className="server-member-avatar">
+                {member.avatarUrl ? <img src={mediaUrl(member.avatarUrl)} alt="" /> : <span>{member.name?.charAt(0) || "?"}</span>}
+                <i className={presence.className} title={presence.title} />
+              </span>
+              <span className="server-member-copy">
+                <strong>{member.name || "Member"}{member.isCurrentUser ? " •" : ""}</strong>
+                <small>{member.statusNote || member.course || (member.isCurrentUser ? "You" : "purxu member")}</small>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {selectedMember ? (
+        <div className="server-member-card">
+          <div className="server-member-card-cover" />
+          <button
+            type="button"
+            className="server-member-card-avatar"
+            onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}
+            title="View profile"
+          >
+            {selectedMember.avatarUrl ? <img src={mediaUrl(selectedMember.avatarUrl)} alt="" /> : <span>{selectedMember.name?.charAt(0) || "?"}</span>}
+          </button>
+          <div className="server-member-card-body">
+            <strong>{selectedMember.name || "Member"}</strong>
+            <small>{selectedMember.isCurrentUser ? "You" : "purxu profile"}</small>
+            <p>{selectedMember.statusNote || selectedMember.bio || "No status yet."}</p>
+            <div className="server-member-card-actions">
+              <button type="button" className="btn btn-primary btn-sm" onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}>
+                View profile
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelectedMember(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </aside>
+  );
+}
+
+function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer, onJoinServerInvite, members = [], onOpenUserProfile }) {
   if (!server) {
     return (
       <div className="server-thread-preview server-thread-preview-empty">
@@ -2501,6 +2605,7 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
 
   if (messages.length) {
     return (
+      <div className="server-thread-layout">
       <div className="server-thread-preview">
         <div className="server-thread-head">
           <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
@@ -2541,10 +2646,13 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
           <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
         )}
       </div>
+      <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
+      </div>
     );
   }
 
   return (
+    <div className="server-thread-layout">
     <div className="server-thread-preview">
       <div className="server-thread-head">
         <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
@@ -2576,6 +2684,8 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
       ) : (
         <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
       )}
+    </div>
+    <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
     </div>
   );
 }
@@ -2632,6 +2742,62 @@ function CreateServerModal({ onClose, onCreate }) {
             <div className="modal-footer">
               <button type="button" className="btn btn-ghost" onClick={onClose}>Back</button>
               <button type="submit" className="btn btn-primary">Create</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </ModalPortal>
+  );
+}
+
+function ServerSettingsModal({ server, onClose, onSave }) {
+  const [name, setName] = useState(server?.name || "");
+  const [iconUrl, setIconUrl] = useState(server?.iconUrl || DEFAULT_SERVER_ICON);
+  const [err, setErr] = useState("");
+
+  function handleIconPick(e) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setErr("Choose an image for the server icon.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setIconUrl(typeof reader.result === "string" ? reader.result : DEFAULT_SERVER_ICON);
+    reader.readAsDataURL(file);
+  }
+
+  function submit(e) {
+    e.preventDefault();
+    if (!name.trim()) {
+      setErr("Server name is required.");
+      return;
+    }
+    onSave({ name, iconUrl });
+  }
+
+  return (
+    <ModalPortal>
+      <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
+        <div className="modal-card server-create-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-head">
+            <h3>Server Settings</h3>
+            <button type="button" className="modal-close" onClick={onClose} title="Close">x</button>
+          </div>
+          <form className="modal-body" onSubmit={submit}>
+            <p className="server-create-copy">Edit this server profile and name.</p>
+            <label className="server-icon-upload">
+              <img src={iconUrl} alt="" />
+              <span>Change</span>
+              <input type="file" accept="image/*" className="sr-only" onChange={handleIconPick} />
+            </label>
+            <label className="field-label">Server Name *</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+            {err ? <p className="form-error">{err}</p> : null}
+            <div className="modal-footer">
+              <button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button>
+              <button type="submit" className="btn btn-primary">Save</button>
             </div>
           </form>
         </div>
