@@ -1,7 +1,12 @@
 import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const CLOUDINARY_CLOUD_NAME = process.env.CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_API_KEY = process.env.CLOUDINARY_API_KEY;
+const CLOUDINARY_API_SECRET = process.env.CLOUDINARY_API_SECRET;
+const CLOUDINARY_FOLDER = process.env.CLOUDINARY_FOLDER || "purxu";
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error("[supabase] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Set them in backend/.env");
@@ -11,6 +16,51 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 export const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
 });
+
+export function cloudinaryEnabled() {
+  return Boolean(CLOUDINARY_CLOUD_NAME && CLOUDINARY_API_KEY && CLOUDINARY_API_SECRET);
+}
+
+export function isCloudinaryMedia(file) {
+  return /^image\//i.test(file?.mimetype || "") || /^video\//i.test(file?.mimetype || "");
+}
+
+function cloudinarySignature(params) {
+  const base = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+  return crypto.createHash("sha1").update(`${base}${CLOUDINARY_API_SECRET}`).digest("hex");
+}
+
+export async function uploadToCloudinary(file, options = {}) {
+  if (!cloudinaryEnabled()) {
+    throw new Error("Cloudinary is not configured. Set CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET.");
+  }
+  const ext = (file.originalname || "media").split(".").pop().toLowerCase();
+  const publicId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+  const folder = [CLOUDINARY_FOLDER, options.bucket].filter(Boolean).join("/");
+  const timestamp = Math.floor(Date.now() / 1000);
+  const signedParams = { folder, public_id: publicId, timestamp };
+  const signature = cloudinarySignature(signedParams);
+  const form = new FormData();
+  form.append("file", new Blob([file.buffer], { type: file.mimetype || "application/octet-stream" }), file.originalname || publicId);
+  form.append("api_key", CLOUDINARY_API_KEY);
+  form.append("timestamp", String(timestamp));
+  form.append("folder", folder);
+  form.append("public_id", publicId);
+  form.append("signature", signature);
+
+  const uploadUrl = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/auto/upload`;
+  const response = await fetch(uploadUrl, { method: "POST", body: form });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const message = data?.error?.message || `Cloudinary upload failed (${response.status})`;
+    throw new Error(message);
+  }
+  return data.secure_url || data.url;
+}
 
 export function toPublicUser(row) {
   if (!row) return null;
@@ -86,6 +136,9 @@ export function toEvent(row, candidates = []) {
 }
 
 export async function uploadToBucket(bucket, file) {
+  if (cloudinaryEnabled() && isCloudinaryMedia(file)) {
+    return uploadToCloudinary(file, { bucket });
+  }
   const ext = (file.originalname || "bin").split(".").pop().toLowerCase();
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
   const { error } = await supabase.storage
@@ -105,6 +158,16 @@ export async function uploadAttachment(bucket, file) {
   const safeName = (file.originalname || "file")
     .replace(/[/\\]/g, "_")
     .slice(0, 120);
+  if (cloudinaryEnabled() && isCloudinaryMedia(file)) {
+    const url = await uploadToCloudinary({ ...file, originalname: safeName }, { bucket });
+    return {
+      url,
+      name: safeName,
+      size: file.size,
+      mime: file.mimetype,
+      isImage: /^image\//i.test(file.mimetype || "")
+    };
+  }
   const ext = safeName.split(".").pop().toLowerCase();
   const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
   const { error } = await supabase.storage

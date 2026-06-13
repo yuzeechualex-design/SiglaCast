@@ -104,7 +104,7 @@ const SIGLACAST_AI_USER_ID = "_siglacast_ai";
 
 const imageMime = /^image\/(jpeg|png|gif|webp)$/i;
 // 25 MB cap — large enough for original-resolution camera shots without re-compression.
-// Files are stored as-is on Supabase Storage (uploadToBucket passes the raw buffer).
+// Files are stored as-is. Media uploads go to Cloudinary when configured; other files fall back to Supabase Storage.
 const uploadImage = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024 },
