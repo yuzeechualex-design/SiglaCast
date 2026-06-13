@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Navigate, Route, Routes, useNavigate, useLocation } from "react-router-dom";
-import { API_ORIGIN, request, requestForm } from "./services/api.js";
+import { API_ORIGIN, mediaUrl, request, requestForm } from "./services/api.js";
 import AppShell from "./components/AppShell.jsx";
 import AuthPage from "./pages/AuthPage.jsx";
 import CommunityPage from "./pages/CommunityPage.jsx";
@@ -28,6 +28,7 @@ import { readLiteModePreference, writeLiteModePreference } from "./utils/network
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
 const STORAGE_ANDROID_OVERLAY_ASKED = "siglacast_android_overlay_permission_asked";
+const STORAGE_OAUTH_ONBOARDING_PREFIX = "siglacast_oauth_onboarded_";
 
 /** Offline / overloaded server — do not wipe login; user stays signed in until explicit logout or real auth failure. */
 function isTransientSessionCheckFailure(result) {
@@ -123,6 +124,7 @@ export default function App() {
   const [newEventCoverFile, setNewEventCoverFile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(false);
   const oauthLoginBusyRef = useRef(false);
+  const [oauthOnboardingOpen, setOauthOnboardingOpen] = useState(false);
   const [appRefreshBusy, setAppRefreshBusy] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState([]);
@@ -353,8 +355,15 @@ export default function App() {
       localStorage.setItem("siglacast_token", res.token);
       localStorage.setItem("siglacast_refresh_token", res.refreshToken);
       localStorage.setItem("siglacast_user", JSON.stringify(res.user));
-      window.history.replaceState(null, "", "/community");
-      navigate("/community", { replace: true });
+      const onboardedKey = `${STORAGE_OAUTH_ONBOARDING_PREFIX}${res.user.id}`;
+      const alreadyOnboarded = localStorage.getItem(onboardedKey) === "1";
+      window.history.replaceState(null, "", alreadyOnboarded ? "/community" : "/welcome");
+      if (alreadyOnboarded) {
+        navigate("/community", { replace: true });
+      } else {
+        setOauthOnboardingOpen(true);
+        navigate("/welcome", { replace: true });
+      }
     }
     setLoadingAuth(false);
     oauthLoginBusyRef.current = false;
@@ -381,6 +390,18 @@ export default function App() {
       inferredProvider === "apple" || inferredProvider === "discord" ? inferredProvider : "google";
     void completeSocialLogin(selectedProvider, accessToken);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setOauthOnboardingOpen(false);
+      return;
+    }
+    if (location.pathname !== "/welcome") return;
+    const onboardedKey = `${STORAGE_OAUTH_ONBOARDING_PREFIX}${user.id}`;
+    if (localStorage.getItem(onboardedKey) !== "1") {
+      setOauthOnboardingOpen(true);
+    }
+  }, [location.pathname, user?.id]);
 
   const activeChatRef = useRef(activeChat);
   activeChatRef.current = activeChat;
@@ -1796,6 +1817,50 @@ export default function App() {
     setNotice("Cover updated");
   }
 
+  async function finishOauthOnboarding({ displayName, avatarFile, coverFile }) {
+    if (!token || !user?.id) return { error: "Session is not ready yet." };
+    const trimmedName = String(displayName || "").trim();
+    let latestUser = user;
+
+    if (trimmedName && trimmedName !== user.name) {
+      const res = await api("/profile", { method: "PATCH", body: { name: trimmedName } });
+      if (res.error) return res;
+      if (res.user) latestUser = res.user;
+    }
+
+    if (avatarFile) {
+      const formData = new FormData();
+      formData.append("avatar", avatarFile);
+      const res = await apiForm("/profile/avatar", formData);
+      if (res.error) return res;
+      if (res.user) latestUser = res.user;
+    }
+
+    if (coverFile) {
+      const formData = new FormData();
+      formData.append("cover", coverFile);
+      const res = await apiForm("/profile/cover", formData);
+      if (res.error) return res;
+      if (res.user) latestUser = res.user;
+    }
+
+    setUser(latestUser);
+    localStorage.setItem("siglacast_user", JSON.stringify(latestUser));
+    localStorage.setItem(`${STORAGE_OAUTH_ONBOARDING_PREFIX}${user.id}`, "1");
+    setOauthOnboardingOpen(false);
+    setNotice("Welcome to purxu");
+    navigate("/community", { replace: true });
+    return { user: latestUser };
+  }
+
+  function skipOauthOnboarding() {
+    if (user?.id) {
+      localStorage.setItem(`${STORAGE_OAUTH_ONBOARDING_PREFIX}${user.id}`, "1");
+    }
+    setOauthOnboardingOpen(false);
+    navigate("/community", { replace: true });
+  }
+
   async function createAnnouncement() {
     const res = await api("/announcements", {
       method: "POST",
@@ -1905,6 +1970,10 @@ export default function App() {
     return <DownloadPage />;
   }
 
+  if (location.pathname === "/auth/callback") {
+    return <OAuthCallbackScreen notice={notice} />;
+  }
+
   if (!token || !user) {
     return (
       <AuthPage
@@ -1927,6 +1996,14 @@ export default function App() {
   }
 
   return (
+    <>
+    {oauthOnboardingOpen ? (
+      <OAuthOnboardingFlow
+        user={user}
+        onFinish={finishOauthOnboarding}
+        onSkip={skipOauthOnboarding}
+      />
+    ) : null}
     <AppShell
       user={user}
       notice={notice || ""}
@@ -2184,5 +2261,161 @@ export default function App() {
       </MusicPlayerProvider>
       </ImageLightboxProvider>
     </AppShell>
+    </>
+  );
+}
+
+function OAuthCallbackScreen({ notice }) {
+  return (
+    <div className="oauth-callback-page">
+      <div className="oauth-callback-card">
+        <div className="oauth-callback-logo-wrap">
+          <img src="/assets/purxu-logo.png" alt="" />
+          <span />
+        </div>
+        <p className="oauth-callback-kicker">Signing you in</p>
+        <h1>Getting purxu ready</h1>
+        <div className="oauth-callback-dots" aria-hidden>
+          <i />
+          <i />
+          <i />
+        </div>
+        <p className="oauth-callback-copy">
+          {notice || "One moment while we finish your secure login."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function OAuthOnboardingFlow({ user, onFinish, onSkip }) {
+  const [step, setStep] = useState(0);
+  const [displayName, setDisplayName] = useState(user?.name || "");
+  const [avatarFile, setAvatarFile] = useState(null);
+  const [coverFile, setCoverFile] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [avatarPreview, setAvatarPreview] = useState(() => mediaUrl(user?.avatarUrl));
+  const [coverPreview, setCoverPreview] = useState(() => mediaUrl(user?.coverUrl));
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreview(mediaUrl(user?.avatarUrl));
+      return undefined;
+    }
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile, user?.avatarUrl]);
+
+  useEffect(() => {
+    if (!coverFile) {
+      setCoverPreview(mediaUrl(user?.coverUrl));
+      return undefined;
+    }
+    const url = URL.createObjectURL(coverFile);
+    setCoverPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [coverFile, user?.coverUrl]);
+
+  async function finish() {
+    setBusy(true);
+    setError("");
+    const res = await onFinish?.({ displayName, avatarFile, coverFile });
+    if (res?.error) {
+      setError(res.error);
+      setBusy(false);
+    }
+  }
+
+  const initial = displayName.trim().charAt(0) || user?.email?.charAt(0) || "?";
+
+  return (
+    <div className="oauth-onboarding-shell" role="dialog" aria-modal="true">
+      <div className="oauth-onboarding-card">
+        <div className="oauth-onboarding-progress" aria-hidden>
+          {[0, 1, 2].map((idx) => (
+            <span key={idx} className={idx <= step ? "active" : ""} />
+          ))}
+        </div>
+
+        {step === 0 ? (
+          <section className="oauth-onboarding-step">
+            <p className="oauth-onboarding-kicker">Welcome in</p>
+            <h2>what should we call you?</h2>
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              maxLength={48}
+              autoFocus
+              placeholder="Your display name"
+            />
+            <div className="oauth-onboarding-actions">
+              <button type="button" className="btn btn-ghost" onClick={onSkip}>Skip</button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!displayName.trim()}
+                onClick={() => setStep(1)}
+              >
+                Continue
+              </button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 1 ? (
+          <section className="oauth-onboarding-step">
+            <p className="oauth-onboarding-kicker">Make it yours</p>
+            <h2>customize your profile picture and banner</h2>
+            <div className="oauth-upload-grid">
+              <label className="oauth-upload-tile">
+                <span className="oauth-avatar-preview">
+                  {avatarPreview ? <img src={avatarPreview} alt="" /> : <b>{initial}</b>}
+                </span>
+                <strong>Profile picture</strong>
+                <small>{avatarFile ? avatarFile.name : "Choose an image"}</small>
+                <input type="file" accept="image/*" onChange={(e) => setAvatarFile(e.target.files?.[0] || null)} />
+              </label>
+              <label className="oauth-upload-tile oauth-cover-tile">
+                <span className="oauth-cover-preview" style={coverPreview ? { backgroundImage: `url(${coverPreview})` } : undefined} />
+                <strong>Banner</strong>
+                <small>{coverFile ? coverFile.name : "Choose a cover"}</small>
+                <input type="file" accept="image/*" onChange={(e) => setCoverFile(e.target.files?.[0] || null)} />
+              </label>
+            </div>
+            <div className="oauth-onboarding-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setStep(0)}>Back</button>
+              <button type="button" className="btn btn-primary" onClick={() => setStep(2)}>Preview</button>
+            </div>
+          </section>
+        ) : null}
+
+        {step === 2 ? (
+          <section className="oauth-onboarding-step">
+            <p className="oauth-onboarding-kicker">Final look</p>
+            <h2>your profile preview</h2>
+            <div className="oauth-profile-preview-card">
+              <div className="oauth-profile-preview-cover" style={coverPreview ? { backgroundImage: `url(${coverPreview})` } : undefined} />
+              <div className="oauth-profile-preview-body">
+                <span className="oauth-profile-preview-avatar">
+                  {avatarPreview ? <img src={avatarPreview} alt="" /> : <b>{initial}</b>}
+                </span>
+                <strong>{displayName.trim() || user?.name || "New friend"}</strong>
+                <small>{user?.email || "Welcome to purxu"}</small>
+                <p>Ready to meet the feed, messages, servers, and the rest of your space.</p>
+              </div>
+            </div>
+            {error ? <p className="form-error">{error}</p> : null}
+            <div className="oauth-onboarding-actions">
+              <button type="button" className="btn btn-ghost" onClick={() => setStep(1)} disabled={busy}>Back</button>
+              <button type="button" className="btn btn-primary" onClick={finish} disabled={busy}>
+                {busy ? "Saving..." : "Enter purxu"}
+              </button>
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </div>
   );
 }
