@@ -9516,6 +9516,8 @@ button.comment-profile-avatar-btn:focus-visible {
 
   .messages-panel.messages-server-mobile-fullscreen .messages-thread {
     height: 100%;
+    position: relative;
+    overflow: hidden;
   }
 
   .messages-panel.messages-server-mobile-fullscreen .server-thread-layout,
@@ -9524,7 +9526,19 @@ button.comment-profile-avatar-btn:focus-visible {
     height: 100%;
   }
 
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-layout {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-preview {
+    display: flex;
+    flex-direction: column;
+  }
+
   .messages-panel.messages-server-mobile-fullscreen .server-thread-head {
+    flex-shrink: 0;
     min-height: calc(58px + env(safe-area-inset-top, 0px));
     padding-top: env(safe-area-inset-top, 0px);
   }
@@ -9532,6 +9546,7 @@ button.comment-profile-avatar-btn:focus-visible {
   .messages-panel.messages-server-mobile-fullscreen .server-thread-compose {
     flex-shrink: 0;
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    margin-top: auto;
   }
 
   .messages-panel.messages-server-mobile-fullscreen .server-thread-messages {
