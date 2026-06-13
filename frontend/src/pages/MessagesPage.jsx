@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_ORIGIN, mediaUrl } from "../services/api.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
@@ -278,12 +278,23 @@ export default function MessagesPage({
     });
     return [...byId.values()].sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   }, [conversations]);
-  const serverMembers = useMemo(() => {
-    const me = currentUser
-      ? [{ ...currentUser, id: currentUser.id || "me", name: currentUser.name || "You", presence: "online", isCurrentUser: true }]
-      : [];
-    return [...me, ...friendInviteTargets.map((friend) => ({ ...friend, presence: friend.presence || "online" }))];
-  }, [currentUser, friendInviteTargets]);
+  const normalizeServer = useCallback((server) => ({
+    ...server,
+    ownerId: server.ownerId || server.owner_id || "",
+    iconUrl: server.iconUrl || server.icon_url || DEFAULT_SERVER_ICON,
+    sections: server.structure || server.sections || [],
+    members: (server.members || []).map((member) => ({
+      ...member,
+      avatarUrl: member.avatarUrl || member.avatar_url || null,
+      coverUrl: member.coverUrl || member.cover_url || null,
+      statusEmoji: member.statusEmoji || member.status_emoji || "",
+      statusNote: member.statusNote || member.status_note || "",
+      profileFrameItemId: member.profileFrameItemId || member.profile_frame_item_id || null,
+      profileBadgeItemIds: member.profileBadgeItemIds || member.profile_badge_item_ids || [],
+      isCurrentUser: member.id === currentUser?.id,
+      presence: member.presence || (member.id === currentUser?.id ? "online" : "offline")
+    }))
+  }), [currentUser?.id]);
 
   async function loadServers() {
     if (!token) return;
@@ -293,10 +304,7 @@ export default function MessagesPage({
       });
       const list = await res.json();
       if (Array.isArray(list)) {
-        const normalized = list.map(s => ({
-          ...s,
-          sections: s.structure || s.sections || []
-        }));
+        const normalized = list.map(normalizeServer);
         setServers(normalized);
         if (normalized.length > 0 && !selectedServerId) {
           setSelectedServerId(normalized[0].id);
@@ -485,6 +493,19 @@ export default function MessagesPage({
     () => servers.find((server) => server.id === selectedServerId) || servers[0] || null,
     [servers, selectedServerId]
   );
+  const selectedServerMembers = useMemo(
+    () => (selectedServer?.members || []).map((member) => ({
+      ...member,
+      isCurrentUser: member.id === currentUser?.id,
+      presence: member.presence || (member.id === currentUser?.id ? "online" : "offline")
+    })),
+    [currentUser?.id, selectedServer?.members]
+  );
+  const selectedServerOwner =
+    !!selectedServer &&
+    (selectedServer.ownerId === currentUser?.id ||
+      selectedServer.owner_id === currentUser?.id ||
+      selectedServer.members?.some((member) => member.id === currentUser?.id && member.role === "owner"));
   const selectedChannel = useMemo(() => {
     if (!selectedServer) return null;
     return selectedServer.sections
@@ -521,10 +542,7 @@ export default function MessagesPage({
       });
       const data = await res.json();
       if (!data.error) {
-        const normalizedServer = {
-          ...data,
-          sections: data.structure || data.sections || []
-        };
+        const normalizedServer = normalizeServer(data);
         setServers((prev) => [normalizedServer, ...prev]);
         setSelectedServerId(normalizedServer.id);
         setSelectedChannelId(normalizedServer.sections?.[0]?.channels?.[0]?.id || "");
@@ -553,6 +571,36 @@ export default function MessagesPage({
     setServerSettingsOpen(false);
   }
 
+  async function handleDeleteServer() {
+    if (!selectedServer) return;
+    const serverName = selectedServer.name || "this server";
+    if (!window.confirm(`Delete ${serverName}? This removes all channels, messages, and members. This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServer.id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.error) {
+        window.alert(data.error || "Could not delete server.");
+        return;
+      }
+      setServers((prev) => {
+        const next = prev.filter((server) => server.id !== selectedServer.id);
+        const fallback = next[0] || null;
+        setSelectedServerId(fallback?.id || "");
+        setSelectedChannelId(fallback?.sections?.[0]?.channels?.[0]?.id || "");
+        return next;
+      });
+      setServerSettingsOpen(false);
+      setMobileServerThreadOpen(false);
+      onRefreshServerUsers?.();
+    } catch (err) {
+      console.error("handleDeleteServer error:", err);
+      window.alert("Could not delete server.");
+    }
+  }
+
   async function joinInvitedServer(server) {
     if (!server?.id) return;
     try {
@@ -564,10 +612,7 @@ export default function MessagesPage({
       });
       const data = await res.json();
       if (!data.error) {
-        const normalizedServer = {
-          ...data,
-          sections: data.structure || data.sections || []
-        };
+        const normalizedServer = normalizeServer(data);
         setServers((prev) => {
           const filtered = prev.filter((s) => s.id !== normalizedServer.id);
           return [normalizedServer, ...filtered];
@@ -656,10 +701,7 @@ export default function MessagesPage({
       });
       const data = await res.json();
       if (!data.error) {
-        const normalizedServer = {
-          ...data,
-          sections: data.structure || data.sections || []
-        };
+        const normalizedServer = normalizeServer(data);
         setServers((prev) =>
           prev.map((s) => s.id === selectedServerId ? normalizedServer : s)
         );
@@ -1280,6 +1322,7 @@ export default function MessagesPage({
               servers={servers}
               selectedServer={selectedServer}
               selectedChannel={selectedChannel}
+              currentUser={currentUser}
               onSelectServer={(server) => {
                 setSelectedServerId(server.id);
                 setSelectedChannelId(server.sections?.[0]?.channels?.[0]?.id || "");
@@ -1297,7 +1340,7 @@ export default function MessagesPage({
                 })
               }
               onInviteServer={(server) => setInviteServer(server)}
-              onOpenServerSettings={() => setServerSettingsOpen(true)}
+              onOpenServerSettings={() => selectedServerOwner && setServerSettingsOpen(true)}
               onOpenChannelMenu={(channel, x, y) => setChannelMenu({ channel, x, y })}
             />
           )}
@@ -1313,7 +1356,7 @@ export default function MessagesPage({
               onDraft={setServerDraft}
               onSend={sendServerMessage}
               currentUser={currentUser}
-              members={serverMembers}
+              members={selectedServerMembers}
               onCreateServer={() => setShowCreateServer(true)}
               onJoinServerInvite={joinInvitedServer}
               onOpenUserProfile={onOpenUserProfile}
@@ -1881,6 +1924,7 @@ export default function MessagesPage({
           server={selectedServer}
           onClose={() => setServerSettingsOpen(false)}
           onSave={handleUpdateServer}
+          onDelete={handleDeleteServer}
         />
       ) : null}
 
@@ -2575,6 +2619,7 @@ function ServerWorkspace({
   servers,
   selectedServer,
   selectedChannel,
+  currentUser,
   onSelectServer,
   onSelectChannel,
   onCreateServer,
@@ -2583,6 +2628,12 @@ function ServerWorkspace({
   onOpenServerSettings,
   onOpenChannelMenu
 }) {
+  const canManageSelectedServer =
+    !!selectedServer &&
+    (selectedServer.ownerId === currentUser?.id ||
+      selectedServer.owner_id === currentUser?.id ||
+      selectedServer.members?.some((member) => member.id === currentUser?.id && member.role === "owner"));
+
   return (
     <div className="servers-workspace">
       <div className="server-rail" aria-label="Servers">
@@ -2617,15 +2668,17 @@ function ServerWorkspace({
                 >
                   <span className="ui-icon ui-icon-user-plus" aria-hidden="true" />
                 </button>
-                <button
-                  type="button"
-                  className="server-icon-action"
-                  onClick={() => onOpenServerSettings?.(selectedServer)}
-                  title="Server settings"
-                  aria-label="Server settings"
-                >
-                  <span className="ui-icon ui-icon-settings" aria-hidden="true" />
-                </button>
+                {canManageSelectedServer ? (
+                  <button
+                    type="button"
+                    className="server-icon-action"
+                    onClick={() => onOpenServerSettings?.(selectedServer)}
+                    title="Server settings"
+                    aria-label="Server settings"
+                  >
+                    <span className="ui-icon ui-icon-settings" aria-hidden="true" />
+                  </button>
+                ) : null}
               </div>
             </div>
             <div className="server-section-list">
@@ -3045,7 +3098,7 @@ function CreateServerModal({ onClose, onCreate }) {
   );
 }
 
-function ServerSettingsModal({ server, onClose, onSave }) {
+function ServerSettingsModal({ server, onClose, onSave, onDelete }) {
   const [name, setName] = useState(server?.name || "");
   const [iconUrl, setIconUrl] = useState(server?.iconUrl || DEFAULT_SERVER_ICON);
   const [err, setErr] = useState("");
@@ -3095,6 +3148,15 @@ function ServerSettingsModal({ server, onClose, onSave }) {
               <button type="submit" className="btn btn-primary">Save</button>
             </div>
           </form>
+          <div className="modal-body server-settings-danger-zone">
+            <div>
+              <strong>Delete server</strong>
+              <small>Only the server owner can delete a server. This removes its channels, messages, and member list.</small>
+            </div>
+            <button type="button" className="btn btn-danger" onClick={onDelete}>
+              Delete server
+            </button>
+          </div>
         </div>
       </div>
     </ModalPortal>

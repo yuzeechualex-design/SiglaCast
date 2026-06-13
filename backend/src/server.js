@@ -6198,6 +6198,49 @@ app.post("/api/servers/:serverId/channels/:channelId/messages", authenticate, as
   }
 });
 
+app.delete("/api/servers/:serverId", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId } = req.params;
+
+    const { data: server, error: serverErr } = await supabase
+      .from("servers")
+      .select("id, owner_id")
+      .eq("id", serverId)
+      .maybeSingle();
+
+    if (serverErr) throw serverErr;
+    if (!server) {
+      return res.status(404).json({ error: "Server not found" });
+    }
+    if (server.owner_id !== userId) {
+      return res.status(403).json({ error: "Only the server owner can delete this server" });
+    }
+
+    const { error: messagesErr } = await supabase
+      .from("server_messages")
+      .delete()
+      .eq("server_id", serverId);
+    if (messagesErr) throw messagesErr;
+
+    const { error: membersErr } = await supabase
+      .from("server_members")
+      .delete()
+      .eq("server_id", serverId);
+    if (membersErr) throw membersErr;
+
+    const { error: deleteErr } = await supabase
+      .from("servers")
+      .delete()
+      .eq("id", serverId);
+    if (deleteErr) throw deleteErr;
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get("/api/users/in-servers", authenticate, async (req, res) => {
   try {
     const { data: members, error: membersErr } = await supabase
