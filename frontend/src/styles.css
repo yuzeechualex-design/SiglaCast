@@ -5664,16 +5664,18 @@ textarea.profile-bio-input::placeholder {
 .server-thread-layout {
   min-height: 0;
   flex: 1;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(210px, 250px);
+  display: flex;
   background: rgba(21, 11, 38, 0.78);
 }
 
 .server-thread-layout .server-thread-preview {
+  flex: 1;
+  min-width: 0;
   background: transparent;
 }
 
 .server-member-panel {
+  display: none;
   position: relative;
   min-width: 0;
   border-left: 1px solid rgba(196, 181, 253, 0.16);
@@ -6034,15 +6036,37 @@ textarea.profile-bio-input::placeholder {
 }
 
 .server-thread-compose {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: flex;
+  align-items: center;
   gap: 10px;
-  padding: 12px;
+  padding: 12px 14px;
   border-top: 1px solid rgba(196, 181, 253, 0.16);
+  background: rgba(21, 11, 38, 0.72);
 }
 
 .server-thread-compose input {
+  flex: 1;
   min-width: 0;
+  min-height: 44px;
+  margin: 0;
+  border-color: rgba(196, 181, 253, 0.22);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f8f5ff;
+}
+
+.server-thread-compose input::placeholder {
+  color: rgba(238, 231, 255, 0.68);
+}
+
+.server-thread-compose .btn-send-msg {
+  min-width: 44px;
+  min-height: 44px;
+  width: 44px;
+  padding: 0;
+  border-radius: 12px;
+  font-size: 1.35rem;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .server-voice-placeholder {
@@ -6642,6 +6666,24 @@ textarea.profile-bio-input::placeholder {
   flex: 1;
   min-width: 0;
   text-align: left;
+}
+
+.bubble-delivery-status {
+  flex: 0 0 auto;
+  color: var(--ink-600);
+  font-weight: 800;
+}
+
+.bubble-me .bubble-delivery-status {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.bubble-delivery-status.status-sending {
+  opacity: 0.72;
+}
+
+.bubble-delivery-status.status-failed {
+  color: #fecaca;
 }
 
 .bubble-me .bubble-meta-row .bubble-reaction-chip small {

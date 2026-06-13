@@ -1494,11 +1494,11 @@ export default function App() {
       });
       if (res.error) {
         setNotice(res.error);
-        return;
+        return res;
       }
       await refreshUserPhoneFromServer();
       await loadMessages();
-      return;
+      return res;
     }
     const formData = new FormData();
     if (text) formData.append("text", text);
@@ -1511,7 +1511,7 @@ export default function App() {
     const res = await apiForm(url, formData);
     if (res.error) {
       setNotice(res.error);
-      return;
+      return res;
     }
     if (res.bondAward) {
       setNotice(`+${res.bondAward.expGained} bond EXP, +${res.bondAward.coinsGained} coins`);
@@ -1523,6 +1523,7 @@ export default function App() {
         : await api(`/messages/with/${activeChat.user.id}`);
     if (!refreshed.error) setActiveChat({ ...refreshed, kind: activeChat.kind });
     await loadMessages();
+    return res;
   }
 
   async function sendDirectMessageToUser(userId, text) {

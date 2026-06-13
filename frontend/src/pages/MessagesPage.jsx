@@ -221,6 +221,7 @@ export default function MessagesPage({
   const [composeSiglaMode, setComposeSiglaMode] = useState(false);
   const [draftFile, setDraftFile] = useState(null);
   const [sending, setSending] = useState(false);
+  const [optimisticMessages, setOptimisticMessages] = useState([]);
   const [chatTab, setChatTab] = useState("users");
   const [showCreateGroup, setShowCreateGroup] = useState(false);
   const [servers, setServers] = useState(loadLocalServers);
@@ -253,6 +254,19 @@ export default function MessagesPage({
   const deepLinkDm = searchParams.get("dm");
   const deepLinkGroup = searchParams.get("group");
   const deepLinkServerInvite = searchParams.get(SERVER_INVITE_PARAM);
+  const activeThreadKey =
+    activeChat?.kind === "group"
+      ? `group:${activeChat.group?.id || ""}`
+      : activeChat?.kind === "dm"
+        ? `dm:${activeChat.user?.id || ""}`
+        : activeChat?.kind === "userphone"
+          ? `userphone:${activeChat.sessionId || ""}`
+          : "";
+  const visibleThreadMessages = useMemo(() => {
+    const base = activeChat?.messages || [];
+    const pending = optimisticMessages.filter((message) => message.threadKey === activeThreadKey);
+    return [...base, ...pending];
+  }, [activeChat?.messages, activeThreadKey, optimisticMessages]);
   const friendInviteTargets = useMemo(() => {
     const byId = new Map();
     (conversations || []).forEach((conversation) => {
@@ -637,7 +651,7 @@ export default function MessagesPage({
   async function handleSend(e) {
     e.preventDefault();
     const text = draft.trim();
-    if ((!text && !draftFile) || sending) return;
+    if ((!text && !draftFile) || (composeSiglaMode && sending)) return;
 
     if (composeSiglaMode) {
       if (!text) return;
@@ -660,16 +674,46 @@ export default function MessagesPage({
       return;
     }
 
-    setSending(true);
-    await onSendMessage(text, draftFile, replyTarget?.id || null);
-    requestAnimationFrame(() => {
-      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    });
+    const optimisticId = `optimistic-${Date.now()}`;
+    const optimistic = {
+      id: optimisticId,
+      threadKey: activeThreadKey,
+      text,
+      fromMe: true,
+      author: currentUser?.name || "You",
+      authorAvatar: currentUser?.avatarUrl || null,
+      fromUserId: currentUser?.id || "",
+      createdAt: new Date().toISOString(),
+      deliveryStatus: "Sending"
+    };
+    setOptimisticMessages((prev) => [...prev, optimistic]);
     setDraft("");
     setDraftFile(null);
     setReplyTarget(null);
     if (fileRef.current) fileRef.current.value = "";
-    setSending(false);
+    requestAnimationFrame(() => {
+      threadEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    });
+    const res = await onSendMessage(text, draftFile, replyTarget?.id || null);
+    setOptimisticMessages((prev) =>
+      prev.map((message) =>
+        message.id === optimisticId
+          ? { ...message, deliveryStatus: res?.error ? "Failed" : "Sent" }
+          : message
+      )
+    );
+    if (!res?.error) {
+      window.setTimeout(() => {
+        setOptimisticMessages((prev) =>
+          prev.map((message) =>
+            message.id === optimisticId ? { ...message, deliveryStatus: "Delivered" } : message
+          )
+        );
+      }, 350);
+      window.setTimeout(() => {
+        setOptimisticMessages((prev) => prev.filter((message) => message.id !== optimisticId));
+      }, 950);
+    }
   }
 
   // Reply / unsend on a single message bubble. `onUnsendMessage` handles confirm.
@@ -1484,7 +1528,7 @@ export default function MessagesPage({
               ) : (
                 <>
                   <div className="thread-messages">
-                    {(activeChat.messages || []).map((m) => (
+                    {visibleThreadMessages.map((m) => (
                     <MessageBubble
                       key={m.id}
                       message={m}
@@ -2131,6 +2175,7 @@ function MessageBubble({
 
   const profilePeek = senderProfilePeek();
   const serverInvite = !unsent ? findServerInvite(m.text) : null;
+  const deliveryStatus = m.deliveryStatus || (activeChat?.kind === "dm" ? "Seen" : "Sent");
 
   function renderIncomingAvatar() {
     const avatarInner = m.authorAvatar ? (
@@ -2215,6 +2260,11 @@ function MessageBubble({
             )}
             <div className="bubble-meta-row">
               <small className="bubble-time">{new Date(m.createdAt).toLocaleString()}</small>
+              {m.fromMe ? (
+                <small className={`bubble-delivery-status status-${String(deliveryStatus).toLowerCase()}`}>
+                  {deliveryStatus}
+                </small>
+              ) : null}
               {!minimal && !unsent && totalCount > 0 ? (
                 <button
                   type="button"
@@ -2638,8 +2688,8 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
         {channel?.type === "text" ? (
           <form className="server-thread-compose" onSubmit={onSend}>
             <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
-            <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim()}>
-              Send
+            <button type="submit" className="btn btn-primary btn-send-msg" disabled={!draft.trim()} aria-label="Send message">
+              ➤
             </button>
           </form>
         ) : (
@@ -2677,8 +2727,8 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
       {channel?.type === "text" ? (
         <form className="server-thread-compose" onSubmit={onSend}>
           <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
-          <button type="submit" className="btn btn-primary btn-sm" disabled={!draft.trim()}>
-            Send
+          <button type="submit" className="btn btn-primary btn-send-msg" disabled={!draft.trim()} aria-label="Send message">
+            ➤
           </button>
         </form>
       ) : (
