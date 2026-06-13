@@ -1217,6 +1217,7 @@ export default function MessagesPage({
                 </div>
 
                 {/* Prepend purxu AI chatbot assistant */}
+                {false ? (
                 <div
                   role="button"
                   tabIndex={0}
@@ -1239,6 +1240,7 @@ export default function MessagesPage({
                     <span className="conv-preview">Ask anything</span>
                   </div>
                 </div>
+                ) : null}
 
                 {/* Render active group chats that the user belongs to */}
                 {conversations

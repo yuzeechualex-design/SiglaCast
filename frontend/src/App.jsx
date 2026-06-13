@@ -963,19 +963,48 @@ export default function App() {
     });
   }, [userPhoneState]);
 
-  // Poll the active thread every 3 seconds while the page is open (not solo Userphone).
+  // Poll the active thread while Messages is open (not solo Userphone).
   useEffect(() => {
     if (!token || !activeChat || location.pathname !== "/messages") return undefined;
     if (activeChat.kind === "userphone") return undefined;
-    const interval = setInterval(async () => {
+    let cancelled = false;
+    let inFlight = false;
+    const threadKey =
+      activeChat.kind === "group"
+        ? `group:${activeChat.group?.id || ""}`
+        : `dm:${activeChat.user?.id || ""}`;
+    let sidebarTicks = 0;
+
+    async function refreshActiveThread() {
+      if (inFlight) return;
+      inFlight = true;
       const refreshed =
         activeChat.kind === "group"
           ? await api(`/groups/${activeChat.group.id}`)
           : await api(`/messages/with/${activeChat.user.id}`);
-      if (refreshed.error) return;
-      setActiveChat({ ...refreshed, kind: activeChat.kind });
-    }, 3000);
-    return () => clearInterval(interval);
+      inFlight = false;
+      if (cancelled || refreshed.error) return;
+      setActiveChat((prev) => {
+        if (!prev || prev.kind !== activeChat.kind) return prev;
+        const prevKey =
+          prev.kind === "group"
+            ? `group:${prev.group?.id || ""}`
+            : `dm:${prev.user?.id || ""}`;
+        if (prevKey !== threadKey) return prev;
+        return { ...refreshed, kind: activeChat.kind };
+      });
+      sidebarTicks += 1;
+      if (sidebarTicks % 2 === 0) void loadMessages();
+    }
+
+    void refreshActiveThread();
+    const interval = setInterval(async () => {
+      await refreshActiveThread();
+    }, 1600);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
   }, [token, activeChat?.kind, activeChat?.user?.id, activeChat?.group?.id, location.pathname]);
 
   useEffect(() => {

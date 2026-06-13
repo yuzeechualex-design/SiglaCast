@@ -3355,6 +3355,41 @@ app.get("/api/community/posts", authenticate, async (req, res) => {
   }
 });
 
+app.get("/api/users/:userId/posts", authenticate, async (req, res) => {
+  try {
+    const targetId = String(req.params.userId || "");
+    if (!targetId || targetId === SIGLACAST_AI_USER_ID || targetId === USERPHONE_GUEST_ID) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const { data: target } = await supabase
+      .from("users")
+      .select("id, is_ai_character")
+      .eq("id", targetId)
+      .maybeSingle();
+    if (!target) return res.status(404).json({ error: "User not found" });
+    if (target.is_ai_character && !(await areFriends(req.user.id, targetId))) {
+      return res.json([]);
+    }
+
+    const { data: posts, error } = await supabase
+      .from("posts")
+      .select("*")
+      .eq("author_id", targetId)
+      .order("created_at", { ascending: false })
+      .limit(60);
+    if (error) return res.status(400).json({ error: error.message });
+
+    const out = [];
+    for (const post of posts || []) {
+      out.push(await serializePost(post, req.user.id));
+    }
+    res.json(out);
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.post("/api/community/posts", authenticate, (req, res, next) => {
   uploadImage.single("image")(req, res, (err) => {
     if (err) return res.status(400).json({ error: err.message || "Upload failed" });
@@ -4459,6 +4494,7 @@ app.get("/api/users/:userId", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
     const targetId = req.params.userId;
+    const lite = req.query?.lite === "1" || req.query?.lite === "true";
     if (!targetId) return res.status(400).json({ error: "Missing user id" });
     if (targetId === SIGLACAST_AI_USER_ID || targetId === USERPHONE_GUEST_ID) {
       return res.status(404).json({ error: "User not found" });
@@ -4484,7 +4520,7 @@ app.get("/api/users/:userId", authenticate, async (req, res) => {
 
     const profile = {
       ...publicProfileWithPresence(row, me, onlineSet),
-      profileBonds: await publicPinnedBondsForUser(targetId),
+      profileBonds: lite ? [] : await publicPinnedBondsForUser(targetId),
       isFriend,
       incomingRequestId,
       outgoingRequestPending

@@ -83,7 +83,7 @@ export default function UserProfileModal({
     (async () => {
       setLoading(true);
       setError("");
-      const data = await api(`/users/${userId}`);
+      const data = await api(`/users/${encodeURIComponent(userId)}?lite=1`);
       if (cancelled) return;
       setLoading(false);
       if (data.error) {
@@ -100,7 +100,7 @@ export default function UserProfileModal({
 
   async function refetchProfile() {
     if (!userId) return;
-    const data = await api(`/users/${userId}`);
+    const data = await api(`/users/${encodeURIComponent(userId)}?lite=1`);
     if (!data.error) setProfile(data);
   }
 
@@ -109,11 +109,9 @@ export default function UserProfileModal({
     setDetailOpen(true);
     if (profilePosts.length || postsLoading) return;
     setPostsLoading(true);
-    const rows = await api("/community/posts");
+    const rows = await api(`/users/${encodeURIComponent(userId)}/posts`);
     setPostsLoading(false);
-    if (Array.isArray(rows)) {
-      setProfilePosts(rows.filter((post) => post.authorId === userId));
-    }
+    if (Array.isArray(rows)) setProfilePosts(rows);
   }
 
   function openFullProfile() {

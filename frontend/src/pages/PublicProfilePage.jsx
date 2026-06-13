@@ -29,7 +29,7 @@ export default function PublicProfilePage({
       setError("");
       const [profileData, postRows] = await Promise.all([
         api(`/users/${encodeURIComponent(userId)}`),
-        api("/community/posts")
+        api(`/users/${encodeURIComponent(userId)}/posts`)
       ]);
       if (cancelled) return;
       setLoading(false);
@@ -64,7 +64,7 @@ export default function PublicProfilePage({
     );
   }
 
-  const profilePosts = livePosts.length ? livePosts : posts;
+  const profilePosts = livePosts.length ? livePosts.filter((post) => post.authorId === userId) : posts;
 
   return (
     <MyProfilePage

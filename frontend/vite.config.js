@@ -1,9 +1,20 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { rmSync } from "node:fs";
+import { resolve } from "node:path";
+
+function excludePublicDownloadsFromBundle() {
+  return {
+    name: "exclude-public-downloads-from-bundle",
+    closeBundle() {
+      rmSync(resolve("dist/downloads"), { recursive: true, force: true });
+    }
+  };
+}
 
 export default defineConfig({
   base: "/",
-  plugins: [react()],
+  plugins: [react(), excludePublicDownloadsFromBundle()],
   server: {
     host: true,
     port: 5173,
