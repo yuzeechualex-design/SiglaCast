@@ -243,6 +243,7 @@ export default function MessagesPage({
   const [menuOpen, setMenuOpen] = useState(false);
   const [bondHelpOpen, setBondHelpOpen] = useState(false);
   const [replyTarget, setReplyTarget] = useState(null);
+  const [mobileServerThreadOpen, setMobileServerThreadOpen] = useState(false);
   const fileRef = useRef(null);
   const threadEndRef = useRef(null);
   const menuRef = useRef(null);
@@ -394,6 +395,7 @@ export default function MessagesPage({
   const groupUserphoneWaiting = gpu?.phase === "waiting";
   const groupUserphoneMatched = gpu?.phase === "matched";
   const mobileThreadFullscreen = isNarrowViewport && !!activeChat;
+  const mobileServerThreadFullscreen = isNarrowViewport && chatTab === "servers" && mobileServerThreadOpen;
   /** DM/group always; solo Userphone only after a match so we can mirror anonymous + AI replies. */
   const showThreadComposer = !!activeChat && (!isUserphone || userphonePhase === "matched");
   const isSiglaDm = activeChat?.kind === "dm" && activeChat?.user?.id === SIGLACAST_AI_USER_ID;
@@ -445,6 +447,12 @@ export default function MessagesPage({
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, []);
+
+  useEffect(() => {
+    if (!isNarrowViewport || chatTab !== "servers") {
+      setMobileServerThreadOpen(false);
+    }
+  }, [chatTab, isNarrowViewport]);
 
   // Jump to bottom when switching threads only (not on every poll / inbound message).
   useEffect(() => {
@@ -827,7 +835,9 @@ export default function MessagesPage({
 
   return (
     <section
-      className={`panel single messages-panel ${mobileThreadFullscreen ? "messages-mobile-fullscreen" : ""}`}
+      className={`panel single messages-panel ${
+        mobileThreadFullscreen || mobileServerThreadFullscreen ? "messages-mobile-fullscreen" : ""
+      } ${mobileServerThreadFullscreen ? "messages-server-mobile-fullscreen" : ""}`}
     >
       <div className="messages-layout">
 
@@ -1274,7 +1284,10 @@ export default function MessagesPage({
                 setSelectedServerId(server.id);
                 setSelectedChannelId(server.sections?.[0]?.channels?.[0]?.id || "");
               }}
-              onSelectChannel={(channel) => setSelectedChannelId(channel.id)}
+              onSelectChannel={(channel) => {
+                setSelectedChannelId(channel.id);
+                if (isNarrowViewport) setMobileServerThreadOpen(true);
+              }}
               onCreateServer={() => setShowCreateServer(true)}
               onCreateChannel={(section) =>
                 setCreateChannelContext({
@@ -1304,6 +1317,8 @@ export default function MessagesPage({
               onCreateServer={() => setShowCreateServer(true)}
               onJoinServerInvite={joinInvitedServer}
               onOpenUserProfile={onOpenUserProfile}
+              onCloseMobileServerThread={() => setMobileServerThreadOpen(false)}
+              mobileServerThreadOpen={mobileServerThreadFullscreen}
             />
           ) : !activeChat ? (
             <div className="thread-empty">
@@ -2677,7 +2692,7 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
               className={`server-member-row${selectedMember?.id === member.id ? " active" : ""}`}
               onClick={() => setSelectedMember(member)}
             >
-              <span className="server-member-avatar" style={{ position: "relative", display: "inline-block" }}>
+              <span className="server-member-avatar">
                 <AvatarWithFrame user={member} size="sm" />
                 <i className={presence.className} title={presence.title} />
               </span>
@@ -2739,7 +2754,20 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
   );
 }
 
-function ServerChannelPreview({ server, channel, messages = [], draft = "", onDraft, onSend, onCreateServer, onJoinServerInvite, members = [], onOpenUserProfile }) {
+function ServerChannelPreview({
+  server,
+  channel,
+  messages = [],
+  draft = "",
+  onDraft,
+  onSend,
+  onCreateServer,
+  onJoinServerInvite,
+  members = [],
+  onOpenUserProfile,
+  onCloseMobileServerThread,
+  mobileServerThreadOpen = false
+}) {
   const [onlinePanelOpen, setOnlinePanelOpen] = useState(false);
   const swipeStartXRef = useRef(null);
   const swipeStartYRef = useRef(null);
@@ -2760,6 +2788,12 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
     swipeStartXRef.current = null;
     swipeStartYRef.current = null;
     if (Math.abs(dx) < 58 || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+    if (mobileServerThreadOpen) {
+      if (dx > 0) setOnlinePanelOpen(true);
+      else if (onlinePanelOpen) setOnlinePanelOpen(false);
+      else onCloseMobileServerThread?.();
+      return;
+    }
     if (dx < 0) setOnlinePanelOpen(true);
     else setOnlinePanelOpen(false);
   }
@@ -2788,6 +2822,16 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
       <div className="server-thread-preview">
         <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            {mobileServerThreadOpen ? (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm thread-back-btn server-thread-back-btn"
+                onClick={() => onCloseMobileServerThread?.()}
+                aria-label="Back to server channels"
+              >
+                ← Back
+              </button>
+            ) : null}
             <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
             <div>
               <strong>{channel?.name || "general"}</strong>
@@ -2851,7 +2895,9 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
           <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
         )}
       </div>
-      <div className="server-online-swipe-hint" aria-hidden>Swipe left for Online</div>
+      <div className="server-online-swipe-hint" aria-hidden>
+        {mobileServerThreadOpen ? "Swipe right for Online · swipe left for Channels" : "Swipe left for Online"}
+      </div>
       <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
       </div>
     );
@@ -2866,6 +2912,16 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
     <div className="server-thread-preview">
       <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          {mobileServerThreadOpen ? (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm thread-back-btn server-thread-back-btn"
+              onClick={() => onCloseMobileServerThread?.()}
+              aria-label="Back to server channels"
+            >
+              ← Back
+            </button>
+          ) : null}
           <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
           <div>
             <strong>{channel?.name || "general"}</strong>
@@ -2921,7 +2977,9 @@ function ServerChannelPreview({ server, channel, messages = [], draft = "", onDr
         <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
       )}
     </div>
-    <div className="server-online-swipe-hint" aria-hidden>Swipe left for Online</div>
+    <div className="server-online-swipe-hint" aria-hidden>
+      {mobileServerThreadOpen ? "Swipe right for Online · swipe left for Channels" : "Swipe left for Online"}
+    </div>
     <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
     </div>
   );

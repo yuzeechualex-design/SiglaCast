@@ -5733,16 +5733,41 @@ textarea.profile-bio-input::placeholder {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(139, 92, 246, 0.24);
+  background: transparent;
   color: #fff;
   font-weight: 1000;
 }
 
-.server-member-avatar img {
-  width: 100%;
-  height: 100%;
-  border-radius: inherit;
+.server-member-avatar .avatar-frame-host {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  overflow: visible;
+}
+
+.server-member-avatar .avatar-frame-host .avatar-frame-img {
+  z-index: 3;
+}
+
+.server-member-avatar .avatar-frame-host > img,
+.server-member-avatar .avatar-frame-host > .msg-avatar,
+.server-member-avatar .avatar-frame-host > .msg-avatar.placeholder,
+.server-member-avatar .avatar-frame-host > span:not(.avatar-frame-img) {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
   object-fit: cover;
+  overflow: hidden;
+  border: 0;
+  box-shadow: none;
+  background-clip: padding-box;
+}
+
+.server-member-avatar .avatar-frame-host > span:not(.avatar-frame-img) {
+  display: grid;
+  place-items: center;
+  background: rgba(139, 92, 246, 0.58);
+  color: #fff;
 }
 
 .server-member-avatar .presence-dot {
@@ -5750,6 +5775,7 @@ textarea.profile-bio-input::placeholder {
   right: -1px;
   bottom: -1px;
   border: 3px solid rgba(17, 13, 26, 0.96);
+  z-index: 5;
 }
 
 .server-member-copy {
@@ -5808,10 +5834,31 @@ textarea.profile-bio-input::placeholder {
   font-weight: 1000;
 }
 
-.server-member-card-avatar img {
-  width: 100%;
-  height: 100%;
+.server-member-card-avatar .avatar-frame-host {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: visible;
+}
+
+.server-member-card-avatar .avatar-frame-host > img,
+.server-member-card-avatar .avatar-frame-host > .msg-avatar,
+.server-member-card-avatar .avatar-frame-host > .msg-avatar.placeholder,
+.server-member-card-avatar .avatar-frame-host > span:not(.avatar-frame-img) {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
   object-fit: cover;
+  overflow: hidden;
+  border: 0;
+  box-shadow: none;
+}
+
+.server-member-card-avatar .avatar-frame-host > span:not(.avatar-frame-img) {
+  display: grid;
+  place-items: center;
+  background: rgba(139, 92, 246, 0.58);
+  color: #fff;
 }
 
 .server-member-card-body {
@@ -5842,6 +5889,11 @@ textarea.profile-bio-input::placeholder {
   gap: 12px;
   padding: 0 18px;
   border-bottom: 1px solid rgba(196, 181, 253, 0.16);
+}
+
+.server-thread-back-btn {
+  flex-shrink: 0;
+  color: rgba(238, 231, 255, 0.92) !important;
 }
 
 .server-thread-head small {
@@ -9424,7 +9476,7 @@ button.comment-profile-avatar-btn:focus-visible {
     min-height: 0;
     /* Stable small viewport avoids an extra strip under the compose row on mobile browsers. */
     height: 100vh;
-    height: 100svh;
+    height: 100dvh;
     border-radius: 0;
     margin: 0;
     padding: 0;
@@ -9460,6 +9512,36 @@ button.comment-profile-avatar-btn:focus-visible {
 
   .messages-panel.messages-mobile-fullscreen .thread-compose {
     padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .messages-thread {
+    height: 100%;
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-layout,
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-preview {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-head {
+    min-height: calc(58px + env(safe-area-inset-top, 0px));
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-compose {
+    flex-shrink: 0;
+    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-messages {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .messages-panel.messages-server-mobile-fullscreen .server-thread-empty {
+    flex: 1;
+    min-height: 0;
   }
 
   .messages-panel.messages-mobile-fullscreen .thread-header {
