@@ -7,6 +7,7 @@ dist/
 dist-electron/
 build/
 .vite/
+frontend/public/downloads/siglacast.exe
 
 # Environment & secrets
 .env

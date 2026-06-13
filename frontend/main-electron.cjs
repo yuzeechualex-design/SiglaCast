@@ -13,7 +13,7 @@ function createWindow() {
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: "#120a20",
-    icon: path.join(__dirname, "public", "assets", "siglacast-icon.png"),
+    icon: path.join(__dirname, "dist", "assets", "siglacast-icon.png"),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

@@ -1,5 +1,7 @@
 import { Link } from "react-router-dom";
 
+const PC_DOWNLOAD_URL = "https://github.com/yuzeechualex-design/SiglaCast/releases/latest/download/siglacast.exe";
+
 export default function DownloadPage() {
   return (
     <main className="download-page">
@@ -29,7 +31,7 @@ export default function DownloadPage() {
               <span aria-hidden="true">↓</span>
               <span>Download Android App</span>
             </a>
-            <a className="download-primary-btn" href="/downloads/siglacast.exe" download>
+            <a className="download-primary-btn" href={PC_DOWNLOAD_URL}>
               <span aria-hidden="true">↓</span>
               <span>Download PC Version</span>
             </a>

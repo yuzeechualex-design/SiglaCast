@@ -3,9 +3,12 @@ const envApiBase = import.meta.env.VITE_API_BASE_URL;
 const isNativeApp =
   typeof window !== "undefined" &&
   ["capacitor:", "ionic:"].includes(window.location.protocol);
+const isDesktopApp =
+  typeof window !== "undefined" &&
+  (window.purxuDesktop?.isDesktop || window.location.protocol === "file:");
 const isLocalApiBase = /\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\/?$/i.test(envApiBase || "");
 const API_BASE =
-  isNativeApp && (!envApiBase || isLocalApiBase)
+  (isNativeApp || isDesktopApp) && (!envApiBase || isLocalApiBase)
     ? DEFAULT_API_BASE_URL
     : envApiBase || (import.meta.env.DEV ? "http://localhost:4000" : DEFAULT_API_BASE_URL);
 const API = `${API_BASE.replace(/\/$/, "")}/api`;
