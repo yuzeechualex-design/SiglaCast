@@ -4895,6 +4895,14 @@ async function fetchArchivedChatTargets(me) {
   return { dms, groups };
 }
 
+async function unarchiveDmForParticipants(a, b) {
+  if (!a || !b) return;
+  await Promise.all([
+    supabase.from("user_chat_archive").delete().eq("user_id", a).eq("dm_peer_id", b),
+    supabase.from("user_chat_archive").delete().eq("user_id", b).eq("dm_peer_id", a)
+  ]);
+}
+
 app.post("/api/messages/conversations/archive", authenticate, async (req, res) => {
   try {
     const me = req.user.id;
@@ -5180,6 +5188,7 @@ app.post("/api/messages/with/:userId", authenticate, (req, res, next) => {
       .select()
       .maybeSingle();
     if (error) return res.status(400).json({ error: error.message });
+    await unarchiveDmForParticipants(me, otherId);
     await broker.publish("message.sent", { id, fromUserId: me, toUserId: otherId });
     const isAssistant = otherId === SIGLACAST_AI_USER_ID;
     let isAiCharacter = false;
