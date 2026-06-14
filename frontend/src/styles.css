@@ -1096,6 +1096,149 @@ body.desktop-shell .panel {
     margin: 0;
     padding: 14px 12px;
   }
+
+  /* ===== MINIMALIST MOBILE: remove all container chrome to match PC desktop look ===== */
+
+  /* Panels — no border, no shadow, no radius, transparent bg */
+  body:not(.desktop-shell) .panel {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 14px 12px;
+  }
+
+  /* Tiles / cards — flat, borderless */
+  body:not(.desktop-shell) .tile {
+    border: none;
+    border-radius: 10px;
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.03);
+    margin-top: 8px;
+  }
+
+  body:not(.desktop-shell) .tile:hover {
+    transform: none;
+    box-shadow: none;
+    border-color: transparent;
+  }
+
+  /* Messages sidebar — remove container box */
+  body:not(.desktop-shell) .messages-sidebar {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+    padding: 0;
+  }
+
+  /* Conversation items — subtle hover, no borders */
+  body:not(.desktop-shell) .conv-item {
+    border: 1px solid transparent;
+    border-radius: 10px;
+    background: transparent;
+  }
+
+  body:not(.desktop-shell) .conv-item:hover,
+  body:not(.desktop-shell) .conv-item.active {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.08);
+  }
+
+  body:not(.desktop-shell) .conv-item.conv-userphone {
+    border-color: rgba(100, 160, 255, 0.15);
+  }
+
+  /* Tab switch — remove container border */
+  body:not(.desktop-shell) .story-identity-switch,
+  body:not(.desktop-shell) .chat-list-switch {
+    border: none;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+  }
+
+  /* Search bar — subtle, blending in */
+  body:not(.desktop-shell) .friend-search input {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  body:not(.desktop-shell) .friend-search-btn {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    box-shadow: none;
+  }
+
+  /* Thread container — borderless on mobile */
+  body:not(.desktop-shell) .messages-thread {
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* Thread header — transparent, clean */
+  body:not(.desktop-shell) .thread-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Thread messages area — no gradient */
+  body:not(.desktop-shell) .thread-messages {
+    background: transparent;
+  }
+
+  /* Compose row — transparent */
+  body:not(.desktop-shell) .thread-compose {
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  /* Comment bubbles — subtle, borderless */
+  body:not(.desktop-shell) .comment-bubble {
+    border: none;
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.04);
+  }
+
+  /* Search results — no border */
+  body:not(.desktop-shell) .search-results {
+    border: none;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  body:not(.desktop-shell) .search-result-row {
+    border: none;
+    background: transparent;
+  }
+
+  /* Composer / post area — subtle border only */
+  body:not(.desktop-shell) .composer {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: none;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+  }
+
+  /* Server workspace sidebar — remove container */
+  body:not(.desktop-shell) .server-sidebar {
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  /* Member row — clean */
+  body:not(.desktop-shell) .member-row {
+    border: none;
+    background: transparent;
+  }
+
+  /* File row — borderless */
+  body:not(.desktop-shell) .file-row {
+    border: none;
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 .app-loading-screen {
@@ -10687,7 +10830,7 @@ button.comment-profile-avatar-btn:focus-visible {
 
 @media (max-width: 900px) {
   .app {
-    padding: 14px;
+    padding: 0;
   }
 
   .grid {
