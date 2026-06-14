@@ -83,9 +83,9 @@ const fallbackExeGacha = {
   id: "exe-profile-card",
   name: "EXE Banner",
   bannerUrl: "/assets/exe-profile-background.mp4",
-  description: "Profile card backgrounds, EXE frame, and keys. Cost doubles each pull.",
+  description: "Profile card backgrounds, EXE frame, and keys. 300 coins per pull.",
   badgeText: "30 days left",
-  nextCost: 200,
+  nextCost: 300,
   pool: [
     { id: "exe-profile-background", name: "EXE Profile Card Background", type: "profile_card_background", imageUrl: "/assets/exe-profile-background.mp4", chanceGroup: "Featured reward" },
     { id: "exe-frame", name: "EXE Profile Frame", type: "profile_frame", imageUrl: "/assets/exe-frame.png", chanceGroup: "Rare" },

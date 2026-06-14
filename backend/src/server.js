@@ -293,7 +293,7 @@ const ALIEN_STAGE_GACHA_ID = "alien-stage-frame";
 const CHIIKAWA_GACHA_ID = "chiikawa-frame";
 const EXE_GACHA_ID = "exe-profile-card";
 const GACHA_DRAW_COSTS = [50, 100, 200, 400, 800, 1600, 3200, 3200];
-const EXE_GACHA_DRAW_COSTS = [200, 400, 800, 1600, 3200, 6400, 6400];
+const EXE_GACHA_DRAW_COSTS = [300, 300, 300, 300, 300, 300, 300];
 const ALIEN_STAGE_GACHA_ITEMS = [
   { id: "alien-stage-mizisua-star", name: "Mizisua Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-mizisua-star.png" },
   { id: "alien-stage-hyuluka-star", name: "Hyuluka Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-hyuluka-star.png" },
@@ -324,7 +324,7 @@ const GACHA_COLLECTIONS = [
     id: EXE_GACHA_ID,
     name: "EXE Banner",
     bannerUrl: "/assets/exe-profile-background.mp4",
-    description: "Profile card backgrounds, EXE frame, and keys. Cost doubles each pull. 30 days left.",
+    description: "Profile card backgrounds, EXE frame, and keys. 300 coins per pull. 30 days left.",
     badgeText: "30 days left",
     items: EXE_GACHA_ITEMS,
     costForDraw: (_user, freeShop, owned) => freeShop ? 0 : nextExeGachaCost(EXE_GACHA_ITEMS.filter((item) => owned?.has(item.id)).length),
