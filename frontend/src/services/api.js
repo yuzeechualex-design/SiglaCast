@@ -10,7 +10,7 @@ const isLocalApiBase = /\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0)(:\d+)?\/?$/i.tes
 const API_BASE =
   (isNativeApp || isDesktopApp) && (!envApiBase || isLocalApiBase)
     ? DEFAULT_API_BASE_URL
-    : envApiBase || (import.meta.env.DEV ? "http://localhost:4000" : DEFAULT_API_BASE_URL);
+    : envApiBase || DEFAULT_API_BASE_URL;
 const API = `${API_BASE.replace(/\/$/, "")}/api`;
 export const API_ORIGIN = API_BASE.replace(/\/$/, "");
 
