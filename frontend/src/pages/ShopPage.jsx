@@ -171,6 +171,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
 
   async function draw(useKey = false) {
     if (!gacha?.id || drawing || complete) return;
+    setDrawing(true);
     setError("");
     setReward(null);
     setPendingReward(null);
@@ -183,7 +184,6 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
     setPendingReward(res.reward);
     setReelStop(calculateReelStop(res.reward));
     setReelKey((key) => key + 1);
-    window.requestAnimationFrame(() => setDrawing(true));
     window.setTimeout(() => {
       setDrawing(false);
       setReward(res.reward);
