@@ -10918,7 +10918,8 @@ button.comment-profile-avatar-btn:focus-visible {
     display: none;
   }
 
-  .messages-panel.messages-mobile-fullscreen {
+  .messages-panel.messages-mobile-fullscreen,
+  body:not(.desktop-shell) .messages-panel.panel.single.messages-mobile-fullscreen {
     position: fixed;
     inset: 0;
     z-index: 100;
@@ -11072,6 +11073,17 @@ button.comment-profile-avatar-btn:focus-visible {
 body:has(.messages-mobile-fullscreen) {
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+/* Hide bottom nav bar when fullscreen chat is open */
+body:has(.messages-mobile-fullscreen) .hero.app-sidebar {
+  display: none !important;
+}
+
+/* Remove grid padding when fullscreen chat is active */
+body:has(.messages-mobile-fullscreen) main.grid {
+  padding: 0;
+  gap: 0;
 }
 
 /* ========== Music hub + Spotify mini player ========== */
