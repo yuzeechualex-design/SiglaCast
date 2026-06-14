@@ -1292,6 +1292,39 @@ export default function MessagesPage({
                 </div>
                 ) : null}
 
+                {/* Render DM conversations */}
+                {conversations
+                  .filter((c) => c.kind === "dm")
+                  .map((c) => {
+                    const isActive = activeChat?.kind === "dm" && activeChat?.user?.id === c.user?.id;
+                    return (
+                      <div
+                        key={c.id}
+                        role="button"
+                        tabIndex={0}
+                        className={`conv-item ${isActive ? "active" : ""}`}
+                        onClick={() => onOpenChat?.("dm", c.user?.id)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            onOpenChat?.("dm", c.user?.id);
+                          }
+                        }}
+                      >
+                        {renderAvatar(c.user, "sm", { showPresence: true, onProfileClick: onOpenUserProfile })}
+                        <div className="conv-item-body">
+                          <strong className="user-line-name">
+                            {c.user?.name || "User"} <StatusEmojiChip emoji={c.user?.statusEmoji} />
+                            {c.isFriend && <span className="pill pill-muted small">friend</span>}
+                          </strong>
+                          <span className="conv-preview">
+                            {c.lastMessage ? `${c.lastMessage.fromMe ? "You: " : ""}${c.lastMessage.text}` : "Start a conversation"}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+
                 {/* Render active group chats that the user belongs to */}
                 {conversations
                   .filter((c) => c.kind === "group")
