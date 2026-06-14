@@ -1,8 +1,14 @@
 export const DEFAULT_API_BASE_URL = "https://siglacast-backend.onrender.com";
 const envApiBase = import.meta.env.VITE_API_BASE_URL;
+const isCapacitorNative =
+  typeof window !== "undefined" &&
+  Boolean(
+    window.Capacitor?.isNativePlatform?.() ||
+      ["android", "ios"].includes(String(window.Capacitor?.getPlatform?.() || "").toLowerCase())
+  );
 const isNativeApp =
   typeof window !== "undefined" &&
-  ["capacitor:", "ionic:"].includes(window.location.protocol);
+  (isCapacitorNative || ["capacitor:", "ionic:"].includes(window.location.protocol));
 const isDesktopApp =
   typeof window !== "undefined" &&
   (window.purxuDesktop?.isDesktop || window.location.protocol === "file:");

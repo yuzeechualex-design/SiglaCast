@@ -40,6 +40,7 @@ export default function AddFriendsPage({
   const [mode, setMode] = useState("users");
   const [characters, setCharacters] = useState([]);
   const [users, setUsers] = useState([]);
+  const [submittedUserQuery, setSubmittedUserQuery] = useState("");
   const [loadingCharacters, setLoadingCharacters] = useState(true);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -90,14 +91,6 @@ export default function AddFriendsPage({
     fetchCharacters();
   }, [fetchCharacters]);
 
-  useEffect(() => {
-    if (mode !== "users") return;
-    const timer = window.setTimeout(() => {
-      void fetchUsers(searchQuery);
-    }, 220);
-    return () => window.clearTimeout(timer);
-  }, [fetchUsers, mode, searchQuery]);
-
   const handleAddFriend = async (friendId) => {
     if (submittingAction) return;
     setSubmittingAction(friendId);
@@ -123,6 +116,22 @@ export default function AddFriendsPage({
     ? "Search users by name, email, or course..."
     : "Search AI characters by name or bio...";
 
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (mode !== "users") return;
+    const q = searchQuery.trim();
+    setSubmittedUserQuery(q);
+    void fetchUsers(q);
+  };
+
+  const handleClearSearch = () => {
+    setSearchQuery("");
+    if (mode === "users") {
+      setSubmittedUserQuery("");
+      setUsers([]);
+    }
+  };
+
   return (
     <section className="panel single add-friends-container">
       <div className="add-friends-header tile">
@@ -146,27 +155,38 @@ export default function AddFriendsPage({
             AI Characters
           </button>
         </div>
-        <div className="search-box-row">
+        <form className="search-box-row" onSubmit={handleSearchSubmit}>
           <div className="search-box-wrap">
             <input
               type="text"
               className="search-box-input"
               placeholder={placeholder}
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (mode === "users" && !e.target.value.trim()) {
+                  setSubmittedUserQuery("");
+                  setUsers([]);
+                }
+              }}
             />
             {searchQuery ? (
               <button
                 type="button"
                 className="search-clear-btn"
-                onClick={() => setSearchQuery("")}
+                onClick={handleClearSearch}
                 aria-label="Clear search"
               >
                 x
               </button>
             ) : null}
           </div>
-        </div>
+          {mode === "users" ? (
+            <button type="submit" className="search-submit-btn" disabled={!searchQuery.trim() || loadingUsers}>
+              Search
+            </button>
+          ) : null}
+        </form>
       </div>
 
       <section className="friends-section discover-section">
@@ -235,7 +255,7 @@ export default function AddFriendsPage({
           ) : (
             <div className="empty-section tile">
               <p className="muted small">
-                {searchQuery.trim() ? "No users found matching your search." : "Search for a user to begin."}
+                {submittedUserQuery ? "No users found matching your search." : "Type a name, email, or course, then press Search."}
               </p>
             </div>
           )
