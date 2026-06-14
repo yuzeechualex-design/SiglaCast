@@ -2791,13 +2791,21 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
       <div className="server-member-list">
         {members.map((member) => {
           const presence = presenceDotAttrs(member);
+          const memberBackgroundHref = bundledAssetUrl(
+            member.profileCardBackgroundUrl || profileBackgroundUrlFromItemId(member.profileCardBackgroundItemId)
+          );
           return (
             <button
               key={member.id}
               type="button"
-              className={`server-member-row${selectedMember?.id === member.id ? " active" : ""}`}
+              className={`server-member-row${memberBackgroundHref ? " has-profile-bg" : ""}${selectedMember?.id === member.id ? " active" : ""}`}
               onClick={() => setSelectedMember(member)}
             >
+              {memberBackgroundHref ? (
+                <video className="server-member-row-bg-video" autoPlay muted loop playsInline preload="metadata" aria-hidden>
+                  <source src={memberBackgroundHref} type="video/mp4" />
+                </video>
+              ) : null}
               <span className="server-member-avatar">
                 <AvatarWithFrame user={member} size="sm" />
                 <i className={presence.className} title={presence.title} />
@@ -2828,7 +2836,7 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
           <button
             type="button"
             className="server-member-card-avatar"
-            onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}
+            onClick={() => selectedMember.id && onOpenUserProfile?.(selectedMember.id, selectedMember)}
             title="View profile"
             style={{ display: "grid", placeItems: "center", overflow: "visible" }}
           >
@@ -2872,7 +2880,7 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
               <button
                 type="button"
                 className="btn btn-primary btn-sm"
-                onClick={() => selectedMember.id && !selectedMember.isCurrentUser && onOpenUserProfile?.(selectedMember.id, selectedMember)}
+                onClick={() => selectedMember.id && onOpenUserProfile?.(selectedMember.id, selectedMember)}
               >
                 View profile
               </button>

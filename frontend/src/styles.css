@@ -6807,10 +6807,11 @@ textarea.profile-bio-input::placeholder {
 }
 
 .server-member-row {
+  position: relative;
   width: 100%;
   min-width: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr);
   align-items: center;
@@ -6820,6 +6821,7 @@ textarea.profile-bio-input::placeholder {
   background: transparent;
   text-align: left;
   cursor: pointer;
+  overflow: hidden;
 }
 
 .server-member-row:hover,
@@ -6827,8 +6829,45 @@ textarea.profile-bio-input::placeholder {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.server-member-row.has-profile-bg {
+  min-height: 48px;
+  background:
+    linear-gradient(90deg, rgba(9, 5, 16, 0.28), rgba(9, 5, 16, 0.74)),
+    rgba(255, 255, 255, 0.04);
+}
+
+.server-member-row.has-profile-bg:hover,
+.server-member-row.has-profile-bg.active {
+  background:
+    linear-gradient(90deg, rgba(9, 5, 16, 0.08), rgba(9, 5, 16, 0.62)),
+    rgba(255, 255, 255, 0.1);
+}
+
+.server-member-row.has-profile-bg::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(7, 3, 14, 0.1), rgba(7, 3, 14, 0.62));
+  pointer-events: none;
+  z-index: 0;
+}
+
+.server-member-row-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  mix-blend-mode: screen;
+  opacity: 0.7;
+  filter: saturate(1.08) contrast(1.08) brightness(0.78);
+  z-index: 0;
+}
+
 .server-member-avatar {
   position: relative;
+  z-index: 1;
   width: 36px;
   height: 36px;
   border-radius: 50%;
@@ -6880,6 +6919,8 @@ textarea.profile-bio-input::placeholder {
 }
 
 .server-member-copy {
+  position: relative;
+  z-index: 1;
   min-width: 0;
   display: grid;
   gap: 1px;
