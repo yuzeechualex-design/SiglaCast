@@ -236,9 +236,10 @@ export default function MessagesPage({
   const [optimisticMessages, setOptimisticMessages] = useState([]);
   const [chatTab, setChatTab] = useState("users");
   const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [servers, setServers] = useState([]);
+  const [servers, setServers] = useState(loadLocalServers);
   const [selectedServerId, setSelectedServerId] = useState("");
   const [selectedChannelId, setSelectedChannelId] = useState("");
+  const [serverMessageCache, setServerMessageCache] = useState(loadServerMessages);
   const [channelMessages, setChannelMessages] = useState([]);
   const [serverDraft, setServerDraft] = useState("");
   const [showCreateServer, setShowCreateServer] = useState(false);
@@ -364,6 +365,12 @@ export default function MessagesPage({
           profileFrameUrl: m.profileFrameUrl || m.authorProfileFrameUrl || null
         }));
         setChannelMessages(normalized);
+        const cacheKey = `${selectedServerId}:${selectedChannelId}`;
+        setServerMessageCache((prev) => {
+          const next = { ...prev, [cacheKey]: normalized.slice(-100) };
+          saveServerMessages(next);
+          return next;
+        });
       }
     } catch (err) {
       console.error("loadActiveChannelMessages error:", err);
@@ -379,6 +386,10 @@ export default function MessagesPage({
     if (!token || !selectedServerId || !selectedChannelId) {
       setChannelMessages([]);
       return;
+    }
+    const cacheKey = `${selectedServerId}:${selectedChannelId}`;
+    if (Array.isArray(serverMessageCache[cacheKey])) {
+      setChannelMessages(serverMessageCache[cacheKey]);
     }
     void loadActiveChannelMessages();
     const interval = setInterval(() => {

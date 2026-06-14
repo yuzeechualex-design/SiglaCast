@@ -27,6 +27,7 @@ import { readLiteModePreference, writeLiteModePreference } from "./utils/network
 
 const STORAGE_SEEN_ANNOUNCEMENT_IDS = "siglacast_seen_announcement_ids";
 const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
+const STORAGE_CACHED_CONVERSATIONS = "siglacast_cached_conversations";
 const STORAGE_ANDROID_OVERLAY_ASKED = "siglacast_android_overlay_permission_asked";
 const STORAGE_OAUTH_ONBOARDING_PREFIX = "siglacast_oauth_onboarded_";
 
@@ -70,6 +71,23 @@ function readCachedPosts() {
 function writeCachedPosts(rows) {
   try {
     localStorage.setItem(STORAGE_CACHED_POSTS, JSON.stringify(rows.map(cacheablePost).slice(0, 80)));
+  } catch (_) {
+    // Ignore storage quota or private-mode failures.
+  }
+}
+
+function readCachedConversations() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_CACHED_CONVERSATIONS) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function writeCachedConversations(rows) {
+  try {
+    localStorage.setItem(STORAGE_CACHED_CONVERSATIONS, JSON.stringify((rows || []).slice(0, 80)));
   } catch (_) {
     // Ignore storage quota or private-mode failures.
   }
@@ -132,7 +150,7 @@ export default function App() {
   const [oauthOnboardingOpen, setOauthOnboardingOpen] = useState(false);
   const [appRefreshBusy, setAppRefreshBusy] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [conversations, setConversations] = useState([]);
+  const [conversations, setConversations] = useState(readCachedConversations);
   const [messagesArchivedView, setMessagesArchivedView] = useState(false);
   const [archivedConversationsSidebar, setArchivedConversationsSidebar] = useState([]);
   const [friendIncomingRequests, setFriendIncomingRequests] = useState([]);
@@ -576,6 +594,8 @@ export default function App() {
 
   async function loadCore() {
     if (!token) return false;
+    const cached = readCachedPosts();
+    if (cached.length && posts.length === 0) setPosts(cached);
     const [ev, po, chars] = await Promise.all([
       api("/events"),
       api("/community/posts"),
@@ -588,7 +608,6 @@ export default function App() {
       setPosts(po);
       writeCachedPosts(po);
     } else {
-      const cached = readCachedPosts();
       if (cached.length) setPosts(cached);
     }
     return ok;
@@ -650,29 +669,15 @@ export default function App() {
       return undefined;
     }
 
-    setAppBootReady(false);
-
-    const bootTimeout = setTimeout(() => {
-      if (!cancelled) setAppBootReady(true);
-    }, 10000);
+    setAppBootReady(true);
 
     async function bootApp() {
-      while (!cancelled) {
-        const ok = await loadAll();
-        if (cancelled) return;
-        if (ok) {
-          clearTimeout(bootTimeout);
-          setAppBootReady(true);
-          return;
-        }
-        await new Promise((resolve) => setTimeout(resolve, 2500));
-      }
+      await loadAll();
     }
 
     void bootApp();
     return () => {
       cancelled = true;
-      clearTimeout(bootTimeout);
     };
   }, [token, user?.id, user?.role]);
 
@@ -907,7 +912,11 @@ export default function App() {
   async function loadMessages() {
     if (!token) return;
     const [list, reqs] = await Promise.all([api("/messages/conversations"), api("/friend-requests")]);
-    if (!list.error) setConversations(Array.isArray(list) ? list : []);
+    if (!list.error) {
+      const next = Array.isArray(list) ? list : [];
+      setConversations(next);
+      writeCachedConversations(next);
+    }
     if (!reqs.error && Array.isArray(reqs)) setFriendIncomingRequests(reqs);
     else setFriendIncomingRequests([]);
   }
