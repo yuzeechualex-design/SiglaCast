@@ -27,12 +27,12 @@ export default function AppShell({
   const navItems = [
     { to: "/community", icon: "home", label: "Home" },
     { to: "/messages", icon: "messages", label: "Messages", badge: msg, badgeLabel: `${navBadges.messages} unread messages` },
-    { to: "/add-friends", icon: "friends", label: "Friends", badge: addFriends, badgeLabel: `${navBadges.addFriends} pending requests` },
+    { to: "/add-friends", icon: "search", label: "Search", badge: addFriends, badgeLabel: `${navBadges.addFriends} pending requests` },
     { to: "/shop", icon: "shop", label: "Shop" },
     { to: "/notifications", icon: "notifications", label: "Notifications", badge: bell, badgeLabel: `${navBadges.notifications} unread notifications` },
     { to: "/characters", icon: "plus", label: "Create" },
     { to: "/profile", icon: "profile", label: "Our profile", profile: true },
-    { to: "/settings", icon: "settings", label: "More", bottom: true }
+    { to: "/settings", icon: "menu", label: "More", bottom: true }
   ];
 
   const [toastMsg, setToastMsg] = useState("");

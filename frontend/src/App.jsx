@@ -615,11 +615,16 @@ export default function App() {
 
     setAppBootReady(false);
 
+    const bootTimeout = setTimeout(() => {
+      if (!cancelled) setAppBootReady(true);
+    }, 10000);
+
     async function bootApp() {
       while (!cancelled) {
         const ok = await loadAll();
         if (cancelled) return;
         if (ok) {
+          clearTimeout(bootTimeout);
           setAppBootReady(true);
           return;
         }
@@ -630,6 +635,7 @@ export default function App() {
     void bootApp();
     return () => {
       cancelled = true;
+      clearTimeout(bootTimeout);
     };
   }, [token, user?.id, user?.role]);
 
@@ -2335,7 +2341,14 @@ export default function App() {
 function AppLoadingScreen() {
   return (
     <div className="app-loading-screen" aria-busy="true" aria-live="polite">
-      <img src="/assets/app-loading-logo.gif" alt="" />
+      <video
+        src="/assets/app-loading-logo.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-hidden="true"
+      />
     </div>
   );
 }

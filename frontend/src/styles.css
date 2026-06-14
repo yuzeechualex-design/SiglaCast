@@ -427,6 +427,526 @@ body.desktop-shell .panel {
   padding: 18px;
 }
 
+@media (min-width: 901px) {
+  body:not(.desktop-shell) {
+    overflow: hidden;
+    background:
+      radial-gradient(circle at 78% 8%, rgba(124, 58, 237, 0.14), transparent 34rem),
+      linear-gradient(145deg, #07050d 0%, #0e0918 48%, #12091f 100%);
+    color: #f7f3ff;
+  }
+
+  body:not(.desktop-shell) .app {
+    --ink-900: #f7f3ff;
+    --ink-600: rgba(238, 231, 255, 0.68);
+    --ink-500: rgba(238, 231, 255, 0.54);
+    --surface: #0b0812;
+    --card: rgba(255, 255, 255, 0.035);
+    --line: rgba(216, 180, 254, 0.1);
+    --input-bg: rgba(255, 255, 255, 0.07);
+    --bubble-them-bg: rgba(255, 255, 255, 0.08);
+    --bubble-them-text: #f7f3ff;
+    --menu-bg: #120d1e;
+    height: 100vh;
+    min-height: 0;
+    max-width: none;
+    margin: 0;
+    padding: 0 0 0 74px;
+    overflow: hidden;
+    background: transparent;
+    color: #f7f3ff;
+  }
+
+  body:not(.desktop-shell) .floating-quick-nav-shell,
+  body:not(.desktop-shell) .pull-refresh-indicator {
+    display: none;
+  }
+
+  body:not(.desktop-shell) main.grid {
+    height: 100vh;
+    margin-top: 0;
+    padding: 0;
+    overflow: auto;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    background:
+      radial-gradient(circle at 84% 5%, rgba(168, 85, 247, 0.1), transparent 30rem),
+      linear-gradient(145deg, rgba(8, 6, 14, 0.98), rgba(13, 8, 22, 0.99));
+  }
+
+  body:not(.desktop-shell) main.grid::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
+
+  body:not(.desktop-shell) .hero.app-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 90;
+    width: 74px;
+    padding: 18px 12px;
+    border: 0;
+    border-right: 1px solid rgba(216, 180, 254, 0.1);
+    border-radius: 0;
+    background:
+      linear-gradient(180deg, rgba(9, 7, 14, 0.99), rgba(11, 7, 18, 0.99)),
+      linear-gradient(180deg, rgba(139, 92, 246, 0.08), transparent 34%);
+    box-shadow: none;
+    overflow: hidden;
+    animation: none;
+    transition: width 240ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease, background 200ms ease;
+  }
+
+  body:not(.desktop-shell) .hero.app-sidebar:hover,
+  body:not(.desktop-shell) .hero.app-sidebar:focus-within {
+    width: 226px;
+    border-right-color: rgba(216, 180, 254, 0.16);
+    background:
+      linear-gradient(180deg, rgba(10, 8, 16, 0.99), rgba(14, 8, 24, 0.99)),
+      linear-gradient(180deg, rgba(139, 92, 246, 0.1), transparent 36%);
+  }
+
+  body:not(.desktop-shell) .hero.app-sidebar::after {
+    display: none;
+  }
+
+  body:not(.desktop-shell) .nav-row {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 9px;
+    overflow: visible;
+  }
+
+  body:not(.desktop-shell) .nav-brand {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin: 0 0 clamp(72px, 13vh, 132px);
+    flex: 0 0 auto;
+  }
+
+  body:not(.desktop-shell) .nav-brand img {
+    width: 25px;
+    height: 25px;
+    border-radius: 8px;
+    object-fit: cover;
+    filter: grayscale(1) brightness(1.85);
+    opacity: 0.96;
+  }
+
+  body:not(.desktop-shell) .nav-btn {
+    width: 100%;
+    height: 46px;
+    min-width: 0;
+    flex: 0 0 46px;
+    justify-content: flex-start;
+    gap: 16px;
+    border: 0;
+    border-radius: 12px;
+    padding: 0 12px;
+    color: rgba(255, 255, 255, 0.86);
+    background: transparent;
+    box-shadow: none;
+    font-size: 1rem;
+    font-weight: 850;
+    outline: 0;
+    transition: background 180ms ease, color 180ms ease;
+  }
+
+  body:not(.desktop-shell) .nav-btn:hover {
+    transform: none;
+    color: #fff;
+    background: rgba(255, 255, 255, 0.07);
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .nav-btn.active {
+    color: #09070f;
+    background: #fff;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .nav-btn-bottom {
+    margin-top: auto;
+  }
+
+  body:not(.desktop-shell) .nav-icon {
+    width: 22px;
+    height: 22px;
+    flex-basis: 22px;
+  }
+
+  body:not(.desktop-shell) .nav-label {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: hidden;
+    clip: auto;
+    opacity: 0;
+    max-width: 0;
+    white-space: nowrap;
+    transform: translateX(-8px);
+    transition: opacity 180ms ease, max-width 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  body:not(.desktop-shell) .hero.app-sidebar:hover .nav-label,
+  body:not(.desktop-shell) .hero.app-sidebar:focus-within .nav-label {
+    opacity: 1;
+    max-width: 132px;
+    transform: translateX(0);
+  }
+
+  body:not(.desktop-shell) .nav-row .nav-ping {
+    top: 50%;
+    right: 8px;
+    min-width: 20px;
+    height: 20px;
+    transform: translateY(-50%);
+    border: 0;
+    color: #fff;
+    background: linear-gradient(135deg, #ff3864, #8b5cf6);
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .nav-profile-avatar {
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+  }
+
+  body:not(.desktop-shell) .nav-icon svg,
+  body.desktop-shell .nav-icon svg {
+    stroke-width: 2.05px;
+  }
+
+  body:not(.desktop-shell) .nav-btn.active .nav-icon svg,
+  body.desktop-shell .nav-btn.active .nav-icon svg {
+    filter: none;
+  }
+
+  body:not(.desktop-shell) .nav-btn.active[title="Home"] .nav-icon svg,
+  body.desktop-shell .nav-btn.active[title="Home"] .nav-icon svg {
+    fill: currentColor;
+  }
+
+  body:not(.desktop-shell) .single,
+  body.desktop-shell .single {
+    grid-column: 1 / -1;
+  }
+
+  body:not(.desktop-shell) .panel,
+  body:not(.desktop-shell) .tile,
+  body:not(.desktop-shell) .composer,
+  body:not(.desktop-shell) .admin-panel,
+  body:not(.desktop-shell) .modal-card,
+  body:not(.desktop-shell) .messages-sidebar,
+  body:not(.desktop-shell) .messages-thread,
+  body:not(.desktop-shell) .messages-stories-sidebar,
+  body:not(.desktop-shell) .community-stories-rail,
+  body:not(.desktop-shell) .search-results,
+  body:not(.desktop-shell) .search-result-row,
+  body:not(.desktop-shell) .conv-item,
+  body:not(.desktop-shell) .notification-tile,
+  body:not(.desktop-shell) .add-friends-container,
+  body:not(.desktop-shell) .my-profile-hero-card,
+  body:not(.desktop-shell) .my-profile-about-card,
+  body:not(.desktop-shell) .my-profile-composer-card,
+  body:not(.desktop-shell) .my-profile-section-head,
+  body:not(.desktop-shell) .my-profile-post-card,
+  body:not(.desktop-shell) .my-profile-empty-posts,
+  body:not(.desktop-shell) .shop-hero,
+  body:not(.desktop-shell) .shop-card,
+  body:not(.desktop-shell) .coin-shop-card,
+  body:not(.desktop-shell) .shop-wallet,
+  body:not(.desktop-shell) .shop-gacha-banner,
+  body.desktop-shell .messages-sidebar,
+  body.desktop-shell .messages-thread,
+  body.desktop-shell .messages-stories-sidebar,
+  body.desktop-shell .community-stories-rail,
+  body.desktop-shell .search-results,
+  body.desktop-shell .search-result-row,
+  body.desktop-shell .conv-item,
+  body.desktop-shell .notification-tile,
+  body.desktop-shell .add-friends-container,
+  body.desktop-shell .shop-hero,
+  body.desktop-shell .shop-card,
+  body.desktop-shell .coin-shop-card,
+  body.desktop-shell .shop-wallet,
+  body.desktop-shell .shop-gacha-banner {
+    border-color: rgba(216, 180, 254, 0.1);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.035);
+    color: #f7f3ff;
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .panel,
+  body.desktop-shell .panel {
+    min-height: 100%;
+    margin: 0;
+    border: 0;
+    border-radius: 0;
+    padding: 22px 24px;
+    background: transparent;
+    box-shadow: none;
+    animation: none;
+  }
+
+  body:not(.desktop-shell) .panel-head,
+  body.desktop-shell .panel-head {
+    display: none;
+  }
+
+  body:not(.desktop-shell) input,
+  body:not(.desktop-shell) textarea,
+  body:not(.desktop-shell) select,
+  body.desktop-shell input,
+  body.desktop-shell textarea,
+  body.desktop-shell select {
+    border-color: rgba(216, 180, 254, 0.12);
+    background: rgba(255, 255, 255, 0.07);
+    color: #f7f3ff;
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) input::placeholder,
+  body:not(.desktop-shell) textarea::placeholder,
+  body.desktop-shell input::placeholder,
+  body.desktop-shell textarea::placeholder {
+    color: rgba(238, 231, 255, 0.55);
+  }
+
+  body:not(.desktop-shell) button,
+  body:not(.desktop-shell) .btn,
+  body.desktop-shell button,
+  body.desktop-shell .btn {
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .btn-primary,
+  body:not(.desktop-shell) .btn-send-msg,
+  body.desktop-shell .btn-primary,
+  body.desktop-shell .btn-send-msg {
+    color: #fff;
+    background: #635bff;
+  }
+
+  body:not(.desktop-shell) .btn-secondary,
+  body:not(.desktop-shell) label.btn-secondary,
+  body.desktop-shell .btn-secondary,
+  body.desktop-shell label.btn-secondary {
+    color: #f7f3ff;
+    border-color: rgba(216, 180, 254, 0.13);
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  body:not(.desktop-shell) .btn-ghost,
+  body.desktop-shell .btn-ghost {
+    color: rgba(238, 231, 255, 0.78);
+    background: transparent;
+  }
+
+  body:not(.desktop-shell) .messages-panel.panel.single,
+  body.desktop-shell .messages-panel.panel.single {
+    height: 100%;
+    max-height: none;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body:not(.desktop-shell) .messages-layout,
+  body.desktop-shell .messages-layout {
+    height: 100%;
+    max-width: none;
+    width: 100%;
+    margin: 0;
+    gap: 0;
+    grid-template-columns: minmax(340px, 396px) minmax(0, 1fr);
+    background: #090d12;
+  }
+
+  body:not(.desktop-shell) .messages-sidebar,
+  body.desktop-shell .messages-sidebar {
+    gap: 12px;
+    border-width: 0 1px 0 0;
+    border-radius: 0;
+    padding: 22px 16px;
+    background: #090d12;
+    overflow-y: auto;
+  }
+
+  body:not(.desktop-shell) .messages-stories-sidebar,
+  body.desktop-shell .messages-stories-sidebar {
+    display: none;
+  }
+
+  body:not(.desktop-shell) .messages-thread,
+  body.desktop-shell .messages-thread {
+    border: 0;
+    border-radius: 0;
+    background: #090d12;
+  }
+
+  body:not(.desktop-shell) .thread-header,
+  body.desktop-shell .thread-header,
+  body:not(.desktop-shell) .server-thread-head,
+  body.desktop-shell .server-thread-head {
+    min-height: 64px;
+    border-bottom-color: rgba(216, 180, 254, 0.08);
+    background: #090d12;
+  }
+
+  body:not(.desktop-shell) .thread-empty,
+  body.desktop-shell .thread-empty,
+  body:not(.desktop-shell) .server-thread-empty,
+  body.desktop-shell .server-thread-empty {
+    color: #f7f3ff;
+    background: #090d12;
+  }
+
+  body:not(.desktop-shell) .thread-messages,
+  body.desktop-shell .thread-messages {
+    background: #090d12;
+    padding: 18px 24px;
+  }
+
+  body:not(.desktop-shell) .thread-compose,
+  body.desktop-shell .thread-compose,
+  body:not(.desktop-shell) .server-thread-compose,
+  body.desktop-shell .server-thread-compose {
+    border-top-color: rgba(216, 180, 254, 0.08);
+    background: #090d12;
+  }
+
+  body:not(.desktop-shell) .conv-item:hover,
+  body:not(.desktop-shell) .conv-item.active,
+  body.desktop-shell .conv-item:hover,
+  body.desktop-shell .conv-item.active {
+    border-color: transparent;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  body:not(.desktop-shell) .conv-item.active,
+  body.desktop-shell .conv-item.active {
+    background: #fff;
+    color: #090d12;
+  }
+
+  body:not(.desktop-shell) .conv-item.active .conv-preview,
+  body:not(.desktop-shell) .conv-item.active .conv-status-sub,
+  body.desktop-shell .conv-item.active .conv-preview,
+  body.desktop-shell .conv-item.active .conv-status-sub {
+    color: rgba(9, 13, 18, 0.66);
+  }
+
+  body:not(.desktop-shell) .bubble,
+  body.desktop-shell .bubble {
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .bubble-them,
+  body.desktop-shell .bubble-them {
+    border-color: rgba(216, 180, 254, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    color: #f7f3ff;
+  }
+
+  body:not(.desktop-shell) .community-stories-shell,
+  body.desktop-shell .community-stories-shell {
+    margin: 0 auto 16px;
+    width: min(760px, 100%);
+  }
+
+  body:not(.desktop-shell) .community-stories-rail,
+  body.desktop-shell .community-stories-rail {
+    padding: 0 0 12px;
+    border-width: 0 0 1px;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  body:not(.desktop-shell) .community-stories-head,
+  body.desktop-shell .community-stories-head {
+    border-bottom-color: rgba(216, 180, 254, 0.08);
+  }
+
+  body:not(.desktop-shell) .community-composer,
+  body.desktop-shell .community-composer,
+  body:not(.desktop-shell) .post-card,
+  body.desktop-shell .post-card {
+    width: min(760px, 100%);
+    margin: 12px auto 0;
+  }
+
+  body:not(.desktop-shell) .post-card,
+  body.desktop-shell .post-card {
+    border-width: 0 0 1px;
+    border-radius: 0;
+    padding: 18px 0;
+    background: transparent;
+  }
+
+  body:not(.desktop-shell) .post-card:hover,
+  body.desktop-shell .post-card:hover {
+    transform: none;
+    border-color: rgba(216, 180, 254, 0.14);
+    box-shadow: none;
+  }
+
+  body:not(.desktop-shell) .my-profile-page,
+  body:not(.desktop-shell) .shop-page,
+  body:not(.desktop-shell) .add-friends-container,
+  body.desktop-shell .my-profile-page,
+  body.desktop-shell .shop-page,
+  body.desktop-shell .add-friends-container {
+    width: min(1120px, 100%);
+    margin: 0 auto;
+    padding: 22px 24px;
+  }
+
+  body:not(.desktop-shell) .my-profile-grid,
+  body.desktop-shell .my-profile-grid {
+    gap: 16px;
+  }
+
+  body:not(.desktop-shell) .my-profile-hero-card,
+  body.desktop-shell .my-profile-hero-card {
+    overflow: hidden;
+  }
+
+  body:not(.desktop-shell) .shop-grid,
+  body:not(.desktop-shell) .coin-shop-grid,
+  body.desktop-shell .shop-grid,
+  body.desktop-shell .coin-shop-grid {
+    gap: 12px;
+  }
+
+  body:not(.desktop-shell) .server-thread-layout,
+  body:not(.desktop-shell) .server-thread-preview,
+  body:not(.desktop-shell) .server-channel-panel,
+  body:not(.desktop-shell) .server-member-panel,
+  body.desktop-shell .server-thread-layout,
+  body.desktop-shell .server-thread-preview,
+  body.desktop-shell .server-channel-panel,
+  body.desktop-shell .server-member-panel {
+    background: #090d12;
+    border-color: rgba(216, 180, 254, 0.08);
+    box-shadow: none;
+  }
+}
+
 .app-loading-screen {
   position: fixed;
   inset: 0;
@@ -436,15 +956,18 @@ body.desktop-shell .panel {
   min-height: 100vh;
   min-height: 100dvh;
   background:
-    radial-gradient(circle at 50% 44%, rgba(139, 92, 246, 0.16), transparent 18rem),
+    radial-gradient(circle at 50% 44%, rgba(139, 92, 246, 0.2), transparent 18rem),
     linear-gradient(145deg, #08050f 0%, #12091f 54%, #090611 100%);
 }
 
-.app-loading-screen img {
-  width: min(260px, 44vw);
+.app-loading-screen video {
+  width: min(320px, 52vw);
   height: auto;
   display: block;
   object-fit: contain;
+  mix-blend-mode: screen;
+  filter: contrast(1.08) saturate(1.08) drop-shadow(0 0 34px rgba(139, 92, 246, 0.24));
+  opacity: 0.96;
 }
 
 .pull-refresh-host {
