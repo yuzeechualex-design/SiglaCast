@@ -900,7 +900,23 @@ body.desktop-shell .panel {
   body.desktop-shell .post-actions {
     position: relative;
     row-gap: 12px;
+    padding-bottom: 0;
+    transition: padding-bottom 0.16s ease;
+  }
+
+  body:not(.desktop-shell) .post-actions:has(.reaction-picker),
+  body.desktop-shell .post-actions:has(.reaction-picker) {
     padding-bottom: 42px;
+  }
+
+  body:not(.desktop-shell) .comment-reaction-row,
+  body.desktop-shell .comment-reaction-row {
+    transition: padding-bottom 0.16s ease;
+  }
+
+  body:not(.desktop-shell) .comment-reaction-row:has(.comment-reaction-picker),
+  body.desktop-shell .comment-reaction-row:has(.comment-reaction-picker) {
+    padding-bottom: 36px;
   }
 
   body:not(.desktop-shell) .reaction-picker,
@@ -5470,43 +5486,46 @@ button.my-profile-edit-wide:disabled,
 
 .friend-search-btn {
   position: relative;
-  width: 38px;
-  height: 38px;
-  overflow: hidden;
-  border: 1px solid rgba(167, 139, 250, 0.32);
-  border-radius: 12px;
+  width: 40px;
+  height: 40px;
+  overflow: visible;
+  border: 1px solid rgba(216, 180, 254, 0.28);
+  border-radius: 11px;
   display: grid;
   place-items: center;
   padding: 0;
-  color: #fff;
-  background: rgba(139, 92, 246, 0.18);
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.055);
   cursor: pointer;
-  text-indent: -999px;
+  font-size: 0;
+  text-indent: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .friend-search-btn::before {
   content: "";
-  width: 13px;
-  height: 13px;
+  position: absolute;
+  width: 14px;
+  height: 14px;
   border: 2px solid currentColor;
   border-radius: 50%;
-  transform: translate(-1px, -1px);
+  transform: translate(-3px, -3px);
 }
 
 .friend-search-btn::after {
   content: "";
   position: absolute;
-  width: 7px;
+  width: 8px;
   height: 2px;
   border-radius: 999px;
   background: currentColor;
   transform: translate(7px, 7px) rotate(45deg);
+  transform-origin: center;
 }
 
 .friend-search-btn:hover {
-  border-color: rgba(196, 181, 253, 0.58);
-  background: rgba(139, 92, 246, 0.32);
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(139, 92, 246, 0.22);
 }
 
 .friend-search .people-search-hint {
@@ -6904,6 +6923,21 @@ textarea.profile-bio-input::placeholder {
   align-items: flex-start;
 }
 
+.server-message-avatar-button {
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.server-message-avatar-button:disabled {
+  cursor: default;
+}
+
 .server-message-row > img,
 .server-message-row > span {
   width: 40px;
@@ -6920,6 +6954,24 @@ textarea.profile-bio-input::placeholder {
   display: flex;
   align-items: baseline;
   gap: 8px;
+}
+
+.server-message-author-btn {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+}
+
+.server-message-author-btn:hover {
+  color: #c4b5fd;
+}
+
+.server-message-author-btn:disabled {
+  cursor: default;
 }
 
 .server-message-meta small {
@@ -12711,6 +12763,17 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   box-sizing: border-box;
 }
 
+.add-friends-header {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.discover-header-copy {
+  display: grid;
+  gap: 4px;
+}
+
 .add-friends-header h2 {
   font-size: 1.8rem;
   font-weight: 800;
@@ -12724,6 +12787,154 @@ body.music-spotify-hub-open.music-mini-player-open.floating-quick-nav-open main.
   background: linear-gradient(135deg, #ffffff 0%, #38bdf8 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
+}
+
+.search-mode-toggle {
+  width: fit-content;
+  display: inline-flex;
+  gap: 4px;
+  border: 1px solid rgba(167, 139, 250, 0.22);
+  border-radius: 14px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.search-mode-toggle button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 14px;
+  background: transparent;
+  color: var(--ink-600);
+  cursor: pointer;
+  font-weight: 850;
+}
+
+.search-mode-toggle button.active {
+  background: #fff;
+  color: #1b102c;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.16);
+}
+
+[data-theme="dark"] .search-mode-toggle button {
+  color: rgba(238, 231, 255, 0.74);
+}
+
+[data-theme="dark"] .search-mode-toggle button.active {
+  color: #170d26;
+}
+
+.search-section-label {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.search-section-label strong {
+  color: var(--ink-900);
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.search-section-label span {
+  color: var(--ink-500);
+  font-size: 0.82rem;
+  font-weight: 750;
+}
+
+.user-discover-list {
+  display: grid;
+  gap: 10px;
+  width: 100%;
+}
+
+.user-discover-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(167, 139, 250, 0.18);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.user-discover-main {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-discover-avatar-frame,
+.user-discover-avatar,
+.user-discover-avatar.placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+}
+
+.user-discover-avatar,
+.user-discover-avatar.placeholder {
+  display: grid;
+  place-items: center;
+  object-fit: cover;
+  overflow: hidden;
+  background: rgba(139, 92, 246, 0.26);
+  color: #fff;
+  font-weight: 900;
+}
+
+.user-discover-copy {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.user-discover-copy strong,
+.user-discover-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-discover-copy strong {
+  color: var(--ink-900);
+  font-weight: 900;
+}
+
+.user-discover-copy small {
+  color: var(--ink-600);
+  font-weight: 700;
+}
+
+.user-discover-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .search-mode-toggle,
+  .user-discover-card,
+  .user-discover-actions {
+    width: 100%;
+  }
+
+  .search-mode-toggle button,
+  .user-discover-actions .btn {
+    flex: 1;
+  }
+
+  .user-discover-card {
+    grid-template-columns: 1fr;
+  }
 }
 
 .search-box-wrap {
@@ -15345,7 +15556,8 @@ body.desktop-shell .shop-hero {
   font-weight: 900;
 }
 
-.server-message-row > .server-message-avatar-frame-host {
+.server-message-row > .server-message-avatar-frame-host,
+.server-message-avatar-button > .server-message-avatar-frame-host {
   background: transparent;
   overflow: visible;
 }

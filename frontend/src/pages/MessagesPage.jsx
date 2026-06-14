@@ -2978,25 +2978,50 @@ function ServerChannelPreview({
         <div className="server-thread-messages">
           {messages.map((message) => {
             const invite = findServerInvite(message.text);
+            const profileTarget = message.authorId ? {
+              id: message.authorId,
+              name: message.author,
+              avatarUrl: message.avatarUrl,
+              profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
+              profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
+            } : null;
+            const openProfile = () => {
+              if (profileTarget?.id) onOpenUserProfile?.(profileTarget.id, profileTarget);
+            };
             return (
               <div key={message.id} className="server-message-row">
-                <AvatarWithFrame
-                  user={{
-                    name: message.author,
-                    avatarUrl: message.avatarUrl,
-                    profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
-                    profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
-                  }}
-                  src={message.avatarUrl}
-                  name={message.author}
-                  className="server-message-avatar-frame-host"
-                  avatarClassName="server-message-avatar-img"
-                  placeholderClassName="server-message-avatar-placeholder"
-                  size="sm"
-                />
+                <button
+                  type="button"
+                  className="server-message-avatar-button"
+                  onClick={openProfile}
+                  disabled={!profileTarget?.id}
+                  aria-label={`Open ${message.author || "user"} profile`}
+                >
+                  <AvatarWithFrame
+                    user={profileTarget || {
+                      name: message.author,
+                      avatarUrl: message.avatarUrl,
+                      profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
+                      profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
+                    }}
+                    src={message.avatarUrl}
+                    name={message.author}
+                    className="server-message-avatar-frame-host"
+                    avatarClassName="server-message-avatar-img"
+                    placeholderClassName="server-message-avatar-placeholder"
+                    size="sm"
+                  />
+                </button>
                 <div>
                   <div className="server-message-meta">
-                    <strong>{message.author}</strong>
+                    <button
+                      type="button"
+                      className="server-message-author-btn"
+                      onClick={openProfile}
+                      disabled={!profileTarget?.id}
+                    >
+                      {message.author}
+                    </button>
                     <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
                   </div>
                   {invite ? (

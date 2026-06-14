@@ -2301,6 +2301,7 @@ export default function App() {
               api={api}
               currentUser={user}
               friendIncomingRequests={friendIncomingRequests}
+              characters={aiCharacters}
               onAcceptFriendRequest={acceptFriendRequest}
               onRejectFriendRequest={rejectFriendRequest}
               onAddFriend={addFriend}
