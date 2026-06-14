@@ -123,6 +123,7 @@ export default function App() {
   const [newCandidateImageUrls, setNewCandidateImageUrls] = useState("");
   const [newEventCoverFile, setNewEventCoverFile] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(false);
+  const [appBootReady, setAppBootReady] = useState(false);
   const oauthLoginBusyRef = useRef(false);
   const [oauthOnboardingOpen, setOauthOnboardingOpen] = useState(false);
   const [appRefreshBusy, setAppRefreshBusy] = useState(false);
@@ -550,12 +551,13 @@ export default function App() {
   ]);
 
   async function loadCore() {
-    if (!token) return;
+    if (!token) return false;
     const [ev, po, chars] = await Promise.all([
       api("/events"),
       api("/community/posts"),
       api("/ai-characters")
     ]);
+    const ok = Array.isArray(ev) && Array.isArray(po) && Array.isArray(chars);
     setEvents(Array.isArray(ev) ? ev : []);
     setAiCharacters(Array.isArray(chars) ? chars : []);
     if (Array.isArray(po)) {
@@ -565,39 +567,71 @@ export default function App() {
       const cached = readCachedPosts();
       if (cached.length) setPosts(cached);
     }
+    return ok;
   }
 
   async function loadAdminUsers() {
     if (!token || !user || user.role !== "admin") {
       setAdminUsers([]);
-      return;
+      return true;
     }
     const list = await api("/admin/users");
-    if (!list.error && Array.isArray(list)) setAdminUsers(list);
+    const ok = !list.error && Array.isArray(list);
+    if (ok) setAdminUsers(list);
+    return ok;
   }
 
   async function loadComms() {
-    if (!token) return;
+    if (!token) return false;
     const [an, no] = await Promise.all([api("/announcements"), api("/notifications")]);
+    const ok = Array.isArray(an) && Array.isArray(no);
     setAnnouncements(Array.isArray(an) ? an : []);
     setNotifications(Array.isArray(no) ? no : []);
+    return ok;
   }
 
   async function loadServerUsers() {
-    if (!token) return;
+    if (!token) return false;
     const res = await api("/users/in-servers");
-    if (!res.error && Array.isArray(res)) {
+    const ok = !res.error && Array.isArray(res);
+    if (ok) {
       setServerUsers(res);
     }
+    return ok;
   }
 
   async function loadAll() {
-    await Promise.all([loadCore(), loadComms(), loadAdminUsers(), loadServerUsers()]);
+    const results = await Promise.all([loadCore(), loadComms(), loadAdminUsers(), loadServerUsers()]);
+    return results.every(Boolean);
   }
 
   useEffect(() => {
-    loadAll();
-  }, [token, user?.role]);
+    let cancelled = false;
+
+    if (!token || !user) {
+      setAppBootReady(false);
+      return undefined;
+    }
+
+    setAppBootReady(false);
+
+    async function bootApp() {
+      while (!cancelled) {
+        const ok = await loadAll();
+        if (cancelled) return;
+        if (ok) {
+          setAppBootReady(true);
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+      }
+    }
+
+    void bootApp();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, user?.id, user?.role]);
 
   // First load: baseline current announcements as "already seen" so only new rows ping the nav.
   useEffect(() => {
@@ -2024,6 +2058,10 @@ export default function App() {
     );
   }
 
+  if (!appBootReady) {
+    return <AppLoadingScreen />;
+  }
+
   return (
     <>
     {oauthOnboardingOpen ? (
@@ -2291,6 +2329,14 @@ export default function App() {
       </ImageLightboxProvider>
     </AppShell>
     </>
+  );
+}
+
+function AppLoadingScreen() {
+  return (
+    <div className="app-loading-screen" aria-busy="true" aria-live="polite">
+      <img src="/assets/app-loading-logo.gif" alt="" />
+    </div>
   );
 }
 

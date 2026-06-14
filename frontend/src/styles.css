@@ -427,6 +427,26 @@ body.desktop-shell .panel {
   padding: 18px;
 }
 
+.app-loading-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at 50% 44%, rgba(139, 92, 246, 0.16), transparent 18rem),
+    linear-gradient(145deg, #08050f 0%, #12091f 54%, #090611 100%);
+}
+
+.app-loading-screen img {
+  width: min(260px, 44vw);
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
 .pull-refresh-host {
   touch-action: pan-y;
 }
