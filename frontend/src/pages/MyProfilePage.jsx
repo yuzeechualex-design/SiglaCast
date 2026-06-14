@@ -185,11 +185,11 @@ export default function MyProfilePage({
         }]
       : [];
   const frameItems = (shopItems.length ? shopItems : frameFallback).filter((item) => item.type === "profile_frame");
-  const ownedFrameItems = frameItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const ownedFrameItems = frameItems.filter((item) => item.owned);
   const badgeItems = shopItems.filter((item) => item.type === "profile_badge");
-  const ownedBadgeItems = badgeItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const ownedBadgeItems = badgeItems.filter((item) => item.owned);
   const backgroundItems = shopItems.filter((item) => item.type === "profile_card_background");
-  const ownedBackgroundItems = backgroundItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const ownedBackgroundItems = backgroundItems.filter((item) => item.owned);
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
   const activeFrameFitClass = profileFrameFitClass(activeFrame || displayUser.profileFrameUrl || displayUser.profileFrameItemId);
   const profileCardBackgroundItem = shopItems.find((item) => item.id === displayUser.profileCardBackgroundItemId);

@@ -14284,16 +14284,22 @@ body.desktop-shell .user-discover-main {
 }
 
 .profile-background-list button {
-  grid-template-columns: 78px minmax(0, 1fr);
+  grid-template-columns: 58px minmax(0, 1fr);
 }
 
 .profile-background-list-media {
-  width: 78px;
-  height: 50px;
+  width: 58px;
+  height: 58px;
   display: block;
   border-radius: 14px;
   object-fit: cover;
   background: rgba(139, 92, 246, 0.12);
+}
+
+.profile-background-list strong {
+  min-width: 0;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .profile-frame-preview {
