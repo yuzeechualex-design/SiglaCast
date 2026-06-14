@@ -8389,6 +8389,7 @@ textarea.profile-bio-input::placeholder {
   position: relative;
   z-index: 0;
   flex-shrink: 0;
+  overflow: visible;
 }
 
 /* Ring + shadow live on frame; inner img fills — fixes GIF/decoding seams that "bleed" past border-radius on <img>. */
@@ -8401,23 +8402,30 @@ textarea.profile-bio-input::placeholder {
   box-shadow: var(--shadow-soft);
   background: var(--surface);
   flex-shrink: 0;
+  position: relative;
 }
 
 .user-profile-avatar-frame-host {
   width: 100%;
   height: 100%;
   border-radius: 50%;
+  overflow: visible;
 }
 
 .user-profile-avatar-frame-host .user-profile-avatar,
 .user-profile-avatar-frame-host .user-profile-avatar.placeholder {
   border-radius: 50%;
   overflow: hidden;
+  width: 100%;
+  height: 100%;
 }
 
+/* Frame image: scale from the OUTER frame size (92px) not the inner content area (84px after border).
+   The border eats 8px total, so we compensate by boosting scale proportionally: 92/84 ≈ 1.095x */
 .user-profile-avatar-frame-host .avatar-frame-img {
-  width: calc(100% * var(--avatar-frame-scale));
-  height: calc(100% * var(--avatar-frame-scale));
+  --_border-boost: 1.095;
+  width: calc(100% * var(--avatar-frame-scale) * var(--_border-boost));
+  height: calc(100% * var(--avatar-frame-scale) * var(--_border-boost));
 }
 
 .user-profile-avatar {
