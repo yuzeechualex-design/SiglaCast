@@ -265,6 +265,18 @@ export default function MessagesPage({
         : activeChat?.kind === "userphone"
           ? `userphone:${activeChat.sessionId || ""}`
           : "";
+  function normalizeMusicNowPlaying(raw) {
+    if (!raw) return null;
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw);
+      } catch (_) {
+        return null;
+      }
+    }
+    return raw;
+  }
+
   const visibleThreadMessages = useMemo(() => {
     const base = activeChat?.messages || [];
     const pending = optimisticMessages.filter((message) => message.threadKey === activeThreadKey);
@@ -290,7 +302,9 @@ export default function MessagesPage({
       statusEmoji: member.statusEmoji || member.status_emoji || "",
       statusNote: member.statusNote || member.status_note || "",
       profileFrameItemId: member.profileFrameItemId || member.profile_frame_item_id || null,
+      profileFrameUrl: member.profileFrameUrl || member.profile_frame_url || null,
       profileBadgeItemIds: member.profileBadgeItemIds || member.profile_badge_item_ids || [],
+      musicNowPlaying: member.musicNowPlaying || (member.music_share_now_playing ? normalizeMusicNowPlaying(member.music_now_playing) : null),
       isCurrentUser: member.id === currentUser?.id,
       presence: member.presence || (member.id === currentUser?.id ? "online" : "offline")
     }))
@@ -330,7 +344,9 @@ export default function MessagesPage({
       if (Array.isArray(list)) {
         const normalized = list.map(m => ({
           ...m,
-          avatarUrl: m.avatarUrl || m.authorAvatar || null
+          avatarUrl: m.avatarUrl || m.authorAvatar || null,
+          profileFrameItemId: m.profileFrameItemId || m.authorProfileFrameItemId || null,
+          profileFrameUrl: m.profileFrameUrl || m.authorProfileFrameUrl || null
         }));
         setChannelMessages(normalized);
       }
@@ -680,7 +696,9 @@ export default function MessagesPage({
       if (!newMsg.error) {
         setChannelMessages(prev => [...prev, {
           ...newMsg,
-          avatarUrl: newMsg.avatarUrl || newMsg.authorAvatar || null
+          avatarUrl: newMsg.avatarUrl || newMsg.authorAvatar || null,
+          profileFrameItemId: newMsg.profileFrameItemId || newMsg.authorProfileFrameItemId || null,
+          profileFrameUrl: newMsg.profileFrameUrl || newMsg.authorProfileFrameUrl || null
         }]);
       }
     } catch (err) {
@@ -756,10 +774,16 @@ export default function MessagesPage({
     const url = entity?.avatarUrl || entity?.photoUrl;
     const inner = isAi ? (
       <div className={`${cls} placeholder chatbot-avatar`}>🤖</div>
-    ) : url ? (
-      <img className={cls} src={mediaUrl(url)} alt="" />
     ) : (
-      <div className={`${cls} placeholder`}>{entity?.name?.charAt(0) || "?"}</div>
+      <AvatarWithFrame
+        user={entity}
+        src={url}
+        name={entity?.name}
+        className="message-avatar-frame-host"
+        avatarClassName={cls}
+        placeholderClassName={`${cls} placeholder`}
+        size={size}
+      />
     );
     const pres = showPresence ? presenceDotAttrs(entity) : null;
 
@@ -2320,10 +2344,21 @@ function MessageBubble({
   const deliveryStatus = m.deliveryStatus || (activeChat?.kind === "dm" ? "Seen" : "Sent");
 
   function renderIncomingAvatar() {
-    const avatarInner = m.authorAvatar ? (
-      <img className="msg-avatar sm" src={mediaUrl(m.authorAvatar)} alt="" />
-    ) : (
-      <div className="msg-avatar sm placeholder">{m.author?.charAt(0) || "?"}</div>
+    const avatarInner = (
+      <AvatarWithFrame
+        user={{
+          name: m.author,
+          avatarUrl: m.authorAvatar,
+          profileFrameUrl: m.authorProfileFrameUrl || m.profileFrameUrl,
+          profileFrameItemId: m.authorProfileFrameItemId || m.profileFrameItemId
+        }}
+        src={m.authorAvatar}
+        name={m.author}
+        className="message-avatar-frame-host"
+        avatarClassName="msg-avatar sm"
+        placeholderClassName="msg-avatar sm placeholder"
+        size="sm"
+      />
     );
 
     if (profilePeek) {
@@ -2790,6 +2825,28 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
               <p style={{ fontWeight: "bold", margin: "4px 0" }}>Status: {selectedMember.statusNote}</p>
             ) : null}
             <p>{selectedMember.bio || "No bio yet."}</p>
+            {selectedMember.musicNowPlaying?.title ? (
+              <div className="profile-music-playing-card server-member-music-card">
+                <div className="profile-music-playing-head muted small">
+                  Now playing<span className="profile-music-spotify-pill">Spotify</span>
+                </div>
+                <div className="profile-music-playing-body">
+                  {selectedMember.musicNowPlaying.imageUrl ? (
+                    <img className="profile-music-playing-art" src={selectedMember.musicNowPlaying.imageUrl} alt="" />
+                  ) : (
+                    <div className="profile-music-playing-art-ph" aria-hidden />
+                  )}
+                  <div className="profile-music-playing-column">
+                    <div className="profile-music-playing-text">
+                      <strong>{selectedMember.musicNowPlaying.title}</strong>
+                      {selectedMember.musicNowPlaying.artist ? (
+                        <span className="muted small">{selectedMember.musicNowPlaying.artist}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : null}
             <div className="server-member-card-actions">
               <button
                 type="button"
@@ -2923,7 +2980,20 @@ function ServerChannelPreview({
             const invite = findServerInvite(message.text);
             return (
               <div key={message.id} className="server-message-row">
-                {message.avatarUrl ? <img src={mediaUrl(message.avatarUrl)} alt="" /> : <span>{message.author?.charAt(0) || "?"}</span>}
+                <AvatarWithFrame
+                  user={{
+                    name: message.author,
+                    avatarUrl: message.avatarUrl,
+                    profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
+                    profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
+                  }}
+                  src={message.avatarUrl}
+                  name={message.author}
+                  className="server-message-avatar-frame-host"
+                  avatarClassName="server-message-avatar-img"
+                  placeholderClassName="server-message-avatar-placeholder"
+                  size="sm"
+                />
                 <div>
                   <div className="server-message-meta">
                     <strong>{message.author}</strong>

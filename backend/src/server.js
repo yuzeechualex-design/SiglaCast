@@ -5895,7 +5895,7 @@ app.get("/api/servers", authenticate, async (req, res) => {
     const memberUserIds = [...new Set(allMembers.map(m => m.user_id))];
     const { data: users, error: usersError } = await supabase
       .from("users")
-      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids")
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids")
       .in("id", memberUserIds);
     if (usersError) throw usersError;
 
@@ -6103,7 +6103,7 @@ app.post("/api/servers/:serverId/join", authenticate, async (req, res) => {
     const memberUserIds = (allMembers || []).map(m => m.user_id);
     const { data: users } = await supabase
       .from("users")
-      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids")
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids")
       .in("id", memberUserIds);
 
     const userMap = new Map((users || []).map(u => [u.id, u]));
@@ -6292,7 +6292,7 @@ app.get("/api/users/in-servers", authenticate, async (req, res) => {
     
     const { data: users, error: usersErr } = await supabase
       .from("users")
-      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, profile_frame_item_id, profile_badge_item_ids");
+      .select("id, name, email, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids");
 
     if (usersErr) throw usersErr;
     
