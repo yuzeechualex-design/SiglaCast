@@ -49,6 +49,12 @@ function StatusEmojiChip({ emoji }) {
   return <span className="status-emoji-pill">{emoji}</span>;
 }
 
+function bundledAssetUrl(url) {
+  if (!url) return null;
+  if (String(url).startsWith("/assets/")) return url;
+  return mediaUrl(url);
+}
+
 /**
  * Discord-style user card — opened from avatars in Community or Messages.
  * Loads `GET /api/users/:id` for presence, status, and friend flags.
@@ -150,6 +156,8 @@ export default function UserProfileModal({
         musicNowPlaying: prefetch?.musicNowPlaying,
         profileFrameUrl: prefetch?.profileFrameUrl,
         profileFrameItemId: prefetch?.profileFrameItemId,
+        profileCardBackgroundUrl: prefetch?.profileCardBackgroundUrl,
+        profileCardBackgroundItemId: prefetch?.profileCardBackgroundItemId,
         profileBadges: prefetch?.profileBadges,
         profileBonds: prefetch?.profileBonds
       };
@@ -158,6 +166,7 @@ export default function UserProfileModal({
   const showPlaceholder = !merged.avatarUrl;
   const coverHref = merged.coverUrl ? mediaUrl(merged.coverUrl) : null;
   const coverIsGif = coverHref && publicUrlLooksLikeGif(coverHref);
+  const profileCardBackgroundHref = bundledAssetUrl(merged.profileCardBackgroundUrl);
 
   async function handleAddFriend() {
     if (!onAddFriend) return;
@@ -213,6 +222,11 @@ export default function UserProfileModal({
     <ModalPortal>
       <div className="modal-backdrop modal-backdrop--portal" role="presentation" onClick={onClose}>
         <div className="modal-card user-profile-modal" onClick={(e) => e.stopPropagation()}>
+          {profileCardBackgroundHref ? (
+            <video className="user-profile-card-bg-video" autoPlay muted loop playsInline preload="metadata" aria-hidden>
+              <source src={profileCardBackgroundHref} type="video/mp4" />
+            </video>
+          ) : null}
           <button type="button" className="modal-close" onClick={onClose} aria-label="Close profile">
             ✕
           </button>

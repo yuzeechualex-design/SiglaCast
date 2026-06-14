@@ -291,7 +291,9 @@ const SHOP_ITEMS = [
 ];
 const ALIEN_STAGE_GACHA_ID = "alien-stage-frame";
 const CHIIKAWA_GACHA_ID = "chiikawa-frame";
+const EXE_GACHA_ID = "exe-profile-card";
 const GACHA_DRAW_COSTS = [50, 100, 200, 400, 800, 1600, 3200, 3200];
+const EXE_GACHA_DRAW_COSTS = [200, 400, 800, 1600, 3200, 6400, 6400];
 const ALIEN_STAGE_GACHA_ITEMS = [
   { id: "alien-stage-mizisua-star", name: "Mizisua Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-mizisua-star.png" },
   { id: "alien-stage-hyuluka-star", name: "Hyuluka Star Badge", type: "profile_badge", rarity: "star", weight: 8, imageUrl: "/assets/alien-stage-hyuluka-star.png" },
@@ -302,6 +304,15 @@ const ALIEN_STAGE_GACHA_ITEMS = [
   { id: "alien-stage-mizi-frame", name: "Mizi Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-mizi-frame.png" },
   { id: "alien-stage-sua-frame", name: "Sua Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/alien-stage-sua-frame.png" }
 ];
+const EXE_GACHA_ITEMS = [
+  { id: "exe-profile-background", name: "EXE Profile Card Background", type: "profile_card_background", rarity: "background", weight: 1, imageUrl: "/assets/exe-profile-background.mp4" },
+  { id: "exe-frame", name: "EXE Profile Frame", type: "profile_frame", rarity: "frame", weight: 2, imageUrl: "/assets/exe-frame.png" },
+  { id: "exe-key-1", name: "1 Key", type: "gacha_key", rarity: "key", weight: 6, imageUrl: "/assets/exe-key.png" },
+  { id: "exe-key-2", name: "2 Key", type: "gacha_key", rarity: "key", weight: 5, imageUrl: "/assets/exe-key.png" },
+  { id: "exe-key-3", name: "3 Key", type: "gacha_key", rarity: "key", weight: 4, imageUrl: "/assets/exe-key.png" },
+  { id: "exe-key-4", name: "4 Key", type: "gacha_key", rarity: "key", weight: 3, imageUrl: "/assets/exe-key.png" },
+  { id: "exe-key-5", name: "5 Key", type: "gacha_key", rarity: "key", weight: 2, imageUrl: "/assets/exe-key.png" }
+];
 const CHIIKAWA_GACHA_ITEMS = [
   { id: "chiikawa-hachiware-frame", name: "Hachiware Profile Frame", type: "profile_frame", rarity: "frame", weight: 1, imageUrl: "/assets/chiikawa-hachiware-frame.png" },
   { id: "chiikawa-usagi-frame", name: "Usagi Profile Frame", type: "profile_frame", rarity: "frame", weight: 1, imageUrl: "/assets/chiikawa-usagi-frame.png" },
@@ -310,19 +321,22 @@ const CHIIKAWA_GACHA_ITEMS = [
 ];
 const GACHA_COLLECTIONS = [
   {
-    id: ALIEN_STAGE_GACHA_ID,
-    name: "Alien Stage Frames",
-    bannerUrl: "/assets/alien-stage-banner-shop.png",
-    description: "Draw once to win one unowned Alien Stage badge or profile frame. Won items leave the pool.",
-    items: ALIEN_STAGE_GACHA_ITEMS,
-    costForDraw: (user, freeShop) => freeShop ? 0 : nextGachaCost(user?.alien_stage_gacha_draws),
-    drawCountForUser: (user) => Number(user?.alien_stage_gacha_draws) || 0,
-    userUpdate: (drawCount) => ({ alien_stage_gacha_draws: drawCount + 1 })
+    id: EXE_GACHA_ID,
+    name: "EXE Banner",
+    bannerUrl: "/assets/exe-profile-background.mp4",
+    description: "Profile card backgrounds, EXE frame, and keys. Cost doubles each pull. 30 days left.",
+    badgeText: "30 days left",
+    items: EXE_GACHA_ITEMS,
+    costForDraw: (_user, freeShop, owned) => freeShop ? 0 : nextExeGachaCost(EXE_GACHA_ITEMS.filter((item) => owned?.has(item.id)).length),
+    drawCountForUser: (_user, owned) => EXE_GACHA_ITEMS.filter((item) => owned?.has(item.id)).length,
+    userUpdate: (_drawCount, reward) => reward?.type === "profile_card_background"
+      ? { profile_card_background_item_id: reward.id }
+      : null
   },
   {
     id: CHIIKAWA_GACHA_ID,
     name: "Chiikawa Frames",
-    bannerUrl: "/assets/chiikawa-banner-bg.png",
+    bannerUrl: "/assets/chiikawa-banner-animation.mp4",
     description: "Draw once for 300 coins to win one unowned Chiikawa profile frame. Won frames leave the pool.",
     items: CHIIKAWA_GACHA_ITEMS,
     costForDraw: (_user, freeShop) => freeShop ? 0 : 300,
@@ -330,7 +344,8 @@ const GACHA_COLLECTIONS = [
     userUpdate: null
   }
 ];
-const ALL_GACHA_ITEMS = GACHA_COLLECTIONS.flatMap((collection) => collection.items);
+const LEGACY_GACHA_ITEMS = ALIEN_STAGE_GACHA_ITEMS;
+const ALL_GACHA_ITEMS = [...GACHA_COLLECTIONS.flatMap((collection) => collection.items), ...LEGACY_GACHA_ITEMS];
 const ALL_SHOP_ITEMS = [...SHOP_ITEMS, ...ALL_GACHA_ITEMS];
 const FREE_SHOP_EMAILS = new Set(["alexcarloman@dorsu.edu.ph"]);
 
@@ -361,6 +376,11 @@ function nextGachaCost(drawCount = 0) {
   return GACHA_DRAW_COSTS[Math.min(idx, GACHA_DRAW_COSTS.length - 1)];
 }
 
+function nextExeGachaCost(drawCount = 0) {
+  const idx = Math.max(0, Number(drawCount) || 0);
+  return EXE_GACHA_DRAW_COSTS[Math.min(idx, EXE_GACHA_DRAW_COSTS.length - 1)];
+}
+
 function pickWeightedGachaItem(items) {
   const pool = items.filter((item) => item.weight > 0);
   const total = pool.reduce((sum, item) => sum + item.weight, 0);
@@ -377,18 +397,25 @@ function gachaCollectionById(collectionId) {
 }
 
 function serializeGachaCollection(collection, owned, user, freeShop) {
-  const drawCount = collection.drawCountForUser(user);
+  const drawCount = collection.drawCountForUser(user, owned);
   return {
     id: collection.id,
     name: collection.name,
     bannerUrl: collection.bannerUrl,
     description: collection.description,
+    badgeText: collection.badgeText || null,
     drawCount,
-    nextCost: collection.costForDraw(user, freeShop),
+    nextCost: collection.costForDraw(user, freeShop, owned),
     pool: collection.items.map((item) => ({
       ...item,
       owned: owned.has(item.id),
-      chanceGroup: item.type === "profile_badge" ? "Higher chance" : collection.id === ALIEN_STAGE_GACHA_ID ? "Lower chance" : "Equal chance"
+      chanceGroup:
+        item.type === "profile_card_background" ? "Featured reward"
+        : item.type === "profile_frame" ? "Rare"
+        : item.type === "gacha_key" ? "Key reward"
+        : item.type === "profile_badge" ? "Higher chance"
+        : collection.id === ALIEN_STAGE_GACHA_ID ? "Lower chance"
+        : "Equal chance"
     }))
   };
 }
@@ -554,10 +581,10 @@ async function upsertOAuthUser({ provider, email, name, avatarUrl }) {
 
 /** Explicit `users` projections for routes that cannot use select("*") (secrets). Omit columns at runtime when DB migrations lag. */
 const USER_SEARCH_SELECT_DEFAULT =
-  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids, alien_stage_gacha_draws, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
+  "id, name, email, role, course, avatar_url, cover_url, bio, availability, status_emoji, status_note, music_share_now_playing, music_now_playing, profile_frame_item_id, profile_badge_item_ids, profile_card_background_item_id, alien_stage_gacha_draws, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 const USER_ADMIN_LIST_SELECT_DEFAULT =
-  "id, role, name, email, course, avatar_url, cover_url, bio, availability, profile_frame_item_id, profile_badge_item_ids, alien_stage_gacha_draws, created_at, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
+  "id, role, name, email, course, avatar_url, cover_url, bio, availability, profile_frame_item_id, profile_badge_item_ids, profile_card_background_item_id, alien_stage_gacha_draws, created_at, owner_user_id, is_ai_character, ai_roles, ai_personality, ai_background, ai_auto_post, ai_auto_reply";
 
 function parseMissingUsersColumn(errorMessage = "") {
   const msg = String(errorMessage);
@@ -598,6 +625,19 @@ async function usersSelectOmitMissingColumns(run, initialCols, maxPasses = 12) {
     cols = nextCols;
   }
   return run(cols);
+}
+
+async function updateUserOmitMissingColumns(userId, updates, selectCols = "*") {
+  let next = { ...(updates || {}) };
+  for (let i = 0; i < 8; i++) {
+    if (!Object.keys(next).length) return { data: null, error: null, skipped: true };
+    const out = await supabase.from("users").update(next).eq("id", userId).select(selectCols).maybeSingle();
+    if (!out?.error) return out;
+    const missing = parseMissingUsersColumn(out.error.message);
+    if (!missing || !(missing in next)) return out;
+    delete next[missing];
+  }
+  return { data: null, error: new Error("Could not update user fields") };
 }
 
 async function fetchEventWithCandidates(eventId) {
@@ -2702,6 +2742,24 @@ app.get("/api/shop", authenticate, async (req, res) => {
           description: "Won from a limited cosmetics gacha collection.",
           owned: owned.has(item.id),
           unlocked: owned.has(item.id)
+        })),
+        ...ALL_GACHA_ITEMS.filter((item) => item.type === "profile_card_background").map((item) => ({
+          ...item,
+          source: "gacha_reward",
+          price: 0,
+          effectivePrice: 0,
+          description: "Animated profile card background won from the EXE banner.",
+          owned: owned.has(item.id),
+          unlocked: owned.has(item.id)
+        })),
+        ...ALL_GACHA_ITEMS.filter((item) => item.type === "gacha_key").map((item) => ({
+          ...item,
+          source: "gacha_reward",
+          price: 0,
+          effectivePrice: 0,
+          description: "EXE key reward for future banner pulls.",
+          owned: owned.has(item.id),
+          unlocked: owned.has(item.id)
         }))
       ],
       gacha: serializeGachaCollection(GACHA_COLLECTIONS[0], owned, req.user, freeShop),
@@ -2753,9 +2811,9 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
     const available = collection.items.filter((item) => !owned.has(item.id));
     if (!available.length) return res.status(400).json({ error: `You already own every ${collection.name} reward.` });
 
-    const drawCount = collection.drawCountForUser(req.user);
+    const drawCount = collection.drawCountForUser(req.user, owned);
     const freeShop = userHasFreeShop(req.user);
-    const cost = collection.costForDraw(req.user, freeShop);
+    const cost = collection.costForDraw(req.user, freeShop, owned);
     const walletBefore = await fetchWallet(req.user.id);
     if (walletBefore.coins < cost) return res.status(400).json({ error: "Not enough purxu coins" });
 
@@ -2766,13 +2824,11 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
 
     let updatedUser = req.user;
     if (collection.userUpdate) {
-      const { data } = await supabase
-        .from("users")
-        .update(collection.userUpdate(drawCount))
-        .eq("id", req.user.id)
-        .select("*")
-        .maybeSingle();
-      updatedUser = data || req.user;
+      const updates = collection.userUpdate(drawCount, reward, req.user, owned);
+      if (updates && Object.keys(updates).length) {
+        const { data } = await updateUserOmitMissingColumns(req.user.id, updates);
+        updatedUser = data || req.user;
+      }
     }
 
     const nextOwned = new Set([...owned, reward.id]);

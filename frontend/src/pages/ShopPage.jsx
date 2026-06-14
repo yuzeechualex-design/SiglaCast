@@ -7,6 +7,23 @@ function shopAssetUrl(url) {
   return mediaUrl(url);
 }
 
+function isVideoAsset(url) {
+  return /\.(mp4|webm|mov)(\?|#|$)/i.test(String(url || ""));
+}
+
+function ShopMedia({ src, className = "", alt = "" }) {
+  const url = shopAssetUrl(src);
+  if (!url) return null;
+  if (isVideoAsset(url)) {
+    return (
+      <video className={className} autoPlay muted loop playsInline preload="metadata" aria-label={alt || undefined}>
+        <source src={url} type="video/mp4" />
+      </video>
+    );
+  }
+  return <img className={className} src={url} alt={alt} />;
+}
+
 function CoinIcon({ className = "" }) {
   return <img className={`coin-icon${className ? ` ${className}` : ""}`} src="/assets/purxu-coin.png" alt="" aria-hidden="true" />;
 }
@@ -40,7 +57,7 @@ const coinPackages = [
 const fallbackChiikawaGacha = {
   id: "chiikawa-frame",
   name: "Chiikawa Frames",
-  bannerUrl: "/assets/chiikawa-banner-bg.png",
+  bannerUrl: "/assets/chiikawa-banner-animation.mp4",
   description: "Draw once for 300 coins to win one unowned Chiikawa profile frame. Won frames leave the pool.",
   nextCost: 300,
   pool: [
@@ -48,6 +65,24 @@ const fallbackChiikawaGacha = {
     { id: "chiikawa-usagi-frame", name: "Usagi Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-usagi-frame.png", chanceGroup: "Equal chance" },
     { id: "chiikawa-momonga-frame", name: "Momonga Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-momonga-frame.png", chanceGroup: "Equal chance" },
     { id: "chiikawa-chiikawa-frame", name: "Chiikawa Profile Frame", type: "profile_frame", imageUrl: "/assets/chiikawa-chiikawa-frame.png", chanceGroup: "Equal chance" }
+  ]
+};
+
+const fallbackExeGacha = {
+  id: "exe-profile-card",
+  name: "EXE Banner",
+  bannerUrl: "/assets/exe-profile-background.mp4",
+  description: "Profile card backgrounds, EXE frame, and keys. Cost doubles each pull.",
+  badgeText: "30 days left",
+  nextCost: 200,
+  pool: [
+    { id: "exe-profile-background", name: "EXE Profile Card Background", type: "profile_card_background", imageUrl: "/assets/exe-profile-background.mp4", chanceGroup: "Featured reward" },
+    { id: "exe-frame", name: "EXE Profile Frame", type: "profile_frame", imageUrl: "/assets/exe-frame.png", chanceGroup: "Rare" },
+    { id: "exe-key-1", name: "1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-2", name: "2 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-3", name: "3 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-4", name: "4 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-5", name: "5 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" }
   ]
 };
 
@@ -179,7 +214,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
                 key={`${item.id}-${index}`}
                 className={`gacha-reel-tile ${item.type === "profile_frame" ? "rare" : ""}${(pendingReward || reward)?.id === item.id ? " is-result" : ""}`}
               >
-                <img src={shopAssetUrl(item.imageUrl)} alt="" />
+                <ShopMedia src={item.imageUrl} className="gacha-reel-media" alt="" />
               </div>
             ))}
           </div>
@@ -188,7 +223,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
           <div className={`gacha-win-indicator${reward ? " is-visible" : ""}`}>
             {reward ? (
               <>
-                <img src={shopAssetUrl(reward.imageUrl)} alt="" />
+                <ShopMedia src={reward.imageUrl} className="gacha-win-media" alt="" />
                 <span>You got</span>
                 <strong>{reward.name}</strong>
               </>
@@ -201,8 +236,13 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
         <div className="gacha-pool-grid">
           {(gacha?.pool || []).map((item) => (
             <div key={item.id} className={`gacha-pool-item ${item.owned ? "owned" : ""} ${item.type === "profile_frame" ? "rare" : ""}`}>
-              <img src={shopAssetUrl(item.imageUrl)} alt="" />
-              <span>{item.type === "profile_badge" ? "Badge" : "Frame"}</span>
+              <ShopMedia src={item.imageUrl} className="gacha-pool-media" alt="" />
+              <span>
+                {item.type === "profile_badge" ? "Badge"
+                  : item.type === "profile_card_background" ? "Background"
+                  : item.type === "gacha_key" ? "Key"
+                  : "Frame"}
+              </span>
               <strong>{item.name}</strong>
               <small>{item.owned ? "Owned" : item.chanceGroup}</small>
             </div>
@@ -211,7 +251,7 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
 
         {reward ? (
           <div className={`gacha-result ${reward.type === "profile_frame" ? "rare" : ""}`}>
-            <img src={shopAssetUrl(reward.imageUrl)} alt="" />
+            <ShopMedia src={reward.imageUrl} className="gacha-result-media" alt="" />
             <div>
               <span>You won</span>
               <strong>{reward.name}</strong>
@@ -244,10 +284,14 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
   const [selectedGacha, setSelectedGacha] = useState(null);
   const [bundleOpen, setBundleOpen] = useState(false);
   const limitedCollections = useMemo(() => {
-    const collections = gachas.length ? gachas : (gacha ? [gacha] : []);
-    return collections.some((collection) => collection.id === fallbackChiikawaGacha.id)
+    const collections = (gachas.length ? gachas : (gacha ? [gacha] : []))
+      .filter((collection) => collection.id !== "alien-stage-frame");
+    const withExe = collections.some((collection) => collection.id === fallbackExeGacha.id)
       ? collections
-      : [...collections, fallbackChiikawaGacha];
+      : [fallbackExeGacha, ...collections];
+    return withExe.some((collection) => collection.id === fallbackChiikawaGacha.id)
+      ? withExe
+      : [...withExe, fallbackChiikawaGacha];
   }, [gacha, gachas]);
   const directItems = items.filter((item) => item.source !== "gacha_reward");
   const displayItems = directItems.length
@@ -298,11 +342,17 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
           <ShopSectionTitle>Limited Cosmetics</ShopSectionTitle>
           <div className="shop-limited-grid">
             {limitedCollections.map((collection) => (
-              <button key={collection.id} type="button" className="shop-gacha-banner" onClick={() => setSelectedGacha(collection)}>
-                <img src={shopAssetUrl(collection.bannerUrl)} alt="" />
+              <button
+                key={collection.id}
+                type="button"
+                className={`shop-gacha-banner ${collection.id === "exe-profile-card" ? "shop-gacha-banner--exe" : ""}`}
+                onClick={() => setSelectedGacha(collection)}
+              >
+                <ShopMedia src={collection.bannerUrl} className="shop-gacha-banner-media" alt="" />
+                {collection.id === "exe-profile-card" ? <img className="shop-gacha-exe-frame" src="/assets/exe-frame.png" alt="" /> : null}
                 <span className="shop-gacha-banner-shade" aria-hidden />
                 <span className="shop-gacha-banner-copy">
-                  <small>Gacha Collection</small>
+                  <small>{collection.badgeText || "Gacha Collection"}</small>
                   <strong>{collection.name}</strong>
                   <em>{collection.description}</em>
                 </span>

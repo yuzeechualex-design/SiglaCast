@@ -32,6 +32,12 @@ function dateLabel(value) {
   }
 }
 
+function bundledAssetUrl(url) {
+  if (!url) return null;
+  if (String(url).startsWith("/assets/")) return url;
+  return mediaUrl(url);
+}
+
 function ProfileComposer({ user, avatarSrc, onPost, onGeneratePost }) {
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -165,6 +171,9 @@ export default function MyProfilePage({
   const ownedBadgeItems = badgeItems.filter((item) => item.owned || item.effectivePrice === 0);
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
   const activeFrameFitClass = profileFrameFitClass(activeFrame || displayUser.profileFrameUrl || displayUser.profileFrameItemId);
+  const profileCardBackgroundItem = shopItems.find((item) => item.id === displayUser.profileCardBackgroundItemId);
+  const profileCardBackgroundUrl = displayUser.profileCardBackgroundUrl || profileCardBackgroundItem?.imageUrl || "";
+  const profileCardBackgroundHref = bundledAssetUrl(profileCardBackgroundUrl);
   const displayBonds = isOwnProfile ? bonds : displayUser.profileBonds || [];
   const eligibleBonds = displayBonds.filter((bond) => (bond.exp || 0) >= 200 && bond.target);
   const pinnedBonds = eligibleBonds.filter((bond) => bond.pinned).slice(0, 3);
@@ -217,6 +226,11 @@ export default function MyProfilePage({
       ) : null}
 
       <div className="my-profile-hero-card">
+        {profileCardBackgroundHref && !liteMode ? (
+          <video className="my-profile-card-bg-video" autoPlay muted loop playsInline preload="metadata" aria-hidden>
+            <source src={profileCardBackgroundHref} type="video/mp4" />
+          </video>
+        ) : null}
         <div className="my-profile-cover">
           {coverSrc && !liteMode ? (
             coverIsGif ? (

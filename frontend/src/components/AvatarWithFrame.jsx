@@ -1,12 +1,14 @@
 import { mediaUrl } from "../services/api.js";
 
 const DEFAULT_FRAME_URLS = {
-  "pink-heart-bond-frame": "/assets/bond-frame-pink.png"
+  "pink-heart-bond-frame": "/assets/bond-frame-pink.png",
+  "exe-frame": "/assets/exe-frame.png"
 };
 
 export function profileFrameFitClass(frameLike) {
   const value = String(frameLike?.id || frameLike || "").toLowerCase();
   if (!value) return "";
+  if (value.includes("exe-frame")) return " frame-fit-exe";
   if (value.includes("chiikawa")) return " frame-fit-chiikawa";
   if (value.includes("alien-stage")) return " frame-fit-alien-stage";
   if (value.includes("bond-frame") || value.includes("pink-heart")) return " frame-fit-bond";

@@ -4778,7 +4778,34 @@ body.community-thread-overlay-open {
 
 .my-profile-hero-card {
   position: relative;
-  overflow: visible;
+  overflow: hidden;
+}
+
+.my-profile-card-bg-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.54;
+  mix-blend-mode: screen;
+  filter: brightness(0.86) contrast(1.2) saturate(1.08);
+  pointer-events: none;
+}
+
+.my-profile-hero-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(180deg, rgba(7, 5, 11, 0.06), rgba(7, 5, 11, 0.52));
+  pointer-events: none;
+}
+
+.my-profile-hero-card > *:not(.my-profile-card-bg-video) {
+  position: relative;
+  z-index: 2;
 }
 
 .my-profile-cover {
@@ -4900,6 +4927,11 @@ body.community-thread-overlay-open {
 
 .my-profile-avatar-wrap.frame-fit-chiikawa {
   --profile-frame-scale: 1.1;
+  --profile-frame-y: -1px;
+}
+
+.my-profile-avatar-wrap.frame-fit-exe {
+  --profile-frame-scale: 1.24;
   --profile-frame-y: -1px;
 }
 
@@ -6691,6 +6723,11 @@ textarea.profile-bio-input::placeholder {
   --avatar-frame-y: -0.5px;
 }
 
+.avatar-frame-host.frame-fit-exe {
+  --avatar-frame-scale: 1.28;
+  --avatar-frame-y: -0.5px;
+}
+
 .avatar-frame-host.frame-fit-bond {
   --avatar-frame-scale: 1.2;
 }
@@ -8019,11 +8056,33 @@ textarea.profile-bio-input::placeholder {
   overflow: hidden;
 }
 
+.user-profile-card-bg-video {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.58;
+  mix-blend-mode: screen;
+  filter: brightness(0.92) contrast(1.15) saturate(1.08);
+  pointer-events: none;
+}
+
+.modal-card.user-profile-modal::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(90deg, rgba(8, 7, 12, 0.52), rgba(8, 7, 12, 0.18));
+  pointer-events: none;
+}
+
 .modal-card.user-profile-modal .modal-close {
   position: absolute;
   top: 8px;
   right: 10px;
-  z-index: 3;
+  z-index: 5;
   padding: 8px 10px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.12);
@@ -8037,6 +8096,8 @@ textarea.profile-bio-input::placeholder {
 }
 
 .user-profile-modal-layout {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: 1fr min(220px, 34%);
   gap: 0;
@@ -8055,6 +8116,7 @@ textarea.profile-bio-input::placeholder {
 }
 
 .user-profile-modal-main {
+  position: relative;
   min-width: 0;
 }
 
@@ -14501,7 +14563,7 @@ body.desktop-shell .shop-hero {
   padding-right: 132px;
 }
 
-.shop-gacha-banner img,
+.shop-gacha-banner-media,
 .shop-gacha-banner-shade {
   position: absolute;
   inset: 0;
@@ -14509,14 +14571,38 @@ body.desktop-shell .shop-hero {
   height: 100%;
 }
 
-.shop-gacha-banner img {
+.shop-gacha-banner-media {
   object-fit: cover;
   transform: scale(1.01);
   transition: transform 0.35s ease;
 }
 
-.shop-gacha-banner:hover img {
+.shop-gacha-banner video.shop-gacha-banner-media {
+  opacity: 0.86;
+  mix-blend-mode: screen;
+  filter: brightness(0.8) contrast(1.25) saturate(1.08);
+}
+
+.shop-gacha-banner:hover .shop-gacha-banner-media {
   transform: scale(1.045);
+}
+
+.shop-gacha-banner--exe {
+  border-color: rgba(56, 189, 248, 0.32);
+  background: #020908;
+}
+
+.shop-gacha-exe-frame {
+  position: absolute;
+  right: clamp(18px, 5vw, 58px);
+  bottom: clamp(18px, 4vw, 42px);
+  z-index: 1;
+  width: min(180px, 32%);
+  aspect-ratio: 1;
+  object-fit: contain;
+  opacity: 0.86;
+  filter: drop-shadow(0 0 24px rgba(34, 211, 238, 0.34));
+  pointer-events: none;
 }
 
 .shop-gacha-banner-shade {
@@ -14904,6 +14990,25 @@ body.desktop-shell .shop-hero {
   object-fit: contain;
 }
 
+.gacha-reel-media,
+.gacha-pool-media,
+.gacha-result-media,
+.gacha-win-media {
+  width: 86%;
+  height: 86%;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+video.gacha-reel-media,
+video.gacha-pool-media,
+video.gacha-result-media,
+video.gacha-win-media {
+  object-fit: cover;
+  mix-blend-mode: screen;
+  filter: brightness(0.9) contrast(1.15);
+}
+
 .gacha-focus-ring {
   position: absolute;
   inset: auto auto 22px 50%;
@@ -14954,7 +15059,8 @@ body.desktop-shell .shop-hero {
   animation: gacha-win-pop 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.gacha-win-indicator img {
+.gacha-win-indicator img,
+.gacha-win-indicator .gacha-win-media {
   grid-row: span 2;
   width: 44px;
   height: 44px;
@@ -15032,7 +15138,8 @@ body.desktop-shell .shop-hero {
   opacity: 0.48;
 }
 
-.gacha-pool-item img {
+.gacha-pool-item img,
+.gacha-pool-item .gacha-pool-media {
   width: 70px;
   height: 70px;
   object-fit: contain;
@@ -15068,7 +15175,8 @@ body.desktop-shell .shop-hero {
   box-shadow: 0 0 32px rgba(251, 191, 36, 0.18);
 }
 
-.gacha-result img {
+.gacha-result img,
+.gacha-result .gacha-result-media {
   width: 58px;
   height: 58px;
   object-fit: contain;

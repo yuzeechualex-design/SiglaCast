@@ -91,6 +91,13 @@ export function toPublicUser(row) {
           ? "/assets/alien-stage-mizi-frame.png"
         : row.profile_frame_item_id === "alien-stage-sua-frame"
           ? "/assets/alien-stage-sua-frame.png"
+        : row.profile_frame_item_id === "exe-frame"
+          ? "/assets/exe-frame.png"
+        : null,
+    profileCardBackgroundItemId: row.profile_card_background_item_id || null,
+    profileCardBackgroundUrl:
+      row.profile_card_background_item_id === "exe-profile-background"
+        ? "/assets/exe-profile-background.mp4"
         : null,
     profileBadgeItemIds: badgeIds,
     profileBadges: badgeIds
