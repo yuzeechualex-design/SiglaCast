@@ -10784,7 +10784,6 @@ button.comment-profile-avatar-btn:focus-visible {
     width: 100%;
     max-width: none;
     min-height: 0;
-    /* Stable small viewport avoids an extra strip under the compose row on mobile browsers. */
     height: 100vh;
     height: 100dvh;
     border-radius: 0;
@@ -10792,6 +10791,10 @@ button.comment-profile-avatar-btn:focus-visible {
     padding: 0;
     left: 0;
     top: 0;
+    /* Remove panel container styling for full-screen feel */
+    border: none;
+    box-shadow: none;
+    background: var(--surface, #0d0a1a);
   }
 
   .messages-panel.messages-mobile-fullscreen .panel-head {
@@ -10817,11 +10820,15 @@ button.comment-profile-avatar-btn:focus-visible {
     min-height: 0;
     max-height: none;
     border-radius: 0;
-    border-width: 0;
+    border: none;
+    box-shadow: none;
+    background: transparent;
   }
 
   .messages-panel.messages-mobile-fullscreen .thread-compose {
-    padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
   }
 
   .messages-panel.messages-server-mobile-fullscreen .messages-thread {
@@ -10869,8 +10876,52 @@ button.comment-profile-avatar-btn:focus-visible {
     min-height: 0;
   }
 
+  /* Minimalist thread header — transparent, clean divider */
   .messages-panel.messages-mobile-fullscreen .thread-header {
-    padding-top: calc(14px + env(safe-area-inset-top, 0px));
+    padding: 10px 14px;
+    padding-top: calc(10px + env(safe-area-inset-top, 0px));
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: transparent;
+    gap: 10px;
+  }
+
+  /* Compact header info — single column stacking */
+  .messages-panel.messages-mobile-fullscreen .thread-header-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .thread-header-info strong {
+    font-size: 0.95rem;
+  }
+
+  .messages-panel.messages-mobile-fullscreen .thread-header-info small {
+    font-size: 0.78rem;
+    opacity: 0.7;
+  }
+
+  /* Bond meter: inline compact on mobile */
+  .messages-panel.messages-mobile-fullscreen .bond-thread-meter {
+    grid-column: unset;
+    grid-row: unset;
+    width: 100%;
+    margin-top: 4px;
+    padding: 4px 6px;
+    border-radius: 8px;
+    font-size: 0.66rem;
+  }
+
+  /* Clean message area — no gradient, transparent */
+  .messages-panel.messages-mobile-fullscreen .thread-messages {
+    padding: 12px 14px;
+    background: transparent;
+  }
+
+  /* Slightly wider bubbles on mobile for breathing room */
+  .messages-panel.messages-mobile-fullscreen .bubble {
+    max-width: 82%;
+    margin-bottom: 6px;
   }
 }
 
