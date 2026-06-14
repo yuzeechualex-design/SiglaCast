@@ -320,7 +320,7 @@ export default function MyProfilePage({
           <a href="#profile-status">Status</a>
         </nav>
 
-        {isOwnProfile || pinnedBonds.length ? (
+        {false ? (
           <div className="profile-bonds-mini">
             <div className="profile-bonds-mini-head">
               <strong>Bonds</strong>

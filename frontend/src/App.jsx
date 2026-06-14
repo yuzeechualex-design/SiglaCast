@@ -30,6 +30,10 @@ const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
 const STORAGE_ANDROID_OVERLAY_ASKED = "siglacast_android_overlay_permission_asked";
 const STORAGE_OAUTH_ONBOARDING_PREFIX = "siglacast_oauth_onboarded_";
 
+function profileBackgroundUrlFromItemId(itemId) {
+  return itemId === "exe-profile-background" ? "/assets/exe-profile-background.mp4" : null;
+}
+
 /** Offline / overloaded server — do not wipe login; user stays signed in until explicit logout or real auth failure. */
 function isTransientSessionCheckFailure(result) {
   const msg = typeof result?.error === "string" ? result.error : "";
@@ -612,7 +616,20 @@ export default function App() {
     const res = await api("/users/in-servers");
     const ok = !res.error && Array.isArray(res);
     if (ok) {
-      setServerUsers(res);
+      setServerUsers(res.map((u) => {
+        const backgroundItemId = u.profileCardBackgroundItemId || u.profile_card_background_item_id || null;
+        return {
+          ...u,
+          avatarUrl: u.avatarUrl || u.avatar_url || null,
+          coverUrl: u.coverUrl || u.cover_url || null,
+          statusEmoji: u.statusEmoji || u.status_emoji || "",
+          statusNote: u.statusNote || u.status_note || "",
+          profileFrameItemId: u.profileFrameItemId || u.profile_frame_item_id || null,
+          profileBadgeItemIds: u.profileBadgeItemIds || u.profile_badge_item_ids || [],
+          profileCardBackgroundItemId: backgroundItemId,
+          profileCardBackgroundUrl: u.profileCardBackgroundUrl || u.profile_card_background_url || profileBackgroundUrlFromItemId(backgroundItemId)
+        };
+      }));
     }
     return ok;
   }

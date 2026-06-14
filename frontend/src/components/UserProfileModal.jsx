@@ -286,7 +286,7 @@ export default function UserProfileModal({
                   </p>
                   {merged.statusNote ? <p className="user-profile-custom-status">{merged.statusNote}</p> : null}
                   <ProfileBadgeShowcase badges={merged.profileBadges} compact />
-                  {Array.isArray(merged.profileBonds) && merged.profileBonds.length ? (
+                  {false ? (
                     <div className="user-profile-bonds-card">
                       <span className="muted small">Bonds</span>
                       <div className="profile-bonds-mini-list user-profile-bonds-list">

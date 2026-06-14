@@ -30,6 +30,16 @@ const DEFAULT_SERVER_ICON = "/assets/purxu-logo.png";
 const DEFAULT_SERVERS = [];
 const SERVER_INVITE_PARAM = "serverInvite";
 
+function bundledAssetUrl(url) {
+  if (!url) return null;
+  if (String(url).startsWith("/assets/")) return url;
+  return mediaUrl(url);
+}
+
+function profileBackgroundUrlFromItemId(itemId) {
+  return itemId === "exe-profile-background" ? "/assets/exe-profile-background.mp4" : null;
+}
+
 function loadLocalServers() {
   if (typeof window === "undefined") return DEFAULT_SERVERS;
   try {
@@ -304,6 +314,11 @@ export default function MessagesPage({
       profileFrameItemId: member.profileFrameItemId || member.profile_frame_item_id || null,
       profileFrameUrl: member.profileFrameUrl || member.profile_frame_url || null,
       profileBadgeItemIds: member.profileBadgeItemIds || member.profile_badge_item_ids || [],
+      profileCardBackgroundItemId: member.profileCardBackgroundItemId || member.profile_card_background_item_id || null,
+      profileCardBackgroundUrl:
+        member.profileCardBackgroundUrl ||
+        member.profile_card_background_url ||
+        profileBackgroundUrlFromItemId(member.profileCardBackgroundItemId || member.profile_card_background_item_id),
       musicNowPlaying: member.musicNowPlaying || (member.music_share_now_playing ? normalizeMusicNowPlaying(member.music_now_playing) : null),
       isCurrentUser: member.id === currentUser?.id,
       presence: member.presence || (member.id === currentUser?.id ? "online" : "offline")
@@ -2768,6 +2783,7 @@ function ServerWorkspace({
 function ServerMemberPanel({ members = [], onOpenUserProfile }) {
   const [selectedMember, setSelectedMember] = useState(null);
   const onlineCount = members.length;
+  const selectedBackgroundHref = bundledAssetUrl(selectedMember?.profileCardBackgroundUrl);
 
   return (
     <aside className="server-member-panel">
@@ -2796,6 +2812,11 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
       </div>
       {selectedMember ? (
         <div className="server-member-card">
+          {selectedBackgroundHref ? (
+            <video className="server-member-card-bg-video" autoPlay muted loop playsInline preload="metadata" aria-hidden>
+              <source src={selectedBackgroundHref} type="video/mp4" />
+            </video>
+          ) : null}
           <div
             className="server-member-card-cover"
             style={

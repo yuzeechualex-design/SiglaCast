@@ -6907,30 +6907,59 @@ textarea.profile-bio-input::placeholder {
   bottom: 0;
   overflow: hidden;
   margin-top: 12px;
-  border: 1px solid rgba(196, 181, 253, 0.26);
-  border-radius: 14px;
-  background: rgba(238, 231, 255, 0.96);
-  color: #1f1630;
+  border: 1px solid rgba(196, 181, 253, 0.2);
+  border-radius: 20px;
+  background:
+    radial-gradient(circle at 28% 0%, rgba(139, 92, 246, 0.2), transparent 10rem),
+    linear-gradient(145deg, rgba(11, 7, 20, 0.98), rgba(25, 13, 42, 0.96));
+  color: rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 44px rgba(0, 0, 0, 0.34);
 }
 
+.server-member-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(6, 3, 12, 0.16), rgba(6, 3, 12, 0.78)),
+    radial-gradient(circle at 22% 12%, rgba(255, 255, 255, 0.12), transparent 7rem);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.server-member-card-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  mix-blend-mode: screen;
+  opacity: 0.58;
+  filter: saturate(1.08) contrast(1.05);
+  z-index: 0;
+}
+
 .server-member-card-cover {
+  position: relative;
+  z-index: 1;
   height: 70px;
-  background: linear-gradient(135deg, #7c3aed, #f472b6);
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.62), rgba(9, 4, 18, 0.16));
 }
 
 .server-member-card-avatar {
+  position: relative;
+  z-index: 2;
   width: 74px;
   height: 74px;
   margin: -36px 0 0 14px;
-  border: 4px solid rgba(238, 231, 255, 0.98);
+  border: 4px solid rgba(15, 9, 26, 0.94);
   border-radius: 50%;
   display: grid;
   place-items: center;
   overflow: hidden;
   padding: 0;
-  background: #fff;
-  color: #5b21b6;
+  background: rgba(15, 9, 26, 0.94);
+  color: #fff;
   cursor: pointer;
   font-weight: 1000;
 }
@@ -6963,6 +6992,8 @@ textarea.profile-bio-input::placeholder {
 }
 
 .server-member-card-body {
+  position: relative;
+  z-index: 1;
   display: grid;
   gap: 5px;
   padding: 8px 14px 14px;
@@ -6974,7 +7005,11 @@ textarea.profile-bio-input::placeholder {
 
 .server-member-card-body > small,
 .server-member-card-body > p {
-  color: rgba(31, 22, 48, 0.72);
+  color: rgba(238, 231, 255, 0.72);
+}
+
+.server-member-card-body > p {
+  margin: 0;
 }
 
 .message-avatar-frame-host,
@@ -7022,12 +7057,15 @@ textarea.profile-bio-input::placeholder {
 
 .server-member-music-card {
   margin-top: 4px;
-  border-color: rgba(91, 33, 182, 0.16);
-  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(196, 181, 253, 0.18);
+  background: rgba(8, 5, 14, 0.52);
   box-shadow: none;
+  backdrop-filter: blur(12px);
 }
 
 .server-member-card-actions {
+  position: relative;
+  z-index: 1;
   display: flex;
   gap: 8px;
   margin-top: 8px;
