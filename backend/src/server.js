@@ -329,9 +329,7 @@ const GACHA_COLLECTIONS = [
     items: EXE_GACHA_ITEMS,
     costForDraw: (_user, freeShop, owned) => freeShop ? 0 : nextExeGachaCost(EXE_GACHA_ITEMS.filter((item) => owned?.has(item.id)).length),
     drawCountForUser: (_user, owned) => EXE_GACHA_ITEMS.filter((item) => owned?.has(item.id)).length,
-    userUpdate: (_drawCount, reward) => reward?.type === "profile_card_background"
-      ? { profile_card_background_item_id: reward.id }
-      : null
+    userUpdate: null
   },
   {
     id: CHIIKAWA_GACHA_ID,
