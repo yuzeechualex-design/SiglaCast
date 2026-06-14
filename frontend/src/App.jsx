@@ -2341,7 +2341,14 @@ export default function App() {
 function AppLoadingScreen() {
   return (
     <div className="app-loading-screen" aria-busy="true" aria-live="polite">
-      <img src="/assets/app-loading-logo.png" alt="" aria-hidden="true" />
+      <video
+        src="/assets/app-loading-logo.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        aria-hidden="true"
+      />
     </div>
   );
 }

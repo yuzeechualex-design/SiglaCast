@@ -315,8 +315,8 @@ body.desktop-shell .nav-brand {
 }
 
 body.desktop-shell .nav-brand img {
-  width: 25px;
-  height: 25px;
+  width: 34px;
+  height: 34px;
   border-radius: 8px;
   object-fit: cover;
   filter: grayscale(1) brightness(1.8);
@@ -537,8 +537,8 @@ body.desktop-shell .panel {
   }
 
   body:not(.desktop-shell) .nav-brand img {
-    width: 25px;
-    height: 25px;
+    width: 34px;
+    height: 34px;
     border-radius: 8px;
     object-fit: cover;
     filter: grayscale(1) brightness(1.85);
@@ -972,12 +972,16 @@ body.desktop-shell .panel {
     linear-gradient(145deg, #08050f 0%, #12091f 54%, #090611 100%);
 }
 
-.app-loading-screen img {
-  width: min(390px, 62vw);
+.app-loading-screen video {
+  width: min(460px, 68vw);
   height: auto;
   display: block;
   object-fit: contain;
-  filter: drop-shadow(0 0 36px rgba(139, 92, 246, 0.26));
+  mix-blend-mode: screen;
+  filter: brightness(1.24) contrast(1.18) saturate(1.08) drop-shadow(0 0 36px rgba(139, 92, 246, 0.32));
+  opacity: 0.98;
+  -webkit-mask-image: radial-gradient(ellipse 42% 40% at 50% 50%, #000 44%, rgba(0, 0, 0, 0.9) 55%, transparent 73%);
+  mask-image: radial-gradient(ellipse 42% 40% at 50% 50%, #000 44%, rgba(0, 0, 0, 0.9) 55%, transparent 73%);
   animation: loading-logo-breathe 1.8s ease-in-out infinite;
 }
 
