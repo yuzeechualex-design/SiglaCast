@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { mediaUrl } from "../services/api.js";
 import FloatingQuickNav from "./FloatingQuickNav.jsx";
 import NavIcon from "./NavIcon.jsx";
 
@@ -18,11 +19,21 @@ export default function AppShell({
   children,
   navBadges = { events: 0, messages: 0, announcements: 0, notifications: 0, addFriends: 0 }
 }) {
-  const ev = formatNavPing(navBadges.events);
   const msg = formatNavPing(navBadges.messages);
-  const ann = formatNavPing(navBadges.announcements);
   const bell = formatNavPing(navBadges.notifications);
   const addFriends = formatNavPing(navBadges.addFriends);
+  const avatarSrc = user?.avatarUrl ? mediaUrl(user.avatarUrl) : "";
+  const userInitial = user?.name?.trim()?.charAt(0) || user?.email?.trim()?.charAt(0) || "?";
+  const navItems = [
+    { to: "/community", icon: "home", label: "Home" },
+    { to: "/messages", icon: "messages", label: "Messages", badge: msg, badgeLabel: `${navBadges.messages} unread messages` },
+    { to: "/add-friends", icon: "friends", label: "Friends", badge: addFriends, badgeLabel: `${navBadges.addFriends} pending requests` },
+    { to: "/shop", icon: "shop", label: "Shop" },
+    { to: "/notifications", icon: "notifications", label: "Notifications", badge: bell, badgeLabel: `${navBadges.notifications} unread notifications` },
+    { to: "/characters", icon: "plus", label: "Create" },
+    { to: "/profile", icon: "profile", label: "Our profile", profile: true },
+    { to: "/settings", icon: "settings", label: "More", bottom: true }
+  ];
 
   const [toastMsg, setToastMsg] = useState("");
   const [toastVisible, setToastVisible] = useState(false);
@@ -123,50 +134,33 @@ export default function AppShell({
       >
         <span />
       </div>
-      <header ref={dashboardHeaderRef} className="hero">
+      <header ref={dashboardHeaderRef} className="hero app-sidebar">
         <div className="nav-row">
-          <NavLink to="/community" className="nav-btn" title="Home">
-            <NavIcon name="home" />
-          </NavLink>
-          <NavLink to="/messages" className="nav-btn" title="Messages">
-            <NavIcon name="messages" />
-            {msg ? (
-              <span className="nav-ping" aria-label={`${navBadges.messages} unread messages`}>
-                {msg}
-              </span>
-            ) : null}
-          </NavLink>
-          <NavLink to="/add-friends" className="nav-btn" title="Discover Friends">
-            <NavIcon name="friends" />
-            {addFriends ? (
-              <span className="nav-ping" aria-label={`${navBadges.addFriends} pending requests`}>
-                {addFriends}
-              </span>
-            ) : null}
-          </NavLink>
-
-          <NavLink to="/shop" className="nav-btn" title="Shop">
-            <NavIcon name="shop" />
-          </NavLink>
-
-          <NavLink to="/notifications" className="nav-btn" title="Notifications">
-            <NavIcon name="notifications" />
-            {bell ? (
-              <span className="nav-ping" aria-label={`${navBadges.notifications} unread notifications`}>
-                {bell}
-              </span>
-            ) : null}
-          </NavLink>
-
-          <NavLink to="/characters" className="nav-btn" title="Create AI Character">
-            <NavIcon name="plus" />
-          </NavLink>
-          <NavLink to="/profile" className="nav-btn" title="Profile">
-            <NavIcon name="profile" />
-          </NavLink>
-          <NavLink to="/settings" className="nav-btn" title="Settings">
-            <NavIcon name="settings" />
-          </NavLink>
+          <div className="nav-brand" aria-hidden="true">
+            <img src="/assets/siglacast-icon.png" alt="" />
+          </div>
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) => `nav-btn${item.bottom ? " nav-btn-bottom" : ""}${isActive ? " active" : ""}`}
+              title={item.label}
+            >
+              {item.profile ? (
+                <span className="nav-profile-avatar" aria-hidden="true">
+                  {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{userInitial}</span>}
+                </span>
+              ) : (
+                <NavIcon name={item.icon} />
+              )}
+              <span className="nav-label">{item.label}</span>
+              {item.badge ? (
+                <span className="nav-ping" aria-label={item.badgeLabel}>
+                  {item.badge}
+                </span>
+              ) : null}
+            </NavLink>
+          ))}
         </div>
       </header>
       <main className="grid">{children}</main>

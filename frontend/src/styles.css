@@ -123,9 +123,8 @@ p {
 body.desktop-shell {
   overflow: hidden;
   background:
-    radial-gradient(circle at 12% 0%, rgba(236, 72, 153, 0.22), transparent 30rem),
-    radial-gradient(circle at 88% 6%, rgba(167, 139, 250, 0.34), transparent 34rem),
-    linear-gradient(135deg, #0f071d, #1f1135 48%, #120b20);
+    radial-gradient(circle at 78% 8%, rgba(124, 58, 237, 0.18), transparent 34rem),
+    linear-gradient(145deg, #07050d 0%, #0e0918 48%, #12091f 100%);
 }
 
 body.desktop-shell .desktop-titlebar {
@@ -225,9 +224,10 @@ body.desktop-shell .app {
   height: calc(100vh - 42px);
   min-height: 0;
   margin-top: 42px;
-  padding: 18px 18px 16px;
-  overflow: auto;
+  padding: 0 0 0 74px;
+  overflow: hidden;
   scrollbar-width: none;
+  background: transparent;
 }
 
 body.desktop-shell .app::-webkit-scrollbar,
@@ -242,7 +242,189 @@ body.desktop-shell .pull-refresh-indicator {
 }
 
 body.desktop-shell main.grid {
-  padding-bottom: 0;
+  height: calc(100vh - 42px);
+  margin-top: 0;
+  padding: 22px 24px 24px;
+  overflow: auto;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  background:
+    radial-gradient(circle at 88% 4%, rgba(168, 85, 247, 0.1), transparent 28rem),
+    linear-gradient(145deg, rgba(10, 7, 18, 0.96), rgba(15, 9, 25, 0.98));
+}
+
+body.desktop-shell main.grid::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+body.desktop-shell .hero.app-sidebar {
+  position: fixed;
+  top: 42px;
+  left: 0;
+  bottom: 0;
+  z-index: 90;
+  width: 74px;
+  padding: 18px 12px;
+  border: 0;
+  border-right: 1px solid rgba(216, 180, 254, 0.1);
+  border-radius: 0;
+  background:
+    linear-gradient(180deg, rgba(9, 7, 14, 0.98), rgba(11, 7, 18, 0.98)),
+    linear-gradient(180deg, rgba(139, 92, 246, 0.08), transparent 34%);
+  box-shadow: none;
+  overflow: hidden;
+  animation: none;
+  transition: width 240ms cubic-bezier(0.16, 1, 0.3, 1), border-color 200ms ease, background 200ms ease;
+}
+
+body.desktop-shell .hero.app-sidebar:hover,
+body.desktop-shell .hero.app-sidebar:focus-within {
+  width: 226px;
+  border-right-color: rgba(216, 180, 254, 0.16);
+  background:
+    linear-gradient(180deg, rgba(10, 8, 16, 0.99), rgba(14, 8, 24, 0.99)),
+    linear-gradient(180deg, rgba(139, 92, 246, 0.1), transparent 36%);
+}
+
+body.desktop-shell .hero.app-sidebar::after {
+  display: none;
+}
+
+body.desktop-shell .nav-row {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: flex-start;
+  gap: 9px;
+  overflow: visible;
+}
+
+body.desktop-shell .nav-brand {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 0 clamp(72px, 13vh, 132px);
+  flex: 0 0 auto;
+}
+
+body.desktop-shell .nav-brand img {
+  width: 25px;
+  height: 25px;
+  border-radius: 8px;
+  object-fit: cover;
+  filter: grayscale(1) brightness(1.8);
+  opacity: 0.95;
+}
+
+body.desktop-shell .nav-btn {
+  width: 100%;
+  height: 46px;
+  min-width: 0;
+  flex: 0 0 46px;
+  justify-content: flex-start;
+  gap: 16px;
+  border: 0;
+  border-radius: 12px;
+  padding: 0 12px;
+  color: rgba(255, 255, 255, 0.84);
+  background: transparent;
+  box-shadow: none;
+  font-size: 1rem;
+  font-weight: 850;
+  outline: 0;
+  transition: background 180ms ease, color 180ms ease, transform 180ms ease;
+}
+
+body.desktop-shell .nav-btn:hover {
+  transform: none;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.07);
+  box-shadow: none;
+}
+
+body.desktop-shell .nav-btn.active {
+  color: #09070f;
+  background: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 10px 24px rgba(255, 255, 255, 0.08);
+}
+
+body.desktop-shell .nav-btn-bottom {
+  margin-top: auto;
+}
+
+body.desktop-shell .nav-icon {
+  width: 22px;
+  height: 22px;
+  flex-basis: 22px;
+}
+
+body.desktop-shell .nav-label {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: hidden;
+  clip: auto;
+  opacity: 0;
+  max-width: 0;
+  white-space: nowrap;
+  transform: translateX(-8px);
+  transition: opacity 180ms ease, max-width 220ms cubic-bezier(0.16, 1, 0.3, 1), transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.desktop-shell .hero.app-sidebar:hover .nav-label,
+body.desktop-shell .hero.app-sidebar:focus-within .nav-label {
+  opacity: 1;
+  max-width: 132px;
+  transform: translateX(0);
+}
+
+body.desktop-shell .nav-row .nav-ping {
+  top: 50%;
+  right: 8px;
+  min-width: 20px;
+  height: 20px;
+  transform: translateY(-50%);
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #ff3864, #8b5cf6);
+  box-shadow: none;
+}
+
+body.desktop-shell .nav-btn.active .nav-ping {
+  color: #fff;
+  background: #ff3864;
+}
+
+body.desktop-shell .nav-profile-avatar {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+}
+
+body.desktop-shell .panel,
+body.desktop-shell .tile,
+body.desktop-shell .my-profile-hero-card,
+body.desktop-shell .my-profile-about-card,
+body.desktop-shell .my-profile-composer-card,
+body.desktop-shell .my-profile-section-head,
+body.desktop-shell .my-profile-post-card,
+body.desktop-shell .my-profile-empty-posts {
+  border-color: rgba(216, 180, 254, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  box-shadow: none;
+}
+
+body.desktop-shell .panel {
+  padding: 18px;
 }
 
 .pull-refresh-host {
@@ -1002,6 +1184,10 @@ body.desktop-shell main.grid {
   display: none;
 }
 
+.nav-brand {
+  display: none;
+}
+
 .nav-btn {
   position: relative;
   z-index: 1;
@@ -1085,6 +1271,42 @@ body.desktop-shell main.grid {
 
 .nav-btn .nav-icon {
   margin-right: 0;
+}
+
+.nav-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.nav-profile-avatar {
+  display: inline-grid;
+  place-items: center;
+  width: 1.2em;
+  height: 1.2em;
+  border-radius: 50%;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed, #ec4899);
+  font-size: 0.62em;
+  font-weight: 900;
+  text-transform: uppercase;
+  flex: 0 0 auto;
+}
+
+.nav-profile-avatar img,
+.nav-profile-avatar > span {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+}
+
+.nav-profile-avatar img {
+  object-fit: cover;
 }
 
 button.nav-logout {
