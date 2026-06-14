@@ -38,6 +38,23 @@ function bundledAssetUrl(url) {
   return mediaUrl(url);
 }
 
+function isVideoAsset(url) {
+  return /\.(mp4|webm|mov)(\?|#|$)/i.test(String(url || ""));
+}
+
+function CosmeticMedia({ item, className = "" }) {
+  const src = bundledAssetUrl(item?.imageUrl);
+  if (!src) return null;
+  if (isVideoAsset(src)) {
+    return (
+      <video className={className} autoPlay muted loop playsInline preload="metadata" aria-hidden>
+        <source src={src} type="video/mp4" />
+      </video>
+    );
+  }
+  return <img className={className} src={src} alt="" />;
+}
+
 function ProfileComposer({ user, avatarSrc, onPost, onGeneratePost }) {
   const [content, setContent] = useState("");
   const [imageFile, setImageFile] = useState(null);
@@ -125,7 +142,8 @@ export default function MyProfilePage({
   onTogglePinnedBond,
   shopItems = [],
   onEquipProfileFrame,
-  onEquipProfileBadges
+  onEquipProfileBadges,
+  onEquipProfileBackground
 }) {
   const [profileMode, setProfileMode] = useState("profile");
   const [selectedCharacterId, setSelectedCharacterId] = useState("");
@@ -148,6 +166,7 @@ export default function MyProfilePage({
   const [bondSearch, setBondSearch] = useState("");
   const [selectedFrameId, setSelectedFrameId] = useState(displayUser.profileFrameItemId || "");
   const [selectedBadgeIds, setSelectedBadgeIds] = useState(displayUser.profileBadgeItemIds || []);
+  const [selectedBackgroundId, setSelectedBackgroundId] = useState(displayUser.profileCardBackgroundItemId || "");
   const isCharacterProfile = Boolean(displayUser.isAiCharacter);
   const characterRoles = displayUser.roles || displayUser.aiRoles || "";
   const characterBackground = displayUser.background || displayUser.aiBackground || "";
@@ -169,6 +188,8 @@ export default function MyProfilePage({
   const ownedFrameItems = frameItems.filter((item) => item.owned || item.effectivePrice === 0);
   const badgeItems = shopItems.filter((item) => item.type === "profile_badge");
   const ownedBadgeItems = badgeItems.filter((item) => item.owned || item.effectivePrice === 0);
+  const backgroundItems = shopItems.filter((item) => item.type === "profile_card_background");
+  const ownedBackgroundItems = backgroundItems.filter((item) => item.owned || item.effectivePrice === 0);
   const activeFrame = frameItems.find((item) => item.id === displayUser.profileFrameItemId);
   const activeFrameFitClass = profileFrameFitClass(activeFrame || displayUser.profileFrameUrl || displayUser.profileFrameItemId);
   const profileCardBackgroundItem = shopItems.find((item) => item.id === displayUser.profileCardBackgroundItemId);
@@ -269,6 +290,7 @@ export default function MyProfilePage({
                 onClick={() => {
                   setSelectedFrameId(displayUser.profileFrameItemId || ownedFrameItems[0]?.id || "");
                   setSelectedBadgeIds(displayUser.profileBadgeItemIds || []);
+                  setSelectedBackgroundId(displayUser.profileCardBackgroundItemId || "");
                   setCosmeticTab("frames");
                   setCosmeticPickerOpen(true);
                 }}
@@ -390,6 +412,13 @@ export default function MyProfilePage({
               >
                 Badges
               </button>
+              <button
+                type="button"
+                className={cosmeticTab === "backgrounds" ? "active" : ""}
+                onClick={() => setCosmeticTab("backgrounds")}
+              >
+                Backgrounds
+              </button>
             </div>
             <div className={`profile-frame-modal-body profile-cosmetic-body is-${cosmeticTab}`}>
               <div className="profile-frame-preview profile-cosmetic-frame-pane">
@@ -449,6 +478,49 @@ export default function MyProfilePage({
                   <p className="muted small profile-badge-empty">Win badges from Alien Stage Frames first.</p>
                 )}
               </div>
+              <div className="profile-background-preview-panel profile-cosmetic-background-pane">
+                {selectedBackgroundId ? (
+                  <CosmeticMedia
+                    className="profile-background-preview-media"
+                    item={backgroundItems.find((item) => item.id === selectedBackgroundId)}
+                  />
+                ) : (
+                  <div className="profile-background-preview-empty">
+                    <strong>No background</strong>
+                    <span>Use the clean dark violet profile card.</span>
+                  </div>
+                )}
+                <div className="profile-background-preview-glass">
+                  {avatarSrc ? <img src={avatarSrc} alt="" /> : <span>{displayUser.name?.charAt(0) || "?"}</span>}
+                  <div>
+                    <strong>{displayUser.name}</strong>
+                    <small>{statusLine || "Profile card preview"}</small>
+                  </div>
+                </div>
+              </div>
+              <div className="profile-frame-list profile-background-list profile-cosmetic-background-pane">
+                <button
+                  type="button"
+                  className={!selectedBackgroundId ? "active" : ""}
+                  onClick={() => setSelectedBackgroundId("")}
+                >
+                  <span className="profile-frame-none">None</span>
+                  <strong>No background</strong>
+                </button>
+                {ownedBackgroundItems.length ? ownedBackgroundItems.map((item) => (
+                  <button
+                    type="button"
+                    key={item.id}
+                    className={selectedBackgroundId === item.id ? "active" : ""}
+                    onClick={() => setSelectedBackgroundId(item.id)}
+                  >
+                    <CosmeticMedia className="profile-background-list-media" item={item} />
+                    <strong>{item.name}</strong>
+                  </button>
+                )) : (
+                  <p className="muted small profile-badge-empty">Win a profile card background from EXE Banner first.</p>
+                )}
+              </div>
             </div>
             <div className="profile-frame-modal-actions">
               <button type="button" className="btn btn-ghost" onClick={() => setCosmeticPickerOpen(false)}>
@@ -466,7 +538,9 @@ export default function MyProfilePage({
                   const ok =
                     cosmeticTab === "frames"
                       ? await onEquipProfileFrame?.(selectedFrameId)
-                      : await onEquipProfileBadges?.(selectedBadgeIds);
+                      : cosmeticTab === "badges"
+                        ? await onEquipProfileBadges?.(selectedBadgeIds)
+                        : await onEquipProfileBackground?.(selectedBackgroundId);
                   if (ok !== false) setCosmeticPickerOpen(false);
                 }}
               >

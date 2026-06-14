@@ -330,6 +330,23 @@ export default function App() {
     return true;
   }
 
+  async function equipProfileBackground(itemId) {
+    const res = await api("/profile/card-background", {
+      method: "PATCH",
+      body: { itemId: itemId || "" }
+    });
+    if (res.error) {
+      setNotice(res.error);
+      return false;
+    }
+    if (res.user) {
+      setUser(res.user);
+      localStorage.setItem("siglacast_user", JSON.stringify(res.user));
+    }
+    setNotice(itemId ? "Profile background equipped" : "Profile background removed");
+    return true;
+  }
+
   function startSocialLogin(provider) {
     if (loadingAuth) return;
     const callbackUrl = `${window.location.origin}/auth/callback`;
@@ -2145,6 +2162,7 @@ export default function App() {
               shopItems={shopState.items}
               onEquipProfileFrame={equipProfileFrame}
               onEquipProfileBadges={equipProfileBadges}
+              onEquipProfileBackground={equipProfileBackground}
             />
           }
         />

@@ -2907,6 +2907,39 @@ app.patch("/api/profile/frame", authenticate, async (req, res) => {
   }
 });
 
+app.patch("/api/profile/card-background", authenticate, async (req, res) => {
+  try {
+    const itemId = String(req.body?.itemId || "").trim();
+    const selected = itemId || null;
+    if (selected) {
+      const item = shopItemById(selected);
+      if (!item) return res.status(404).json({ error: "Profile background not found" });
+      if (item.type !== "profile_card_background") {
+        return res.status(400).json({ error: "Only profile card backgrounds can be equipped here." });
+      }
+      if (!userHasFreeShop(req.user)) {
+        const { data: purchase } = await supabase
+          .from("user_shop_purchases")
+          .select("item_id")
+          .eq("user_id", req.user.id)
+          .eq("item_id", selected)
+          .maybeSingle();
+        if (!purchase) return res.status(403).json({ error: "Win this background before equipping it." });
+      }
+    }
+    const { data, error } = await updateUserOmitMissingColumns(req.user.id, {
+      profile_card_background_item_id: selected
+    });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({
+      user: authUserPayload(data || { ...req.user, profile_card_background_item_id: selected }),
+      backgroundUrl: shopItemUrl(selected)
+    });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
 app.patch("/api/profile", authenticate, async (req, res) => {
   try {
     const { name, currentPassword, newPassword, statusEmoji, statusNote, availability, bio, removeCover, musicShareNowPlaying } =
