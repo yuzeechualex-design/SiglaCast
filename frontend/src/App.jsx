@@ -278,8 +278,11 @@ export default function App() {
     await loadBondsAndShop();
   }
 
-  async function drawShopGacha(collectionId) {
-    const res = await api(`/shop/gacha/${encodeURIComponent(collectionId)}/draw`, { method: "POST", body: {} });
+  async function drawShopGacha(collectionId, options = {}) {
+    const res = await api(`/shop/gacha/${encodeURIComponent(collectionId)}/draw`, {
+      method: "POST",
+      body: { useKey: Boolean(options.useKey) }
+    });
     if (res.error) {
       setNotice(res.error);
       return null;

@@ -392,6 +392,61 @@ function pickWeightedGachaItem(items) {
   return pool[pool.length - 1] || null;
 }
 
+function gachaKeyAmount(itemId) {
+  const match = String(itemId || "").match(/^exe-key-(\d+)$/);
+  return match ? Math.max(0, Number(match[1]) || 0) : 0;
+}
+
+function legacyKeyCountFromPurchases(purchases = []) {
+  return (purchases || []).reduce((sum, purchase) => sum + gachaKeyAmount(purchase.item_id), 0);
+}
+
+async function fetchGachaKeyWallet(userId, purchases = null) {
+  const { data, error } = await supabase
+    .from("user_gacha_key_wallets")
+    .select("user_id, keys")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (!error && data) return { userId, keys: Math.max(0, Number(data.keys) || 0) };
+
+  let rows = purchases;
+  if (!rows) {
+    const { data: purchaseRows } = await supabase
+      .from("user_shop_purchases")
+      .select("item_id")
+      .eq("user_id", userId);
+    rows = purchaseRows || [];
+  }
+  const legacyKeys = legacyKeyCountFromPurchases(rows);
+  if (!error && legacyKeys > 0) {
+    await supabase
+      .from("user_gacha_key_wallets")
+      .upsert({ user_id: userId, keys: legacyKeys, updated_at: new Date().toISOString() });
+  }
+  return { userId, keys: legacyKeys };
+}
+
+async function addGachaKeys(userId, amount) {
+  const wallet = await fetchGachaKeyWallet(userId);
+  const next = Math.max(0, wallet.keys + (Number(amount) || 0));
+  const { error } = await supabase
+    .from("user_gacha_key_wallets")
+    .upsert({ user_id: userId, keys: next, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  return { userId, keys: next };
+}
+
+async function spendGachaKey(userId) {
+  const wallet = await fetchGachaKeyWallet(userId);
+  if (wallet.keys < 1) throw new Error("You need at least 1 EXE key to draw with key.");
+  const next = wallet.keys - 1;
+  const { error } = await supabase
+    .from("user_gacha_key_wallets")
+    .upsert({ user_id: userId, keys: next, updated_at: new Date().toISOString() });
+  if (error) throw new Error(error.message);
+  return { userId, keys: next };
+}
+
 function gachaCollectionById(collectionId) {
   return GACHA_COLLECTIONS.find((collection) => collection.id === collectionId) || null;
 }
@@ -2714,10 +2769,12 @@ app.get("/api/shop", authenticate, async (req, res) => {
     const { data: purchases } = await supabase.from("user_shop_purchases").select("item_id").eq("user_id", req.user.id);
     const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
     const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
+    const keyWallet = await fetchGachaKeyWallet(req.user.id, purchases || []);
     const hasPartnerBond = Boolean(partnerBonds?.length);
     const freeShop = userHasFreeShop(req.user);
     res.json({
-      wallet,
+      wallet: { ...wallet, keys: keyWallet.keys },
+      keyWallet,
       items: [
         ...SHOP_ITEMS.map((item) => ({
           ...item,
@@ -2811,16 +2868,28 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
     const available = collection.items.filter((item) => !owned.has(item.id));
     if (!available.length) return res.status(400).json({ error: `You already own every ${collection.name} reward.` });
 
+    const useKey = Boolean(req.body?.useKey);
+    if (useKey && collection.id !== CHIIKAWA_GACHA_ID) {
+      return res.status(400).json({ error: "Keys can only be used on the Chiikawa banner." });
+    }
     const drawCount = collection.drawCountForUser(req.user, owned);
     const freeShop = userHasFreeShop(req.user);
-    const cost = collection.costForDraw(req.user, freeShop, owned);
+    const cost = useKey ? 0 : collection.costForDraw(req.user, freeShop, owned);
     const walletBefore = await fetchWallet(req.user.id);
     if (walletBefore.coins < cost) return res.status(400).json({ error: "Not enough purxu coins" });
+    let keyWallet = await fetchGachaKeyWallet(req.user.id, purchases || []);
+    if (useKey) {
+      keyWallet = await spendGachaKey(req.user.id);
+    }
 
     const reward = pickWeightedGachaItem(available);
     if (!reward) return res.status(400).json({ error: "No reward available" });
     await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: reward.id });
     const wallet = await addWalletCoins(req.user.id, -cost);
+    const keyRewardAmount = gachaKeyAmount(reward.id);
+    if (keyRewardAmount > 0) {
+      keyWallet = await addGachaKeys(req.user.id, keyRewardAmount);
+    }
 
     let updatedUser = req.user;
     if (collection.userUpdate) {
@@ -2833,7 +2902,8 @@ app.post("/api/shop/gacha/:collectionId/draw", authenticate, async (req, res) =>
 
     const nextOwned = new Set([...owned, reward.id]);
     res.json({
-      wallet,
+      wallet: { ...wallet, keys: keyWallet.keys },
+      keyWallet,
       reward,
       user: authUserPayload(updatedUser),
       gacha: serializeGachaCollection(collection, nextOwned, updatedUser, freeShop),

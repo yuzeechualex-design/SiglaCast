@@ -39,6 +39,17 @@ function CoinAmount({ value, suffix = "coins", className = "" }) {
   );
 }
 
+function KeyAmount({ value, suffix = "keys", className = "" }) {
+  const n = Number(value) || 0;
+  return (
+    <span className={`key-amount${className ? ` ${className}` : ""}`}>
+      <img className="key-icon" src="/assets/exe-key.png" alt="" aria-hidden="true" />
+      <strong>{n.toLocaleString()}</strong>
+      {suffix ? <small>{suffix}</small> : null}
+    </span>
+  );
+}
+
 function PriceLabel({ value }) {
   const n = Number(value) || 0;
   if (n === 0) return <span className="coin-price-free">Free</span>;
@@ -131,6 +142,8 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
   const availableCount = (gacha?.pool || []).filter((item) => !item.owned).length;
   const complete = availableCount === 0;
   const canAfford = (wallet?.coins ?? 0) >= (gacha?.nextCost ?? 0);
+  const keyBalance = Number(wallet?.keys) || 0;
+  const canUseKey = gacha?.id === "chiikawa-frame" && keyBalance > 0;
   const reelItems = useMemo(() => {
     const pool = gacha?.pool?.length ? gacha.pool : [];
     const visualPool = pool.length ? pool : [];
@@ -156,12 +169,12 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
     return `${Math.round(stageWidth / 2 - tileCenter)}px`;
   }
 
-  async function draw() {
+  async function draw(useKey = false) {
     if (!gacha?.id || drawing || complete) return;
     setError("");
     setReward(null);
     setPendingReward(null);
-    const res = await onDraw?.(gacha.id);
+    const res = await onDraw?.(gacha.id, { useKey });
     if (!res || res.error) {
       setError(res?.error || "Draw failed. Try again.");
       setDrawing(false);
@@ -264,15 +277,28 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
           <div className="gacha-draw-info">
             <span>{availableCount} rewards left</span>
             <CoinAmount value={wallet?.coins ?? 0} />
+            <KeyAmount value={keyBalance} />
           </div>
-          <button type="button" className="btn btn-primary gacha-draw-btn" disabled={drawing || complete || !canAfford} onClick={draw}>
-            {drawing ? "Drawing..." : complete ? "Complete" : (
-              <>
-                <span>Draw</span>
-                <CoinAmount value={gacha?.nextCost ?? 0} suffix="" className="coin-amount-inline" />
-              </>
-            )}
-          </button>
+          <div className="gacha-draw-actions">
+            {gacha?.id === "chiikawa-frame" ? (
+              <button type="button" className="btn btn-secondary gacha-draw-btn gacha-key-draw-btn" disabled={drawing || complete || !canUseKey} onClick={() => draw(true)}>
+                {drawing ? "Drawing..." : complete ? "Complete" : (
+                  <>
+                    <span>Draw with key</span>
+                    <KeyAmount value={1} suffix="" className="key-amount-inline" />
+                  </>
+                )}
+              </button>
+            ) : null}
+            <button type="button" className="btn btn-primary gacha-draw-btn" disabled={drawing || complete || !canAfford} onClick={() => draw(false)}>
+              {drawing ? "Drawing..." : complete ? "Complete" : (
+                <>
+                  <span>Draw</span>
+                  <CoinAmount value={gacha?.nextCost ?? 0} suffix="" className="coin-amount-inline" />
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -334,6 +360,7 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
         </div>
         <div className="shop-wallet">
           <CoinAmount value={wallet?.coins ?? 0} />
+          <KeyAmount value={wallet?.keys ?? 0} />
         </div>
       </div>
 
@@ -444,8 +471,8 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
           gacha={selectedGacha}
           wallet={wallet}
           onClose={() => setSelectedGacha(null)}
-          onDraw={async (collectionId) => {
-            const res = await onDrawGacha?.(collectionId);
+          onDraw={async (collectionId, options) => {
+            const res = await onDrawGacha?.(collectionId, options);
             const nextGacha = res?.gachas?.find((collection) => collection.id === collectionId) || res?.gacha;
             if (nextGacha) setSelectedGacha(nextGacha);
             return res;

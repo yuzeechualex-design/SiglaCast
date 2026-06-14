@@ -14451,7 +14451,8 @@ body.desktop-shell .user-discover-main {
   box-shadow: var(--shadow-soft);
 }
 
-.coin-amount {
+.coin-amount,
+.key-amount {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -14460,31 +14461,44 @@ body.desktop-shell .user-discover-main {
   white-space: nowrap;
 }
 
-.coin-amount-inline {
+.coin-amount-inline,
+.key-amount-inline {
   color: inherit;
 }
 
-.coin-amount small {
+.coin-amount small,
+.key-amount small {
   color: var(--ink-600);
   font-weight: 800;
 }
 
 .coin-amount-inline small,
+.key-amount-inline small,
 .shop-gacha-banner-cta .coin-amount small,
-.gacha-draw-btn .coin-amount small {
+.gacha-draw-btn .coin-amount small,
+.gacha-draw-btn .key-amount small {
   color: inherit;
 }
 
-.coin-icon {
+.coin-icon,
+.key-icon {
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  border-radius: 50%;
   object-fit: cover;
+}
+
+.coin-icon {
+  border-radius: 50%;
   box-shadow: 0 3px 10px rgba(124, 58, 237, 0.32);
 }
 
-.shop-wallet .coin-icon {
+.key-icon {
+  filter: drop-shadow(0 3px 10px rgba(139, 92, 246, 0.35));
+}
+
+.shop-wallet .coin-icon,
+.shop-wallet .key-icon {
   width: 30px;
   height: 30px;
 }
@@ -15432,12 +15446,25 @@ video.gacha-win-media {
   color: #fff;
 }
 
+.gacha-draw-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
 .gacha-draw-btn {
   min-width: 190px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
+}
+
+.gacha-key-draw-btn {
+  border-color: rgba(167, 139, 250, 0.42);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
 }
 
 @media (max-width: 720px) {
