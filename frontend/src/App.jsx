@@ -17,6 +17,7 @@ import AICharactersPage from "./pages/AICharactersPage.jsx";
 import CharacterEditPage from "./pages/CharacterEditPage.jsx";
 import ShopPage from "./pages/ShopPage.jsx";
 import UserProfileModal from "./components/UserProfileModal.jsx";
+import WelcomeGiftPopup from "./components/WelcomeGiftPopup.jsx";
 import SharePostModal from "./components/SharePostModal.jsx";
 import { SIGLACAST_AI_USER_ID } from "./constants/sentinelUsers.js";
 import { normalizeRegistrationEmail, validateRegisterForm } from "./utils/registerValidation.js";
@@ -30,6 +31,7 @@ const STORAGE_CACHED_POSTS = "siglacast_cached_text_posts";
 const STORAGE_CACHED_CONVERSATIONS = "siglacast_cached_conversations";
 const STORAGE_ANDROID_OVERLAY_ASKED = "siglacast_android_overlay_permission_asked";
 const STORAGE_OAUTH_ONBOARDING_PREFIX = "siglacast_oauth_onboarded_";
+const STORAGE_WELCOME_GIFT_PREFIX = "siglacast_welcome_gift_claimed_";
 
 function profileBackgroundUrlFromItemId(itemId) {
   return itemId === "exe-profile-background" ? "/assets/exe-profile-background.mp4" : null;
@@ -148,6 +150,7 @@ export default function App() {
   const [appBootReady, setAppBootReady] = useState(false);
   const oauthLoginBusyRef = useRef(false);
   const [oauthOnboardingOpen, setOauthOnboardingOpen] = useState(false);
+  const [welcomeGiftOpen, setWelcomeGiftOpen] = useState(false);
   const [appRefreshBusy, setAppRefreshBusy] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [conversations, setConversations] = useState(readCachedConversations);
@@ -1218,7 +1221,15 @@ export default function App() {
           localStorage.setItem("siglacast_token", loginRes.token);
           localStorage.setItem("siglacast_refresh_token", loginRes.refreshToken);
           localStorage.setItem("siglacast_user", JSON.stringify(loginRes.user));
-          navigate("/community");
+          // Show welcome gift popup for brand-new accounts
+          const giftKey = `${STORAGE_WELCOME_GIFT_PREFIX}${loginRes.user.id}`;
+          const alreadyClaimed = localStorage.getItem(giftKey);
+          if (!alreadyClaimed) {
+            navigate("/community");
+            setWelcomeGiftOpen(true);
+          } else {
+            navigate("/community");
+          }
         }
         setLoadingAuth(false);
       } else {
@@ -2177,6 +2188,27 @@ export default function App() {
         user={user}
         onFinish={finishOauthOnboarding}
         onSkip={skipOauthOnboarding}
+      />
+    ) : null}
+    {welcomeGiftOpen ? (
+      <WelcomeGiftPopup
+        onClaim={async () => {
+          await api("/shop/welcome-gift/claim", { method: "POST", body: {} });
+          await loadBondsAndShop();
+        }}
+        onClose={() => {
+          if (user?.id) {
+            localStorage.setItem(`${STORAGE_WELCOME_GIFT_PREFIX}${user.id}`, "1");
+          }
+          setWelcomeGiftOpen(false);
+        }}
+        onDrawNow={() => {
+          if (user?.id) {
+            localStorage.setItem(`${STORAGE_WELCOME_GIFT_PREFIX}${user.id}`, "1");
+          }
+          setWelcomeGiftOpen(false);
+          navigate("/shop");
+        }}
       />
     ) : null}
     <AppShell

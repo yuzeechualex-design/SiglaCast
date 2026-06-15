@@ -3014,6 +3014,31 @@ app.post("/api/shop/monthly-card/claim", authenticate, async (req, res) => {
   }
 });
 
+/** Welcome gift — grants 300 coins once per new account. Idempotent: a second call returns {alreadyClaimed: true}. */
+app.post("/api/shop/welcome-gift/claim", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Check if already claimed using user_metadata or a dedicated flag in the wallet table
+    const { data: existing } = await supabase
+      .from("user_welcome_gifts")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (existing) {
+      return res.json({ alreadyClaimed: true, coins: 0 });
+    }
+    // Mark as claimed
+    await supabase.from("user_welcome_gifts").insert({ user_id: userId, coins: 300, created_at: new Date().toISOString() });
+    // Credit coins
+    const wallet = await addWalletCoins(userId, 300);
+    res.json({ alreadyClaimed: false, coins: 300, wallet });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+
+
 app.post("/api/shop/paypal/create-order", authenticate, async (req, res) => {
   try {
     const sku = String(req.body?.sku || "").trim();

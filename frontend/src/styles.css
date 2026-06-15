@@ -17081,6 +17081,463 @@ video.gacha-win-media {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ═══════════════════════════════════════════════════
+   WELCOME GIFT POPUP
+═══════════════════════════════════════════════════ */
+
+@keyframes wgp-overlay-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes wgp-popup-in {
+  0%   { opacity: 0; transform: scale(0.82) translateY(28px); }
+  60%  { opacity: 1; transform: scale(1.03) translateY(-4px); }
+  100% { opacity: 1; transform: scale(1)   translateY(0);    }
+}
+
+@keyframes wgp-popup-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.88) translateY(20px); }
+}
+
+@keyframes wgp-float {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(-10px); }
+}
+
+@keyframes wgp-glow-pulse {
+  0%, 100% { box-shadow: 0 0 28px 6px rgba(167, 139, 250, 0.45), 0 0 60px 12px rgba(250, 204, 21, 0.18); }
+  50%       { box-shadow: 0 0 44px 14px rgba(167, 139, 250, 0.65), 0 0 90px 24px rgba(250, 204, 21, 0.28); }
+}
+
+@keyframes wgp-sparkle {
+  0%   { opacity: 0; transform: scale(0) rotate(0deg); }
+  40%  { opacity: 1; transform: scale(1.2) rotate(180deg); }
+  70%  { opacity: 0.6; }
+  100% { opacity: 0; transform: scale(0) rotate(360deg); }
+}
+
+@keyframes wgp-particle-burst {
+  0%   { opacity: 1; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0; transform: translate(
+    calc(cos(var(--angle)) * var(--dist)),
+    calc(sin(var(--angle)) * var(--dist))
+  ) scale(0.2); }
+}
+
+@keyframes wgp-coin-bounce {
+  0%, 100% { transform: scale(1); }
+  30%       { transform: scale(1.18) rotate(-8deg); }
+  60%       { transform: scale(0.95) rotate(5deg); }
+}
+
+@keyframes wgp-claimed-in {
+  0%   { opacity: 0; transform: scale(0.7) translateY(12px); }
+  70%  { opacity: 1; transform: scale(1.05) translateY(-3px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes wgp-shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+
+@keyframes wgp-ribbon-slide {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Overlay */
+.wgp-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(4, 2, 18, 0.78);
+  backdrop-filter: blur(6px);
+  animation: wgp-overlay-in 0.35s ease both;
+  padding: 16px;
+}
+
+/* Popup container */
+.wgp-popup {
+  position: relative;
+  width: 100%;
+  max-width: 480px;
+  border-radius: 28px;
+  overflow: hidden;
+  /* opaque until JS adds class */
+  opacity: 0;
+  transform: scale(0.82) translateY(28px);
+  transition: opacity 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
+              transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: wgp-glow-pulse 3s ease-in-out infinite;
+  border: 1px solid rgba(167, 139, 250, 0.35);
+}
+
+.wgp-popup.wgp-visible {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+/* ── Video background ── */
+.wgp-bg-video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  z-index: 0;
+}
+
+/* ── Dimmer gradient ── */
+.wgp-bg-dimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background: linear-gradient(
+    165deg,
+    rgba(10, 6, 40, 0.72) 0%,
+    rgba(20, 12, 60, 0.58) 50%,
+    rgba(30, 8, 50, 0.80) 100%
+  );
+}
+
+/* ── Sparkle decorations ── */
+.wgp-sparkles {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.wgp-sparkle {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #facc15;
+  box-shadow: 0 0 6px 2px #a78bfa;
+  opacity: 0;
+  animation: wgp-sparkle calc(2.2s + var(--i) * 0.28s) calc(var(--i) * 0.18s) ease-in-out infinite;
+  top:  calc(10% + var(--i) * 7%);
+  left: calc(3%  + (var(--i) * 8.5%) mod 94%);
+}
+
+/* ── Close button ── */
+.wgp-close-btn {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 10;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wgp-close-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff;
+  transform: scale(1.12);
+}
+
+/* ── All inner content above z-index layers ── */
+.wgp-header,
+.wgp-reward-card,
+.wgp-actions,
+.wgp-footer {
+  position: relative;
+  z-index: 5;
+}
+
+/* ── Header ── */
+.wgp-header {
+  padding: 36px 28px 0;
+  text-align: center;
+}
+
+.wgp-gift-icon {
+  font-size: 52px;
+  line-height: 1;
+  display: block;
+  margin-bottom: 12px;
+  animation: wgp-float 3.2s ease-in-out infinite;
+  filter: drop-shadow(0 0 16px rgba(250, 204, 21, 0.7));
+}
+
+.wgp-title {
+  font-size: 28px;
+  font-weight: 800;
+  margin: 0 0 8px;
+  color: #fff;
+  letter-spacing: -0.4px;
+  background: linear-gradient(90deg, #facc15 0%, #a78bfa 50%, #facc15 100%);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: wgp-shimmer 3s linear infinite;
+}
+
+.wgp-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.65);
+  margin: 0 0 24px;
+  line-height: 1.5;
+}
+
+/* ── Reward card ── */
+.wgp-reward-card {
+  margin: 0 28px 22px;
+  padding: 20px 24px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  backdrop-filter: blur(10px);
+}
+
+.wgp-coin-icon {
+  width: 70px;
+  height: 70px;
+  flex-shrink: 0;
+  animation: wgp-coin-bounce 2.8s ease-in-out infinite;
+  filter: drop-shadow(0 0 12px rgba(250, 204, 21, 0.6));
+}
+
+.wgp-coin-icon img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.wgp-reward-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.wgp-reward-amount {
+  font-size: 48px;
+  font-weight: 900;
+  line-height: 1;
+  color: #facc15;
+  text-shadow: 0 0 20px rgba(250, 204, 21, 0.5);
+  letter-spacing: -2px;
+}
+
+.wgp-reward-unit {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 0.5px;
+}
+
+/* ── Actions area ── */
+.wgp-actions {
+  padding: 0 28px 10px;
+  display: flex;
+  justify-content: center;
+}
+
+/* ── Claim button wrapper (for particle burst) ── */
+.wgp-claim-wrapper {
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  width: 100%;
+}
+
+/* ── Claim button ── */
+.wgp-claim-btn {
+  width: 100%;
+  padding: 0;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(135deg, #facc15 0%, #f59e0b 50%, #a78bfa 100%);
+  transition: transform 0.18s, box-shadow 0.18s;
+  box-shadow: 0 4px 24px rgba(250, 204, 21, 0.45), 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.wgp-claim-btn:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 36px rgba(250, 204, 21, 0.6), 0 4px 16px rgba(0,0,0,0.35);
+}
+
+.wgp-claim-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.wgp-claim-btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.wgp-claim-btn.wgp-claiming {
+  animation: wgp-coin-bounce 0.5s ease infinite;
+}
+
+.wgp-claim-btn-inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 16px 24px;
+  font-size: 17px;
+  font-weight: 800;
+  color: #1a0a00;
+  letter-spacing: 0.2px;
+}
+
+.wgp-coin-mini {
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* ── Coin burst particles ── */
+.wgp-particle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background: radial-gradient(circle, #facc15 60%, #f59e0b);
+  box-shadow: 0 0 8px 3px rgba(250, 204, 21, 0.6);
+  pointer-events: none;
+  animation: wgp-particle-burst 0.9s var(--delay) ease-out both;
+  transform-origin: center;
+}
+
+/* ── Claimed state ── */
+.wgp-claimed-state {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: wgp-claimed-in 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.wgp-claimed-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 22px;
+  border-radius: 14px;
+  background: rgba(74, 222, 128, 0.14);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  width: 100%;
+  justify-content: center;
+}
+
+.wgp-claimed-badge span {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.wgp-claimed-badge p {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: #4ade80;
+  letter-spacing: 0.1px;
+}
+
+/* ── Draw Now button ── */
+.wgp-draw-btn {
+  width: 100%;
+  padding: 16px 24px;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 17px;
+  font-weight: 800;
+  color: #fff;
+  background: linear-gradient(135deg, #7c3aed 0%, #a78bfa 50%, #4f46e5 100%);
+  box-shadow: 0 4px 24px rgba(124, 58, 237, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  transition: transform 0.18s, box-shadow 0.18s;
+  letter-spacing: 0.3px;
+}
+
+.wgp-draw-btn:hover {
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: 0 8px 36px rgba(124, 58, 237, 0.7);
+}
+
+.wgp-draw-btn:active {
+  transform: scale(0.97);
+}
+
+.wgp-draw-arrow {
+  font-size: 20px;
+  transition: transform 0.25s;
+}
+
+.wgp-draw-btn:hover .wgp-draw-arrow {
+  transform: translateX(5px);
+}
+
+/* ── Footer ribbon ── */
+.wgp-footer {
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.38);
+  padding: 10px 28px 22px;
+  animation: wgp-ribbon-slide 0.6s 0.5s ease both;
+}
+
+/* Mobile adjustments */
+@media (max-width: 520px) {
+  .wgp-popup {
+    border-radius: 22px;
+  }
+  .wgp-header {
+    padding: 28px 20px 0;
+  }
+  .wgp-title {
+    font-size: 22px;
+  }
+  .wgp-reward-card {
+    margin: 0 20px 18px;
+    padding: 16px;
+  }
+  .wgp-reward-amount {
+    font-size: 38px;
+  }
+  .wgp-actions {
+    padding: 0 20px 8px;
+  }
+  .wgp-footer {
+    padding: 8px 20px 18px;
+  }
+}
+
+
 
 
 
