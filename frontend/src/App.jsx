@@ -1588,7 +1588,8 @@ export default function App() {
         waitStartedAt: next.waitStartedAt ?? null
       });
       setSearchResults([]);
-      await loadMessages();
+      // Refresh conversation list in background — don't block the UI
+      void loadMessages();
       return;
     } else {
       const thread = await api(`/messages/with/${id}`);
@@ -1596,7 +1597,8 @@ export default function App() {
       setActiveChat({ ...thread, kind: "dm" });
     }
     setSearchResults([]);
-    await loadMessages();
+    // Refresh sidebar list in background — thread is already displayed
+    void loadMessages();
   }
 
   async function startUserphoneCall() {
@@ -1711,12 +1713,18 @@ export default function App() {
       }
       void loadBondsAndShop();
     }
-    const refreshed =
-      activeChat.kind === "group"
-        ? await api(`/groups/${activeChat.group.id}`)
-        : await api(`/messages/with/${activeChat.user.id}`);
-    if (!refreshed.error) setActiveChat({ ...refreshed, kind: activeChat.kind });
-    await loadMessages();
+    // Return immediately so MessagesPage can clear the optimistic bubble
+    // right away — no double-message overlap. Refresh data in background.
+    const chatKind = activeChat.kind;
+    const refreshUrl =
+      chatKind === "group"
+        ? `/groups/${activeChat.group.id}`
+        : `/messages/with/${activeChat.user.id}`;
+    void (async () => {
+      const refreshed = await api(refreshUrl);
+      if (!refreshed.error) setActiveChat({ ...refreshed, kind: chatKind });
+      void loadMessages();
+    })();
     return res;
   }
 

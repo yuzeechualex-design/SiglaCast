@@ -290,7 +290,13 @@ export default function MessagesPage({
 
   const visibleThreadMessages = useMemo(() => {
     const base = activeChat?.messages || [];
-    const pending = optimisticMessages.filter((message) => message.threadKey === activeThreadKey);
+    const pending = optimisticMessages.filter((message) => {
+      if (message.threadKey !== activeThreadKey) return false;
+      // Drop the optimistic bubble if the real message already landed in base
+      return !base.some(
+        (b) => b.fromMe && b.text === message.text && !b.id?.startsWith("optimistic-")
+      );
+    });
     return [...base, ...pending];
   }, [activeChat?.messages, activeThreadKey, optimisticMessages]);
   const friendInviteTargets = useMemo(() => {
