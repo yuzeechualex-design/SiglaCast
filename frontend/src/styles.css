@@ -6835,7 +6835,7 @@ textarea.profile-bio-input::placeholder {
 }
 
 .avatar-frame-host {
-  --avatar-frame-scale: 1.22;
+  --avatar-frame-scale: 1.14;
   --avatar-frame-x: 0px;
   --avatar-frame-y: 0px;
   position: relative;
@@ -6858,21 +6858,21 @@ textarea.profile-bio-input::placeholder {
 }
 
 .avatar-frame-host.frame-fit-alien-stage {
-  --avatar-frame-scale: 1.18;
+  --avatar-frame-scale: 1.12;
 }
 
 .avatar-frame-host.frame-fit-chiikawa {
-  --avatar-frame-scale: 1.16;
+  --avatar-frame-scale: 1.10;
   --avatar-frame-y: -0.5px;
 }
 
 .avatar-frame-host.frame-fit-exe {
-  --avatar-frame-scale: 1.28;
+  --avatar-frame-scale: 1.24;
   --avatar-frame-y: -0.5px;
 }
 
 .avatar-frame-host.frame-fit-bond {
-  --avatar-frame-scale: 1.2;
+  --avatar-frame-scale: 1.14;
 }
 
 .avatar-frame-host > :not(.avatar-frame-img) {
@@ -7204,6 +7204,10 @@ textarea.profile-bio-input::placeholder {
   border-radius: 50%;
 }
 
+.message-avatar-frame-host {
+  overflow: visible;
+}
+
 .message-avatar-frame-host.avatar-frame-host--sm,
 .message-avatar-frame-host.avatar-frame-host--sm > .msg-avatar,
 .message-avatar-frame-host.avatar-frame-host--sm > .msg-avatar.placeholder {
@@ -7224,6 +7228,10 @@ textarea.profile-bio-input::placeholder {
   width: 40px;
   height: 40px;
   border-radius: 50%;
+}
+
+.server-message-avatar-frame-host {
+  overflow: visible;
 }
 
 .server-message-avatar-img,

@@ -708,10 +708,15 @@ export default function App() {
       return undefined;
     }
 
-    setAppBootReady(true);
-
     async function bootApp() {
+      const minDisplayMs = 1800;
+      const start = Date.now();
       await loadAll();
+      const elapsed = Date.now() - start;
+      if (elapsed < minDisplayMs) {
+        await new Promise((r) => setTimeout(r, minDisplayMs - elapsed));
+      }
+      if (!cancelled) setAppBootReady(true);
     }
 
     void bootApp();

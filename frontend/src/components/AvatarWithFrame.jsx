@@ -2,6 +2,14 @@ import { mediaUrl } from "../services/api.js";
 
 const DEFAULT_FRAME_URLS = {
   "pink-heart-bond-frame": "/assets/bond-frame-pink.png",
+  "alien-stage-ivan-frame": "/assets/alien-stage-ivan-frame.png",
+  "alien-stage-till-frame": "/assets/alien-stage-till-frame.png",
+  "alien-stage-mizi-frame": "/assets/alien-stage-mizi-frame.png",
+  "alien-stage-sua-frame": "/assets/alien-stage-sua-frame.png",
+  "chiikawa-hachiware-frame": "/assets/chiikawa-hachiware-frame.png",
+  "chiikawa-usagi-frame": "/assets/chiikawa-usagi-frame.png",
+  "chiikawa-momonga-frame": "/assets/chiikawa-momonga-frame.png",
+  "chiikawa-chiikawa-frame": "/assets/chiikawa-chiikawa-frame.png",
   "exe-frame": "/assets/exe-frame.png"
 };
 
