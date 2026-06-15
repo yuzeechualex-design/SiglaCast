@@ -69,31 +69,31 @@ function paypalSdkUrl(clientId) {
   return `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=USD&components=buttons&enable-funding=card&disable-funding=venmo,paylater`;
 }
 
+function waitForPaypal(timeoutMs = 12000) {
+  return new Promise((resolve, reject) => {
+    if (window.paypal?.Buttons) return resolve(window.paypal);
+    const start = Date.now();
+    const interval = setInterval(() => {
+      if (window.paypal?.Buttons) {
+        clearInterval(interval);
+        resolve(window.paypal);
+      } else if (Date.now() - start > timeoutMs) {
+        clearInterval(interval);
+        reject(new Error("PayPal checkout took too long to load. Check the client ID and network."));
+      }
+    }, 200);
+  });
+}
+
 function loadPayPalSdk(clientId) {
   if (window.paypal?.Buttons) return Promise.resolve(window.paypal);
   const existing = document.querySelector("script[data-purxu-paypal-sdk='1']");
   if (existing) {
-    if (existing.dataset.loaded === "1" && !window.paypal?.Buttons) existing.remove();
-    else if (existing.dataset.loaded === "1" && window.paypal?.Buttons) return Promise.resolve(window.paypal);
-    else if (existing.dataset.failed === "1") existing.remove();
-    else {
-      return new Promise((resolve, reject) => {
-        const timeout = window.setTimeout(() => {
-          existing.dataset.failed = "1";
-          reject(new Error("PayPal checkout took too long to load. Check the client ID and network."));
-        }, 12000);
-        existing.addEventListener("load", () => {
-          window.clearTimeout(timeout);
-          existing.dataset.loaded = "1";
-          if (window.paypal?.Buttons) resolve(window.paypal);
-          else reject(new Error("PayPal checkout loaded, but buttons are unavailable."));
-        }, { once: true });
-        existing.addEventListener("error", () => {
-          window.clearTimeout(timeout);
-          existing.dataset.failed = "1";
-          reject(new Error("Could not load PayPal checkout."));
-        }, { once: true });
-      });
+    if (existing.dataset.failed === "1") {
+      existing.remove();
+    } else {
+      // Script exists and is either loading or loaded — poll for window.paypal
+      return waitForPaypal();
     }
   }
   return new Promise((resolve, reject) => {
@@ -162,6 +162,14 @@ function CheckoutModal({ product, onClose, onCreateOrder, onCaptureOrder }) {
   const [error, setError] = useState("");
   const isMonthly = product?.kind === "monthly_card";
 
+  // Stabilize callback refs so the effect doesn't re-trigger on every parent render
+  const onCreateOrderRef = useRef(onCreateOrder);
+  const onCaptureOrderRef = useRef(onCaptureOrder);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCreateOrderRef.current = onCreateOrder; }, [onCreateOrder]);
+  useEffect(() => { onCaptureOrderRef.current = onCaptureOrder; }, [onCaptureOrder]);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
+
   useEffect(() => {
     let cancelled = false;
     let rendered = null;
@@ -172,6 +180,7 @@ function CheckoutModal({ product, onClose, onCreateOrder, onCaptureOrder }) {
         const configRes = await fetch(`${API_ORIGIN}/api/shop/paypal/config`, {
           headers: { Authorization: `Bearer ${localStorage.getItem("siglacast_token") || ""}` }
         });
+        if (!configRes.ok) throw new Error("Could not fetch PayPal configuration.");
         const config = await configRes.json();
         if (!config.enabled || !config.clientId) throw new Error("PayPal is not configured yet.");
         const paypal = await loadPayPalSdk(config.clientId);
@@ -180,20 +189,20 @@ function CheckoutModal({ product, onClose, onCreateOrder, onCaptureOrder }) {
         rendered = paypal.Buttons({
           style: { layout: "vertical", shape: "pill", color: "blue", label: "pay" },
           createOrder: async () => {
-            const res = await onCreateOrder?.(product.sku);
+            const res = await onCreateOrderRef.current?.(product.sku);
             if (res?.error) throw new Error(res.error);
             return res.orderId;
           },
           onApprove: async (data) => {
             setStatus("capturing");
-            const res = await onCaptureOrder?.(data.orderID);
+            const res = await onCaptureOrderRef.current?.(data.orderID);
             if (res?.error) {
               setError(res.error);
               setStatus("ready");
               return;
             }
             setStatus("success");
-            window.setTimeout(() => onClose?.(), 1100);
+            window.setTimeout(() => onCloseRef.current?.(), 1100);
           },
           onError: (err) => {
             setError(err?.message || "Payment failed. Please try again.");
@@ -214,7 +223,7 @@ function CheckoutModal({ product, onClose, onCreateOrder, onCaptureOrder }) {
       cancelled = true;
       try { rendered?.close?.(); } catch (_) { /* ignore */ }
     };
-  }, [onCaptureOrder, onClose, onCreateOrder, product?.sku]);
+  }, [product?.sku]);
 
   return (
     <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Complete purchase">
