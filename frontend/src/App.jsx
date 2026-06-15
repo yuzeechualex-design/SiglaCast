@@ -185,7 +185,7 @@ export default function App() {
   /** `{ userId, prefetch? }` — public profile popover from avatars in Community / Messages. */
   const [userProfilePeek, setUserProfilePeek] = useState(null);
   const [bondState, setBondState] = useState({ bonds: [], wallet: { coins: 0 }, levels: [] });
-  const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 }, gacha: null });
+  const [shopState, setShopState] = useState({ items: [], wallet: { coins: 0 }, gacha: null, monthlyCard: null });
   const [serverUsers, setServerUsers] = useState([]);
 
   const [theme, setTheme] = useState(() => {
@@ -264,9 +264,12 @@ export default function App() {
 
   async function loadBondsAndShop() {
     if (!token) return;
-    const [bonds, shop] = await Promise.all([api("/bonds"), api("/shop")]);
+    const [bonds, shop, monthly] = await Promise.all([api("/bonds"), api("/shop"), api("/shop/monthly-card")]);
     if (!bonds.error) setBondState(bonds);
-    if (!shop.error) setShopState(shop);
+    if (!shop.error) setShopState((prev) => ({ ...prev, ...shop }));
+    if (!monthly.error) {
+      setShopState((prev) => ({ ...prev, monthlyCard: monthly.monthlyCard || null }));
+    }
   }
 
   useEffect(() => {
@@ -318,6 +321,42 @@ export default function App() {
       }));
     }
     await loadBondsAndShop();
+    return res;
+  }
+
+  async function createShopPayPalOrder(sku) {
+    return api("/shop/paypal/create-order", { method: "POST", body: { sku } });
+  }
+
+  async function captureShopPayPalOrder(orderId) {
+    const res = await api("/shop/paypal/capture-order", { method: "POST", body: { orderId } });
+    if (res.error) {
+      setNotice(res.error);
+      return res;
+    }
+    if (res.wallet || res.monthlyCard) {
+      setShopState((prev) => ({
+        ...prev,
+        wallet: res.wallet || prev.wallet,
+        monthlyCard: res.monthlyCard ?? prev.monthlyCard
+      }));
+    }
+    setNotice(res.product?.kind === "monthly_card" ? "Monthly card activated" : "Coins added");
+    return res;
+  }
+
+  async function claimMonthlyCardDaily() {
+    const res = await api("/shop/monthly-card/claim", { method: "POST", body: {} });
+    if (res.error) {
+      setNotice(res.error);
+      return res;
+    }
+    setShopState((prev) => ({
+      ...prev,
+      wallet: res.wallet || prev.wallet,
+      monthlyCard: res.monthlyCard ?? prev.monthlyCard
+    }));
+    setNotice(`Claimed ${res.claimedCoins || 20} daily coins`);
     return res;
   }
 
@@ -2266,9 +2305,13 @@ export default function App() {
               items={shopState.items}
               gacha={shopState.gacha}
               gachas={shopState.gachas}
+              monthlyCard={shopState.monthlyCard}
               currentUser={user}
               onBuy={buyShopItem}
               onDrawGacha={drawShopGacha}
+              onCreatePayPalOrder={createShopPayPalOrder}
+              onCapturePayPalOrder={captureShopPayPalOrder}
+              onClaimMonthlyDaily={claimMonthlyCardDaily}
             />
           }
         />

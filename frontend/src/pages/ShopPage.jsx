@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from "react";
-import { mediaUrl } from "../services/api.js";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { API_ORIGIN, mediaUrl } from "../services/api.js";
 
 function shopAssetUrl(url) {
   if (!url) return "";
@@ -57,13 +57,37 @@ function PriceLabel({ value }) {
 }
 
 const coinPackages = [
-  { coins: 100, price: "$1.99", imageUrl: "/assets/purxu-coins-small.png" },
-  { coins: 300, price: "$4.90", imageUrl: "/assets/purxu-coins-small.png" },
-  { coins: 500, price: "$7.99", imageUrl: "/assets/purxu-coins-small.png" },
-  { coins: 1000, price: "$16.40", imageUrl: "/assets/purxu-coins-large.png" },
-  { coins: 5000, price: "$82.20", imageUrl: "/assets/purxu-coins-large.png" },
-  { coins: 10000, price: "$164.40", imageUrl: "/assets/purxu-coins-large.png" }
+  { sku: "coins_100", coins: 100, price: "$1.99", imageUrl: "/assets/purxu-coins-small.png" },
+  { sku: "coins_300", coins: 300, price: "$4.90", imageUrl: "/assets/purxu-coins-small.png" },
+  { sku: "coins_500", coins: 500, price: "$7.99", imageUrl: "/assets/purxu-coins-small.png" },
+  { sku: "coins_1000", coins: 1000, price: "$16.40", imageUrl: "/assets/purxu-coins-large.png" },
+  { sku: "coins_5000", coins: 5000, price: "$82.20", imageUrl: "/assets/purxu-coins-large.png" },
+  { sku: "coins_10000", coins: 10000, price: "$164.40", imageUrl: "/assets/purxu-coins-large.png" }
 ];
+
+function paypalSdkUrl(clientId) {
+  return `https://www.paypal.com/sdk/js?client-id=${encodeURIComponent(clientId)}&currency=USD&components=buttons&enable-funding=card&disable-funding=venmo,paylater`;
+}
+
+function loadPayPalSdk(clientId) {
+  if (window.paypal?.Buttons) return Promise.resolve(window.paypal);
+  const existing = document.querySelector("script[data-purxu-paypal-sdk='1']");
+  if (existing) {
+    return new Promise((resolve, reject) => {
+      existing.addEventListener("load", () => resolve(window.paypal), { once: true });
+      existing.addEventListener("error", reject, { once: true });
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = paypalSdkUrl(clientId);
+    script.async = true;
+    script.dataset.purxuPaypalSdk = "1";
+    script.onload = () => resolve(window.paypal);
+    script.onerror = reject;
+    document.head.appendChild(script);
+  });
+}
 
 const fallbackChiikawaGacha = {
   id: "chiikawa-frame",
@@ -101,29 +125,97 @@ function ShopSectionTitle({ children }) {
   return <h3 className="shop-section-title">{children}</h3>;
 }
 
-function BundleModal({ onClose }) {
+function CheckoutModal({ product, onClose, onCreateOrder, onCaptureOrder }) {
+  const paypalRef = useRef(null);
+  const [status, setStatus] = useState("loading");
+  const [error, setError] = useState("");
+  const isMonthly = product?.kind === "monthly_card";
+
+  useEffect(() => {
+    let cancelled = false;
+    let rendered = null;
+    (async () => {
+      try {
+        setStatus("loading");
+        setError("");
+        const configRes = await fetch(`${API_ORIGIN}/api/shop/paypal/config`, {
+          headers: { Authorization: `Bearer ${localStorage.getItem("siglacast_token") || ""}` }
+        });
+        const config = await configRes.json();
+        if (!config.enabled || !config.clientId) throw new Error("PayPal is not configured yet.");
+        const paypal = await loadPayPalSdk(config.clientId);
+        if (cancelled || !paypalRef.current) return;
+        paypalRef.current.innerHTML = "";
+        rendered = paypal.Buttons({
+          style: { layout: "vertical", shape: "pill", color: "blue", label: "pay" },
+          createOrder: async () => {
+            const res = await onCreateOrder?.(product.sku);
+            if (res?.error) throw new Error(res.error);
+            return res.orderId;
+          },
+          onApprove: async (data) => {
+            setStatus("capturing");
+            const res = await onCaptureOrder?.(data.orderID);
+            if (res?.error) {
+              setError(res.error);
+              setStatus("ready");
+              return;
+            }
+            setStatus("success");
+            window.setTimeout(() => onClose?.(), 1100);
+          },
+          onError: (err) => {
+            setError(err?.message || "Payment failed. Please try again.");
+            setStatus("ready");
+          },
+          onCancel: () => setStatus("ready")
+        });
+        await rendered.render(paypalRef.current);
+        if (!cancelled) setStatus("ready");
+      } catch (e) {
+        if (!cancelled) {
+          setError(e.message || "Could not start checkout.");
+          setStatus("error");
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+      try { rendered?.close?.(); } catch (_) { /* ignore */ }
+    };
+  }, [onCaptureOrder, onClose, onCreateOrder, product?.sku]);
+
   return (
-    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Purxu monthly card bundle benefits">
+    <div className="gacha-modal-backdrop" role="dialog" aria-modal="true" aria-label="Complete purchase">
       <div className="bundle-modal">
         <div className="gacha-modal-head">
           <div>
-            <p>Monthly Bundle</p>
-            <h3>Purxu Monthly Card Bundle</h3>
+            <p>{isMonthly ? "Monthly Bundle" : "Coin Pack"}</p>
+            <h3>{product?.title || "Purchase"}</h3>
           </div>
           <button type="button" className="gacha-close-btn" onClick={onClose} aria-label="Close">
             x
           </button>
         </div>
-        <img className="bundle-modal-art" src="/assets/purxu-monthly-card-bundle.png" alt="" />
+        <img className="bundle-modal-art" src={product?.imageUrl || "/assets/purxu-monthly-card-bundle.png"} alt="" />
         <div className="bundle-benefits">
-          <strong>Benefits</strong>
-          <p>- get upto 900 coins in total</p>
-          <p>- obtain 300 coins after purchase</p>
-          <p>- you can claim 20 coins daily</p>
+          <strong>{product?.price} USD</strong>
+          {isMonthly ? (
+            <>
+              <p>- claim 300 coins immediately</p>
+              <p>- claim 20 coins daily for 30 days</p>
+              <p>- daily claim popup appears while active</p>
+            </>
+          ) : (
+            <p>- {product?.coins?.toLocaleString()} coins will be added after payment is captured</p>
+          )}
         </div>
-        <div className="bundle-modal-footer">
-          <strong>$9.69</strong>
-          <button type="button" className="btn btn-primary" onClick={onClose}>Buy Bundle</button>
+        <div className="checkout-paypal-panel">
+          <div ref={paypalRef} />
+          {status === "loading" ? <p className="muted small">Loading secure checkout...</p> : null}
+          {status === "capturing" ? <p className="muted small">Capturing payment...</p> : null}
+          {status === "success" ? <p className="checkout-success">Purchase complete</p> : null}
+          {error ? <p className="form-error">{error}</p> : null}
         </div>
       </div>
     </div>
@@ -305,10 +397,23 @@ function GachaModal({ gacha, wallet, onClose, onDraw }) {
   );
 }
 
-export default function ShopPage({ wallet, items = [], gacha = null, gachas = [], currentUser, onBuy, onDrawGacha }) {
+export default function ShopPage({
+  wallet,
+  items = [],
+  gacha = null,
+  gachas = [],
+  monthlyCard = null,
+  currentUser,
+  onBuy,
+  onDrawGacha,
+  onCreatePayPalOrder,
+  onCapturePayPalOrder,
+  onClaimMonthlyDaily
+}) {
   const [activeTab, setActiveTab] = useState("cosmetics");
   const [selectedGacha, setSelectedGacha] = useState(null);
-  const [bundleOpen, setBundleOpen] = useState(false);
+  const [checkoutProduct, setCheckoutProduct] = useState(null);
+  const [claimingDaily, setClaimingDaily] = useState(false);
   const limitedCollections = useMemo(() => {
     const collections = (gachas.length ? gachas : (gacha ? [gacha] : []))
       .filter((collection) => collection.id !== "alien-stage-frame");
@@ -339,9 +444,35 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
   const previewItem = displayItems.find((item) => item.id === previewItemId) || featured;
   const avatarUrl = currentUser?.avatarUrl ? mediaUrl(currentUser.avatarUrl) : "/assets/purxu-shop-logo.png";
   const previewKey = useMemo(() => `${previewItem?.id || "empty"}-${Date.now()}`, [previewItem?.id]);
+  const monthlyProduct = {
+    sku: "monthly_card",
+    kind: "monthly_card",
+    title: "Purxu Monthly Card Bundle",
+    price: "$9.69",
+    coins: 300,
+    imageUrl: "/assets/purxu-monthly-card-bundle.png"
+  };
+  const showDailyClaim = monthlyCard?.active && monthlyCard?.canClaimDaily;
+
+  async function claimDaily() {
+    setClaimingDaily(true);
+    await onClaimMonthlyDaily?.();
+    setClaimingDaily(false);
+  }
 
   return (
     <section className="shop-page">
+      {showDailyClaim ? (
+        <div className="monthly-claim-pop">
+          <div>
+            <small>Monthly Card</small>
+            <strong>Claim your 20 daily coins</strong>
+          </div>
+          <button type="button" className="btn btn-primary btn-sm" disabled={claimingDaily} onClick={claimDaily}>
+            {claimingDaily ? "Claiming..." : "Claim"}
+          </button>
+        </div>
+      ) : null}
       <div className="shop-topbar">
         <div>
           <p className="shop-eyebrow">purxu shop</p>
@@ -437,13 +568,19 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
           <ShopSectionTitle>Coins Shop</ShopSectionTitle>
           <div className="coin-shop-grid">
             {coinPackages.map((pack) => (
-              <article key={pack.coins} className="coin-shop-card">
+              <article key={pack.sku} className="coin-shop-card">
                 <img src={pack.imageUrl} alt="" />
                 <div>
                   <CoinAmount value={pack.coins} />
                   <strong>{pack.price} usd</strong>
                 </div>
-                <button type="button" className="btn btn-primary">Purchase</button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setCheckoutProduct({ ...pack, title: `${pack.coins.toLocaleString()} Coins`, kind: "coins" })}
+                >
+                  Purchase
+                </button>
               </article>
             ))}
           </div>
@@ -454,7 +591,7 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
         <>
           <ShopSectionTitle>Bundles</ShopSectionTitle>
           <div className="bundle-grid">
-            <button type="button" className="bundle-card" onClick={() => setBundleOpen(true)}>
+            <button type="button" className="bundle-card" onClick={() => setCheckoutProduct(monthlyProduct)}>
               <img src="/assets/purxu-monthly-card-bundle.png" alt="" />
               <span>
                 <small>Monthly Bundle</small>
@@ -479,7 +616,14 @@ export default function ShopPage({ wallet, items = [], gacha = null, gachas = []
           }}
         />
       ) : null}
-      {bundleOpen ? <BundleModal onClose={() => setBundleOpen(false)} /> : null}
+      {checkoutProduct ? (
+        <CheckoutModal
+          product={checkoutProduct}
+          onClose={() => setCheckoutProduct(null)}
+          onCreateOrder={onCreatePayPalOrder}
+          onCaptureOrder={onCapturePayPalOrder}
+        />
+      ) : null}
     </section>
   );
 }

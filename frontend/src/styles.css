@@ -15312,6 +15312,60 @@ body.desktop-shell .shop-hero {
   font-size: 1.4rem;
 }
 
+.checkout-paypal-panel {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+  border: 1px solid rgba(216, 180, 254, 0.24);
+  border-radius: 18px;
+  padding: 14px;
+  background: rgba(8, 4, 16, 0.34);
+}
+
+.checkout-success {
+  margin: 0;
+  border-radius: 999px;
+  padding: 9px 12px;
+  color: #ecfdf5;
+  font-weight: 1000;
+  text-align: center;
+  background: rgba(34, 197, 94, 0.22);
+}
+
+.monthly-claim-pop {
+  position: sticky;
+  top: 10px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  border: 1px solid rgba(216, 180, 254, 0.36);
+  border-radius: 20px;
+  padding: 12px 14px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(240, 171, 252, 0.22), transparent 12rem),
+    linear-gradient(135deg, rgba(42, 17, 73, 0.96), rgba(13, 6, 24, 0.96));
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.24);
+}
+
+.monthly-claim-pop div {
+  display: grid;
+  gap: 2px;
+}
+
+.monthly-claim-pop small {
+  color: #f0abfc;
+  font-weight: 1000;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.monthly-claim-pop strong {
+  font-size: 1rem;
+}
+
 .gacha-modal-backdrop {
   position: fixed;
   inset: 0;

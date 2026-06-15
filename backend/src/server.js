@@ -96,6 +96,10 @@ const MOBILE_APP_ORIGINS = ["capacitor://localhost", "http://localhost", "https:
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 const GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions";
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_CLIENT_ID || "";
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_CLIENT_SECRET || "";
+const PAYPAL_ENV = String(process.env.PAYPAL_ENV || "sandbox").toLowerCase();
+const PAYPAL_API_BASE = PAYPAL_ENV === "live" ? "https://api-m.paypal.com" : "https://api-m.sandbox.paypal.com";
 
 /** Sentinel user id for mirrored anonymous lines in group Userphone bridges (migration 0008). */
 const USERPHONE_GUEST_ID = "_userphone_guest";
@@ -289,6 +293,24 @@ const SHOP_ITEMS = [
     requiredBondLevel: "partner"
   }
 ];
+const SHOP_COIN_PACKS = [
+  { sku: "coins_100", kind: "coins", label: "100 Coins", coins: 100, amountUsd: "1.99" },
+  { sku: "coins_300", kind: "coins", label: "300 Coins", coins: 300, amountUsd: "4.90" },
+  { sku: "coins_500", kind: "coins", label: "500 Coins", coins: 500, amountUsd: "7.99" },
+  { sku: "coins_1000", kind: "coins", label: "1,000 Coins", coins: 1000, amountUsd: "16.40" },
+  { sku: "coins_5000", kind: "coins", label: "5,000 Coins", coins: 5000, amountUsd: "82.20" },
+  { sku: "coins_10000", kind: "coins", label: "10,000 Coins", coins: 10000, amountUsd: "164.40" }
+];
+const MONTHLY_CARD_PRODUCT = {
+  sku: "monthly_card",
+  kind: "monthly_card",
+  label: "Purxu Monthly Card Bundle",
+  coins: 300,
+  amountUsd: "9.69",
+  dailyCoins: 20,
+  durationDays: 30
+};
+const SHOP_PAYMENT_PRODUCTS = new Map([...SHOP_COIN_PACKS, MONTHLY_CARD_PRODUCT].map((item) => [item.sku, item]));
 const ALIEN_STAGE_GACHA_ID = "alien-stage-frame";
 const CHIIKAWA_GACHA_ID = "chiikawa-frame";
 const EXE_GACHA_ID = "exe-profile-card";
@@ -526,6 +548,92 @@ async function addWalletCoins(userId, coins) {
   const next = Math.max(0, wallet.coins + coins);
   await supabase.from("user_wallets").upsert({ user_id: userId, coins: next, updated_at: new Date().toISOString() });
   return { userId, coins: next };
+}
+
+async function fetchMonthlyCard(userId) {
+  const { data } = await supabase.from("user_monthly_cards").select("*").eq("user_id", userId).maybeSingle();
+  if (!data) return null;
+  const activeUntil = data.active_until ? new Date(data.active_until) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    activeUntil: data.active_until,
+    lastClaimDate: data.last_claim_date || null,
+    active: Boolean(activeUntil && activeUntil.getTime() > Date.now()),
+    canClaimDaily: Boolean(activeUntil && activeUntil.getTime() > Date.now() && data.last_claim_date !== today),
+    dailyCoins: MONTHLY_CARD_PRODUCT.dailyCoins
+  };
+}
+
+async function grantMonthlyCard(userId) {
+  const now = new Date();
+  const { data: existing } = await supabase.from("user_monthly_cards").select("*").eq("user_id", userId).maybeSingle();
+  const currentUntil = existing?.active_until ? new Date(existing.active_until) : null;
+  const base = currentUntil && currentUntil.getTime() > now.getTime() ? currentUntil : now;
+  const activeUntil = new Date(base.getTime() + MONTHLY_CARD_PRODUCT.durationDays * 24 * 60 * 60 * 1000).toISOString();
+  await supabase.from("user_monthly_cards").upsert({
+    user_id: userId,
+    active_until: activeUntil,
+    last_claim_date: existing?.last_claim_date || null,
+    updated_at: now.toISOString()
+  });
+  return fetchMonthlyCard(userId);
+}
+
+async function paypalAccessToken() {
+  if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
+    throw new Error("PayPal is not configured. Set PAYPAL_CLIENT_ID and PAYPAL_CLIENT_SECRET.");
+  }
+  const auth = Buffer.from(`${PAYPAL_CLIENT_ID}:${PAYPAL_CLIENT_SECRET}`).toString("base64");
+  const response = await fetch(`${PAYPAL_API_BASE}/v1/oauth2/token`, {
+    method: "POST",
+    headers: {
+      Authorization: `Basic ${auth}`,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: "grant_type=client_credentials"
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error_description || data.error || "Could not connect to PayPal.");
+  return data.access_token;
+}
+
+async function paypalCreateOrder(product, orderId) {
+  const accessToken = await paypalAccessToken();
+  const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      intent: "CAPTURE",
+      purchase_units: [{
+        reference_id: orderId,
+        description: product.label,
+        amount: {
+          currency_code: "USD",
+          value: product.amountUsd
+        }
+      }]
+    })
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "Could not create PayPal order.");
+  return data;
+}
+
+async function paypalCaptureOrder(providerOrderId) {
+  const accessToken = await paypalAccessToken();
+  const response = await fetch(`${PAYPAL_API_BASE}/v2/checkout/orders/${encodeURIComponent(providerOrderId)}/capture`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json"
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.message || "Could not capture PayPal payment.");
+  return data;
 }
 
 async function awardBondInteraction(userId, targetUserId, { hasAttachment = false } = {}) {
@@ -2847,6 +2955,106 @@ app.post("/api/shop/:itemId/buy", authenticate, async (req, res) => {
     await supabase.from("user_shop_purchases").insert({ user_id: req.user.id, item_id: item.id });
     const wallet = await addWalletCoins(req.user.id, -effectivePrice);
     res.json({ wallet, item: { ...item, effectivePrice, owned: true, unlocked: true } });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.get("/api/shop/paypal/config", authenticate, async (_req, res) => {
+  res.json({
+    clientId: PAYPAL_CLIENT_ID || "",
+    env: PAYPAL_ENV,
+    currency: "USD",
+    enabled: Boolean(PAYPAL_CLIENT_ID && PAYPAL_CLIENT_SECRET)
+  });
+});
+
+app.get("/api/shop/monthly-card", authenticate, async (req, res) => {
+  try {
+    res.json({ monthlyCard: await fetchMonthlyCard(req.user.id) });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/shop/monthly-card/claim", authenticate, async (req, res) => {
+  try {
+    const card = await fetchMonthlyCard(req.user.id);
+    if (!card?.active) return res.status(403).json({ error: "Buy the Purxu Monthly Card first." });
+    if (!card.canClaimDaily) return res.status(400).json({ error: "Daily coins already claimed today." });
+    const today = new Date().toISOString().slice(0, 10);
+    await supabase
+      .from("user_monthly_cards")
+      .update({ last_claim_date: today, updated_at: new Date().toISOString() })
+      .eq("user_id", req.user.id);
+    const wallet = await addWalletCoins(req.user.id, MONTHLY_CARD_PRODUCT.dailyCoins);
+    res.json({ wallet, monthlyCard: await fetchMonthlyCard(req.user.id), claimedCoins: MONTHLY_CARD_PRODUCT.dailyCoins });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/shop/paypal/create-order", authenticate, async (req, res) => {
+  try {
+    const sku = String(req.body?.sku || "").trim();
+    const product = SHOP_PAYMENT_PRODUCTS.get(sku);
+    if (!product) return res.status(404).json({ error: "Shop product not found" });
+    const orderId = `pay-${crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
+    const paypalOrder = await paypalCreateOrder(product, orderId);
+    await supabase.from("shop_payment_orders").insert({
+      id: orderId,
+      user_id: req.user.id,
+      sku: product.sku,
+      kind: product.kind,
+      amount_usd: product.amountUsd,
+      coins: product.coins || 0,
+      provider_order_id: paypalOrder.id,
+      status: paypalOrder.status || "created"
+    });
+    res.status(201).json({ orderId: paypalOrder.id, internalOrderId: orderId });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post("/api/shop/paypal/capture-order", authenticate, async (req, res) => {
+  try {
+    const providerOrderId = String(req.body?.orderId || "").trim();
+    if (!providerOrderId) return res.status(400).json({ error: "Missing PayPal order id" });
+    const { data: order } = await supabase
+      .from("shop_payment_orders")
+      .select("*")
+      .eq("provider_order_id", providerOrderId)
+      .eq("user_id", req.user.id)
+      .maybeSingle();
+    if (!order) return res.status(404).json({ error: "Payment order not found" });
+    if (order.status === "completed") {
+      return res.json({
+        wallet: await fetchWallet(req.user.id),
+        monthlyCard: await fetchMonthlyCard(req.user.id),
+        alreadyCompleted: true
+      });
+    }
+    const product = SHOP_PAYMENT_PRODUCTS.get(order.sku);
+    if (!product) return res.status(404).json({ error: "Shop product not found" });
+    const capture = await paypalCaptureOrder(providerOrderId);
+    if (capture.status !== "COMPLETED") {
+      await supabase.from("shop_payment_orders").update({ status: capture.status || "capture_failed" }).eq("id", order.id);
+      return res.status(400).json({ error: "Payment was not completed." });
+    }
+    const captureId = capture.purchase_units?.[0]?.payments?.captures?.[0]?.id || null;
+    let wallet = await addWalletCoins(req.user.id, product.coins || 0);
+    let monthlyCard = await fetchMonthlyCard(req.user.id);
+    if (product.kind === "monthly_card") {
+      monthlyCard = await grantMonthlyCard(req.user.id);
+      wallet = await fetchWallet(req.user.id);
+    }
+    await supabase.from("shop_payment_orders").update({
+      status: "completed",
+      provider_capture_id: captureId,
+      captured_at: new Date().toISOString()
+    }).eq("id", order.id);
+    res.json({ wallet, monthlyCard, product: { sku: product.sku, kind: product.kind, coins: product.coins } });
   } catch (e) {
     res.status(400).json({ error: e.message });
   }
