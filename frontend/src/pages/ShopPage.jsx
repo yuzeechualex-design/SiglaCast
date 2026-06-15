@@ -73,18 +73,49 @@ function loadPayPalSdk(clientId) {
   if (window.paypal?.Buttons) return Promise.resolve(window.paypal);
   const existing = document.querySelector("script[data-purxu-paypal-sdk='1']");
   if (existing) {
-    return new Promise((resolve, reject) => {
-      existing.addEventListener("load", () => resolve(window.paypal), { once: true });
-      existing.addEventListener("error", reject, { once: true });
-    });
+    if (existing.dataset.loaded === "1" && !window.paypal?.Buttons) existing.remove();
+    else if (existing.dataset.loaded === "1" && window.paypal?.Buttons) return Promise.resolve(window.paypal);
+    else if (existing.dataset.failed === "1") existing.remove();
+    else {
+      return new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => {
+          existing.dataset.failed = "1";
+          reject(new Error("PayPal checkout took too long to load. Check the client ID and network."));
+        }, 12000);
+        existing.addEventListener("load", () => {
+          window.clearTimeout(timeout);
+          existing.dataset.loaded = "1";
+          if (window.paypal?.Buttons) resolve(window.paypal);
+          else reject(new Error("PayPal checkout loaded, but buttons are unavailable."));
+        }, { once: true });
+        existing.addEventListener("error", () => {
+          window.clearTimeout(timeout);
+          existing.dataset.failed = "1";
+          reject(new Error("Could not load PayPal checkout."));
+        }, { once: true });
+      });
+    }
   }
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
+    const timeout = window.setTimeout(() => {
+      script.dataset.failed = "1";
+      reject(new Error("PayPal checkout took too long to load. Check the client ID and network."));
+    }, 12000);
     script.src = paypalSdkUrl(clientId);
     script.async = true;
     script.dataset.purxuPaypalSdk = "1";
-    script.onload = () => resolve(window.paypal);
-    script.onerror = reject;
+    script.onload = () => {
+      window.clearTimeout(timeout);
+      script.dataset.loaded = "1";
+      if (window.paypal?.Buttons) resolve(window.paypal);
+      else reject(new Error("PayPal checkout loaded, but buttons are unavailable."));
+    };
+    script.onerror = () => {
+      window.clearTimeout(timeout);
+      script.dataset.failed = "1";
+      reject(new Error("Could not load PayPal checkout."));
+    };
     document.head.appendChild(script);
   });
 }
