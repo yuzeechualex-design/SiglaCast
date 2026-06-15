@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { API_ORIGIN, mediaUrl } from "../services/api.js";
 import { SIGLACAST_AI_USER_ID } from "../constants/sentinelUsers.js";
@@ -242,6 +243,11 @@ export default function MessagesPage({
   const [serverMessageCache, setServerMessageCache] = useState(loadServerMessages);
   const [channelMessages, setChannelMessages] = useState([]);
   const [serverDraft, setServerDraft] = useState("");
+  const [serverMsgMenu, setServerMsgMenu] = useState(null); // { msgId, x, y, msg }
+  const [serverEditingMsgId, setServerEditingMsgId] = useState(null);
+  const [serverEditDraft, setServerEditDraft] = useState("");
+  const serverFileRef = useRef(null);
+  const [serverAttachFile, setServerAttachFile] = useState(null);
   const [showCreateServer, setShowCreateServer] = useState(false);
   const [serverSettingsOpen, setServerSettingsOpen] = useState(false);
   const [inviteServer, setInviteServer] = useState(null);
@@ -713,28 +719,96 @@ export default function MessagesPage({
   async function sendServerMessage(e) {
     e.preventDefault();
     const text = serverDraft.trim();
-    if (!text || !selectedChannel || !selectedServerId) return;
+    if ((!text && !serverAttachFile) || !selectedChannel || !selectedServerId) return;
     setServerDraft("");
+    const file = serverAttachFile;
+    setServerAttachFile(null);
+    if (serverFileRef.current) serverFileRef.current.value = "";
     try {
-      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify({ text })
-      });
-      const newMsg = await res.json();
+      let newMsg;
+      if (file) {
+        const fd = new FormData();
+        if (text) fd.append("text", text);
+        fd.append("attachment", file);
+        const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd
+        });
+        newMsg = await res.json();
+      } else {
+        const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ text })
+        });
+        newMsg = await res.json();
+      }
       if (!newMsg.error) {
-        setChannelMessages(prev => [...prev, {
-          ...newMsg,
-          avatarUrl: newMsg.avatarUrl || newMsg.authorAvatar || null,
-          profileFrameItemId: newMsg.profileFrameItemId || newMsg.authorProfileFrameItemId || null,
-          profileFrameUrl: newMsg.profileFrameUrl || newMsg.authorProfileFrameUrl || null
-        }]);
+        setChannelMessages((prev) => [
+          ...prev,
+          {
+            ...newMsg,
+            avatarUrl: newMsg.avatarUrl || newMsg.authorAvatar || currentUser?.avatarUrl || null,
+            profileFrameItemId:
+              newMsg.profileFrameItemId || newMsg.authorProfileFrameItemId || currentUser?.profileFrameItemId || null,
+            profileFrameUrl: newMsg.profileFrameUrl || newMsg.authorProfileFrameUrl || null
+          }
+        ]);
       }
     } catch (err) {
       console.error("sendServerMessage error:", err);
+    }
+  }
+
+  async function deleteServerMessage(msgId) {
+    if (!selectedServerId || !selectedChannelId || !msgId) return;
+    setChannelMessages(prev => prev.filter(m => m.id !== msgId));
+    try {
+      await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages/${msgId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      });
+    } catch (err) {
+      console.error("deleteServerMessage error:", err);
+    }
+  }
+
+  async function editServerMessage(msgId, newText) {
+    if (!selectedServerId || !selectedChannelId || !msgId || !newText.trim()) return;
+    setChannelMessages(prev => prev.map(m => m.id === msgId ? { ...m, text: newText.trim() } : m));
+    try {
+      const res = await fetch(`${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages/${msgId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ text: newText.trim() })
+      });
+      const updated = await res.json();
+      if (!updated.error) {
+        setChannelMessages(prev => prev.map(m => m.id === msgId ? { ...m, ...updated } : m));
+      }
+    } catch (err) {
+      console.error("editServerMessage error:", err);
+    }
+  }
+
+  async function reactServerMessage(msgId, emoji) {
+    if (!selectedServerId || !selectedChannelId || !msgId) return;
+    try {
+      const res = await fetch(
+        `${API_ORIGIN}/api/servers/${selectedServerId}/channels/${selectedChannelId}/messages/${msgId}/react`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ emoji: emoji || null })
+        }
+      );
+      const updated = await res.json();
+      if (!updated.error) {
+        setChannelMessages(prev => prev.map(m => m.id === msgId ? { ...m, ...updated } : m));
+      }
+    } catch (err) {
+      console.error("reactServerMessage error:", err);
     }
   }
 
@@ -1453,6 +1527,18 @@ export default function MessagesPage({
               onOpenUserProfile={onOpenUserProfile}
               onCloseMobileServerThread={() => setMobileServerThreadOpen(false)}
               mobileServerThreadOpen={mobileServerThreadFullscreen}
+              serverMsgMenu={serverMsgMenu}
+              setServerMsgMenu={setServerMsgMenu}
+              serverEditingMsgId={serverEditingMsgId}
+              setServerEditingMsgId={setServerEditingMsgId}
+              serverEditDraft={serverEditDraft}
+              setServerEditDraft={setServerEditDraft}
+              onDeleteServerMsg={deleteServerMessage}
+              onEditServerMsg={editServerMessage}
+              onReactServerMsg={reactServerMessage}
+              serverFileRef={serverFileRef}
+              serverAttachFile={serverAttachFile}
+              setServerAttachFile={setServerAttachFile}
             />
           ) : !activeChat ? (
             <div className="thread-empty">
@@ -2945,6 +3031,402 @@ function ServerMemberPanel({ members = [], onOpenUserProfile }) {
   );
 }
 
+const SERVER_QUICK_REACTIONS = ["😭", "😄", "❤️", "👍"];
+
+function OpenOnMountEmojiPicker({ onPick, onClose }) {
+  const hostRef = useRef(null);
+  useEffect(() => {
+    const btn = hostRef.current?.querySelector("button");
+    btn?.click();
+  }, []);
+  return (
+    <div ref={hostRef} className="server-msg-menu-emoji-picker">
+      <EmojiPickerButton
+        title="Pick reaction"
+        className="server-msg-inline-emoji-picker"
+        onPick={(emoji) => {
+          onPick(emoji);
+          onClose?.();
+        }}
+      />
+    </div>
+  );
+}
+
+function ServerMessageContextMenu({
+  menu,
+  onClose,
+  onReact,
+  onEdit,
+  onDelete,
+  showEmojiPicker,
+  onOpenEmojiPicker
+}) {
+  if (!menu || typeof document === "undefined") return null;
+  const menuLeft = Math.min(menu.x, (typeof window !== "undefined" ? window.innerWidth : 400) - 220);
+  const menuTop = Math.min(menu.y + 4, (typeof window !== "undefined" ? window.innerHeight : 600) - 280);
+
+  function handleCopy() {
+    const text = menu.msg?.text || "";
+    if (text) navigator.clipboard?.writeText(text);
+    onClose();
+  }
+
+  function handleEdit() {
+    onEdit(menu.msgId, menu.msg?.text || "");
+    onClose();
+  }
+
+  function handleDelete() {
+    if (window.confirm("Delete this message?")) onDelete(menu.msgId);
+    onClose();
+  }
+
+  return createPortal(
+    <>
+      <div className="server-msg-menu-backdrop" onClick={onClose} />
+      <div className="server-msg-menu" style={{ left: menuLeft, top: menuTop }}>
+        <div className="server-msg-menu-reactions">
+          {SERVER_QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="server-msg-menu-emoji"
+              onClick={() => {
+                onReact(menu.msgId, emoji);
+                onClose();
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+        <div className="server-msg-menu-divider" />
+        <button
+          type="button"
+          className="server-msg-menu-item"
+          onClick={() => onOpenEmojiPicker(menu.msgId)}
+        >
+          <span className="server-msg-menu-icon server-msg-menu-icon--react" aria-hidden="true" />
+          Add Reaction
+        </button>
+        {menu.isOwn ? (
+          <button type="button" className="server-msg-menu-item" onClick={handleEdit}>
+            <span className="server-msg-menu-icon server-msg-menu-icon--edit" aria-hidden="true" />
+            Edit Message
+          </button>
+        ) : null}
+        <button type="button" className="server-msg-menu-item" onClick={handleCopy}>
+          <span className="server-msg-menu-icon server-msg-menu-icon--copy" aria-hidden="true" />
+          Copy Text
+        </button>
+        {menu.isOwn ? (
+          <>
+            <div className="server-msg-menu-divider" />
+            <button type="button" className="server-msg-menu-item server-msg-menu-item--danger" onClick={handleDelete}>
+              <span className="server-msg-menu-icon server-msg-menu-icon--delete" aria-hidden="true" />
+              Delete Message
+            </button>
+          </>
+        ) : null}
+        {showEmojiPicker === menu.msgId ? (
+          <OpenOnMountEmojiPicker
+            onPick={(emoji) => onReact(menu.msgId, emoji)}
+            onClose={onClose}
+          />
+        ) : null}
+      </div>
+    </>,
+    document.body
+  );
+}
+
+function ServerMessageReactions({ message, onReact }) {
+  const breakdown = message.reactionBreakdown || {};
+  const entries = Object.entries(breakdown).filter(([, count]) => count > 0);
+  if (!entries.length) return null;
+  return (
+    <div className="server-message-reactions">
+      {entries.map(([emoji, count]) => (
+        <button
+          key={emoji}
+          type="button"
+          className={`server-message-reaction-pill${message.myReaction === emoji ? " is-mine" : ""}`}
+          onClick={() => onReact(message.id, message.myReaction === emoji ? null : emoji)}
+          title={`${count} reaction${count === 1 ? "" : "s"}`}
+        >
+          <span>{emoji}</span>
+          <span className="server-message-reaction-count">{count}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ServerMessageRow({
+  message,
+  currentUser,
+  isEditing,
+  editDraft,
+  onEditDraft,
+  onSaveEdit,
+  onCancelEdit,
+  onOpenMenu,
+  onReact,
+  onOpenUserProfile,
+  onJoinServerInvite
+}) {
+  const longPressTimerRef = useRef(null);
+  const longPressTriggeredRef = useRef(false);
+  const { openLightbox } = useImageLightbox();
+  const invite = findServerInvite(message.text);
+  const profileTarget = message.authorId
+    ? {
+        id: message.authorId,
+        name: message.author,
+        avatarUrl: message.avatarUrl || message.authorAvatar,
+        profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
+        profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
+      }
+    : null;
+  const isOwn = currentUser && (message.authorId === currentUser.id || message.author === currentUser.name);
+
+  function openProfile() {
+    if (profileTarget?.id) onOpenUserProfile?.(profileTarget.id, profileTarget);
+  }
+
+  function openMenuAt(clientX, clientY) {
+    onOpenMenu({
+      msgId: message.id,
+      x: clientX,
+      y: clientY,
+      msg: message,
+      isOwn
+    });
+  }
+
+  function handleTouchStart(e) {
+    if (e.touches?.length !== 1) return;
+    longPressTriggeredRef.current = false;
+    const touch = e.touches[0];
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      longPressTriggeredRef.current = true;
+      openMenuAt(touch.clientX, touch.clientY);
+    }, 480);
+  }
+
+  function cancelLongPress() {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  }
+
+  useEffect(() => () => cancelLongPress(), []);
+
+  return (
+    <div
+      className={`server-message-row server-message-row--hoverable${isEditing ? " is-editing" : ""}`}
+      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={handleTouchStart}
+      onTouchEnd={cancelLongPress}
+      onTouchMove={cancelLongPress}
+      onTouchCancel={cancelLongPress}
+    >
+      <button
+        type="button"
+        className="server-message-avatar-button"
+        onClick={openProfile}
+        disabled={!profileTarget?.id}
+        aria-label={`Open ${message.author || "user"} profile`}
+      >
+        <AvatarWithFrame
+          user={
+            profileTarget || {
+              name: message.author,
+              avatarUrl: message.avatarUrl,
+              profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
+              profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
+            }
+          }
+          src={message.avatarUrl || message.authorAvatar}
+          name={message.author}
+          className="server-message-avatar-frame-host"
+          avatarClassName="server-message-avatar-img"
+          placeholderClassName="server-message-avatar-placeholder"
+          size="sm"
+        />
+      </button>
+      <div className="server-message-body">
+        <div className="server-message-meta">
+          <button type="button" className="server-message-author-btn" onClick={openProfile} disabled={!profileTarget?.id}>
+            {message.author}
+          </button>
+          <small>
+            {new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+            {message.editedAt ? " (edited)" : ""}
+          </small>
+        </div>
+        {isEditing ? (
+          <form
+            className="server-msg-edit-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (editDraft.trim()) onSaveEdit(message.id, editDraft);
+            }}
+          >
+            <input
+              autoFocus
+              value={editDraft}
+              onChange={(ev) => onEditDraft(ev.target.value)}
+              onKeyDown={(ev) => {
+                if (ev.key === "Escape") onCancelEdit();
+              }}
+              className="server-msg-edit-input"
+            />
+            <div className="server-msg-edit-actions">
+              <button type="submit" className="btn btn-primary btn-sm">
+                Save
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={onCancelEdit}>
+                Cancel
+              </button>
+            </div>
+          </form>
+        ) : invite ? (
+          <ServerInviteCard server={invite} onJoin={() => onJoinServerInvite?.(invite)} />
+        ) : message.text ? (
+          <p>{message.text}</p>
+        ) : null}
+        {message.attachmentUrl ? (
+          <button
+            type="button"
+            className="server-message-attachment-trigger"
+            onClick={() => openLightbox(mediaUrl(message.attachmentUrl))}
+            aria-label="View attachment"
+          >
+            <img
+              src={mediaUrl(message.attachmentUrl)}
+              alt=""
+              className="server-message-attachment-img"
+              decoding="async"
+              loading="lazy"
+            />
+          </button>
+        ) : null}
+        <ServerMessageReactions message={message} onReact={onReact} />
+      </div>
+      <div className="server-msg-action-bar" onContextMenu={(e) => e.preventDefault()}>
+        <div className="server-msg-action-bar-group">
+          {SERVER_QUICK_REACTIONS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              className="server-msg-action-emoji"
+              title={`React ${emoji}`}
+              onClick={() => onReact(message.id, message.myReaction === emoji ? null : emoji)}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+        <div className="server-msg-action-bar-sep" aria-hidden="true" />
+        <div className="server-msg-action-bar-group">
+          <EmojiPickerButton
+            title="Add reaction"
+            className="server-msg-action-emoji-picker"
+            onPick={(emoji) => onReact(message.id, emoji)}
+          />
+          <button
+            type="button"
+            className="server-msg-action-more"
+            title="More actions"
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect();
+              openMenuAt(rect.right, rect.bottom);
+            }}
+          >
+            ···
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ServerThreadCompose({
+  channel,
+  draft,
+  onDraft,
+  onSend,
+  serverFileRef,
+  serverAttachFile,
+  setServerAttachFile
+}) {
+  const previewUrl = serverAttachFile?.type?.startsWith("image/")
+    ? URL.createObjectURL(serverAttachFile)
+    : null;
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
+  function clearAttachment() {
+    setServerAttachFile?.(null);
+    if (serverFileRef?.current) serverFileRef.current.value = "";
+  }
+
+  return (
+    <form className="server-thread-compose" onSubmit={onSend}>
+      <input
+        ref={serverFileRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => setServerAttachFile?.(e.target.files?.[0] || null)}
+      />
+      <button
+        type="button"
+        className="server-compose-attach-btn"
+        title="Upload image"
+        onClick={() => serverFileRef?.current?.click()}
+        aria-label="Upload image"
+      >
+        <span className="ui-icon ui-icon-plus" aria-hidden="true" />
+      </button>
+      <div className="server-compose-input-wrap">
+        {serverAttachFile ? (
+          <div className="server-attach-preview">
+            {previewUrl ? <img src={previewUrl} alt="" className="server-attach-preview-img" /> : null}
+            <span>{serverAttachFile.name}</span>
+            <button type="button" onClick={clearAttachment} aria-label="Remove attachment">
+              ✕
+            </button>
+          </div>
+        ) : null}
+        <input
+          value={draft}
+          onChange={(e) => onDraft?.(e.target.value)}
+          placeholder={`Message #${channel?.name || "general"}`}
+        />
+      </div>
+      <EmojiPickerButton
+        title="Insert emoji"
+        className="server-compose-emoji-picker"
+        onPick={(emoji) => onDraft?.(`${draft}${emoji}`)}
+      />
+      <button
+        type="submit"
+        className="btn btn-primary btn-send-msg"
+        disabled={!draft.trim() && !serverAttachFile}
+        aria-label="Send message"
+      >
+        ➤
+      </button>
+    </form>
+  );
+}
+
 function ServerChannelPreview({
   server,
   channel,
@@ -2952,14 +3434,28 @@ function ServerChannelPreview({
   draft = "",
   onDraft,
   onSend,
+  currentUser,
   onCreateServer,
   onJoinServerInvite,
   members = [],
   onOpenUserProfile,
   onCloseMobileServerThread,
-  mobileServerThreadOpen = false
+  mobileServerThreadOpen = false,
+  serverMsgMenu,
+  setServerMsgMenu,
+  serverEditingMsgId,
+  setServerEditingMsgId,
+  serverEditDraft,
+  setServerEditDraft,
+  onDeleteServerMsg,
+  onEditServerMsg,
+  onReactServerMsg,
+  serverFileRef,
+  serverAttachFile,
+  setServerAttachFile
 }) {
   const [onlinePanelOpen, setOnlinePanelOpen] = useState(false);
+  const [menuEmojiPickerFor, setMenuEmojiPickerFor] = useState(null);
   const swipeStartXRef = useRef(null);
   const swipeStartYRef = useRef(null);
 
@@ -3003,214 +3499,123 @@ function ServerChannelPreview({
     );
   }
 
-  if (messages.length) {
-    return (
+  const memberToggleBtn = (
+    <button
+      type="button"
+      className={`server-member-toggle-btn${onlinePanelOpen ? " active" : ""}`}
+      onClick={() => setOnlinePanelOpen(!onlinePanelOpen)}
+      title="Toggle member list"
+      aria-label="Toggle member list"
+    >
+      👥
+    </button>
+  );
+
+  const threadHead = (
+    <div className="server-thread-head">
+      <div className="server-thread-head-main">
+        {mobileServerThreadOpen ? (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm thread-back-btn server-thread-back-btn"
+            onClick={() => onCloseMobileServerThread?.()}
+            aria-label="Back to server channels"
+          >
+            ← Back
+          </button>
+        ) : null}
+        <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
+        <div>
+          <strong>{channel?.name || "general"}</strong>
+          <small>{server.name}</small>
+        </div>
+      </div>
+      {memberToggleBtn}
+    </div>
+  );
+
+  return (
+    <>
       <div
         className={`server-thread-layout${onlinePanelOpen ? " online-open" : ""}`}
         onTouchStart={handleOnlineTouchStart}
         onTouchEnd={handleOnlineTouchEnd}
       >
-      <div className="server-thread-preview">
-        <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-            {mobileServerThreadOpen ? (
-              <button
-                type="button"
-                className="btn btn-ghost btn-sm thread-back-btn server-thread-back-btn"
-                onClick={() => onCloseMobileServerThread?.()}
-                aria-label="Back to server channels"
-              >
-                ← Back
-              </button>
-            ) : null}
-            <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
-            <div>
-              <strong>{channel?.name || "general"}</strong>
-              <small>{server.name}</small>
+        <div className="server-thread-preview">
+          {threadHead}
+          {messages.length ? (
+            <div className="server-thread-messages">
+              {messages.map((message) => (
+                <ServerMessageRow
+                  key={message.id}
+                  message={message}
+                  currentUser={currentUser}
+                  isEditing={serverEditingMsgId === message.id}
+                  editDraft={serverEditDraft}
+                  onEditDraft={setServerEditDraft}
+                  onSaveEdit={(msgId, text) => {
+                    onEditServerMsg?.(msgId, text);
+                    setServerEditingMsgId(null);
+                  }}
+                  onCancelEdit={() => setServerEditingMsgId(null)}
+                  onOpenMenu={(menu) => {
+                    setMenuEmojiPickerFor(null);
+                    setServerMsgMenu(menu);
+                  }}
+                  onReact={onReactServerMsg}
+                  onOpenUserProfile={onOpenUserProfile}
+                  onJoinServerInvite={onJoinServerInvite}
+                />
+              ))}
             </div>
-          </div>
-          <button
-            type="button"
-            className={`server-member-toggle-btn${onlinePanelOpen ? " active" : ""}`}
-            onClick={() => setOnlinePanelOpen(!onlinePanelOpen)}
-            title="Toggle member list"
-            aria-label="Toggle member list"
-            style={{
-              background: "transparent",
-              border: "none",
-              color: "rgba(238, 231, 255, 0.76)",
-              fontSize: "1.2rem",
-              cursor: "pointer",
-              padding: "8px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: "50%",
-              transition: "background 0.2s"
-            }}
-            onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"}
-            onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
-          >
-            👥
-          </button>
-        </div>
-        <div className="server-thread-messages">
-          {messages.map((message) => {
-            const invite = findServerInvite(message.text);
-            const profileTarget = message.authorId ? {
-              id: message.authorId,
-              name: message.author,
-              avatarUrl: message.avatarUrl,
-              profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
-              profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
-            } : null;
-            const openProfile = () => {
-              if (profileTarget?.id) onOpenUserProfile?.(profileTarget.id, profileTarget);
-            };
-            return (
-              <div key={message.id} className="server-message-row">
-                <button
-                  type="button"
-                  className="server-message-avatar-button"
-                  onClick={openProfile}
-                  disabled={!profileTarget?.id}
-                  aria-label={`Open ${message.author || "user"} profile`}
-                >
-                  <AvatarWithFrame
-                    user={profileTarget || {
-                      name: message.author,
-                      avatarUrl: message.avatarUrl,
-                      profileFrameUrl: message.profileFrameUrl || message.authorProfileFrameUrl,
-                      profileFrameItemId: message.profileFrameItemId || message.authorProfileFrameItemId
-                    }}
-                    src={message.avatarUrl}
-                    name={message.author}
-                    className="server-message-avatar-frame-host"
-                    avatarClassName="server-message-avatar-img"
-                    placeholderClassName="server-message-avatar-placeholder"
-                    size="sm"
-                  />
-                </button>
-                <div>
-                  <div className="server-message-meta">
-                    <button
-                      type="button"
-                      className="server-message-author-btn"
-                      onClick={openProfile}
-                      disabled={!profileTarget?.id}
-                    >
-                      {message.author}
-                    </button>
-                    <small>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</small>
-                  </div>
-                  {invite ? (
-                    <ServerInviteCard server={invite} onJoin={() => onJoinServerInvite?.(invite)} />
-                  ) : (
-                    <p>{message.text}</p>
-                  )}
-                </div>
+          ) : (
+            <div className="server-thread-empty">
+              <div className="server-thread-orb">
+                {server?.iconUrl ? <img src={server.iconUrl} alt="" /> : <span>{server?.name?.charAt(0) || "S"}</span>}
               </div>
-            );
-          })}
+              <h3>Welcome to #{channel?.name || "general"}</h3>
+              <p className="muted small">Send the first message in this channel.</p>
+              <button type="button" className="server-thread-first-message">
+                Send your first message
+                <span>›</span>
+              </button>
+            </div>
+          )}
+          {channel?.type === "text" ? (
+            <ServerThreadCompose
+              channel={channel}
+              draft={draft}
+              onDraft={onDraft}
+              onSend={onSend}
+              serverFileRef={serverFileRef}
+              serverAttachFile={serverAttachFile}
+              setServerAttachFile={setServerAttachFile}
+            />
+          ) : (
+            <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
+          )}
         </div>
-        {channel?.type === "text" ? (
-          <form className="server-thread-compose" onSubmit={onSend}>
-            <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
-            <button type="submit" className="btn btn-primary btn-send-msg" disabled={!draft.trim()} aria-label="Send message">
-              ➤
-            </button>
-          </form>
-        ) : (
-          <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
-        )}
-      </div>
-      <div className="server-online-swipe-hint" aria-hidden>
-        {mobileServerThreadOpen ? "Swipe right for Online · swipe left for Channels" : "Swipe left for Online"}
-      </div>
-      <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      className={`server-thread-layout${onlinePanelOpen ? " online-open" : ""}`}
-      onTouchStart={handleOnlineTouchStart}
-      onTouchEnd={handleOnlineTouchEnd}
-    >
-    <div className="server-thread-preview">
-      <div className="server-thread-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          {mobileServerThreadOpen ? (
-            <button
-              type="button"
-              className="btn btn-ghost btn-sm thread-back-btn server-thread-back-btn"
-              onClick={() => onCloseMobileServerThread?.()}
-              aria-label="Back to server channels"
-            >
-              ← Back
-            </button>
-          ) : null}
-          <span className="server-thread-channel-icon">{channelIcon(channel?.type)}</span>
-          <div>
-            <strong>{channel?.name || "general"}</strong>
-            <small>{server?.name || "Server"}</small>
-          </div>
+        <div className="server-online-swipe-hint" aria-hidden>
+          {mobileServerThreadOpen ? "Swipe right for Online · swipe left for Channels" : "Swipe left for Online"}
         </div>
-        <button
-          type="button"
-          className={`server-member-toggle-btn${onlinePanelOpen ? " active" : ""}`}
-          onClick={() => setOnlinePanelOpen(!onlinePanelOpen)}
-          title="Toggle member list"
-          aria-label="Toggle member list"
-          style={{
-            background: "transparent",
-            border: "none",
-            color: "rgba(238, 231, 255, 0.76)",
-            fontSize: "1.2rem",
-            cursor: "pointer",
-            padding: "8px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            transition: "background 0.2s"
-          }}
-          onMouseOver={(e) => e.currentTarget.style.background = "rgba(255, 255, 255, 0.08)"}
-          onMouseOut={(e) => e.currentTarget.style.background = "transparent"}
-        >
-          👥
-        </button>
+        <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
       </div>
-      <div className="server-thread-empty">
-        <div className="server-thread-orb">
-          {server?.iconUrl ? <img src={server.iconUrl} alt="" /> : <span>{server?.name?.charAt(0) || "S"}</span>}
-        </div>
-        <h3>Welcome to #{channel?.name || "general"}</h3>
-        <p className="muted small">
-          Send the first message in this channel.
-        </p>
-        <button type="button" className="server-thread-first-message">
-          Send your first message
-          <span>›</span>
-        </button>
-      </div>
-      {channel?.type === "text" ? (
-        <form className="server-thread-compose" onSubmit={onSend}>
-          <input value={draft} onChange={(e) => onDraft?.(e.target.value)} placeholder={`Message #${channel?.name || "general"}`} />
-          <button type="submit" className="btn btn-primary btn-send-msg" disabled={!draft.trim()} aria-label="Send message">
-            ➤
-          </button>
-        </form>
-      ) : (
-        <div className="server-voice-placeholder">Voice channel layout is ready. Voice calling can be connected later.</div>
-      )}
-    </div>
-    <div className="server-online-swipe-hint" aria-hidden>
-      {mobileServerThreadOpen ? "Swipe right for Online · swipe left for Channels" : "Swipe left for Online"}
-    </div>
-    <ServerMemberPanel members={members} onOpenUserProfile={onOpenUserProfile} />
-    </div>
+      <ServerMessageContextMenu
+        menu={serverMsgMenu}
+        onClose={() => {
+          setServerMsgMenu(null);
+          setMenuEmojiPickerFor(null);
+        }}
+        onReact={onReactServerMsg}
+        onEdit={(msgId, text) => {
+          setServerEditingMsgId(msgId);
+          setServerEditDraft(text);
+        }}
+        onDelete={onDeleteServerMsg}
+        showEmojiPicker={menuEmojiPickerFor}
+        onOpenEmojiPicker={(msgId) => setMenuEmojiPickerFor(msgId)}
+      />
+    </>
   );
 }
 

@@ -6515,19 +6515,78 @@ app.post("/api/servers/:serverId/join", authenticate, async (req, res) => {
   }
 });
 
+async function ensureServerMember(serverId, userId) {
+  const { data: member, error } = await supabase
+    .from("server_members")
+    .select("role")
+    .eq("server_id", serverId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error || !member) return null;
+  return member;
+}
+
+function decorateServerMessageRow(row, author, viewerId, reactionRows = []) {
+  const reactionBreakdown = {};
+  let myReaction = null;
+  for (const rx of reactionRows) {
+    const emoji = String(rx.emoji || "").trim();
+    if (!emoji) continue;
+    reactionBreakdown[emoji] = (reactionBreakdown[emoji] || 0) + 1;
+    if (viewerId && rx.user_id === viewerId) myReaction = emoji;
+  }
+  const reactionCount = Object.values(reactionBreakdown).reduce((a, b) => a + b, 0);
+  return {
+    id: row.id,
+    serverId: row.server_id,
+    channelId: row.channel_id,
+    text: row.text || "",
+    authorId: row.author_id,
+    createdAt: row.created_at,
+    editedAt: row.edited_at || null,
+    attachmentUrl: row.attachment_url || null,
+    attachmentType: row.attachment_type || null,
+    author: author?.name || "Unknown",
+    authorAvatar: author?.avatar_url || null,
+    authorProfileFrameItemId: author?.profile_frame_item_id || null,
+    authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id),
+    reactionBreakdown,
+    reactionCount,
+    myReaction
+  };
+}
+
+async function decorateServerMessages(rows, viewerId) {
+  if (!rows?.length) return [];
+  const authorIds = [...new Set(rows.map((m) => m.author_id))];
+  const messageIds = rows.map((m) => m.id);
+  const [{ data: users, error: usersErr }, rxResult] = await Promise.all([
+    supabase
+      .from("users")
+      .select("id, name, email, avatar_url, profile_frame_item_id, profile_badge_item_ids")
+      .in("id", authorIds),
+    supabase.from("server_message_reactions").select("message_id, user_id, emoji").in("message_id", messageIds)
+  ]);
+  if (usersErr) throw usersErr;
+  const reactionRows = rxResult.error ? [] : rxResult.data || [];
+  const userMap = new Map((users || []).map((u) => [u.id, u]));
+  const reactionsByMessage = new Map();
+  for (const rx of reactionRows || []) {
+    if (!reactionsByMessage.has(rx.message_id)) reactionsByMessage.set(rx.message_id, []);
+    reactionsByMessage.get(rx.message_id).push(rx);
+  }
+  return rows.map((m) =>
+    decorateServerMessageRow(m, userMap.get(m.author_id), viewerId, reactionsByMessage.get(m.id) || [])
+  );
+}
+
 app.get("/api/servers/:serverId/channels/:channelId/messages", authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
     const { serverId, channelId } = req.params;
 
-    const { data: member, error: memberErr } = await supabase
-      .from("server_members")
-      .select("role")
-      .eq("server_id", serverId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (memberErr || !member) {
+    const member = await ensureServerMember(serverId, userId);
+    if (!member) {
       return res.status(403).json({ error: "Only server members can view channel messages" });
     }
 
@@ -6540,60 +6599,33 @@ app.get("/api/servers/:serverId/channels/:channelId/messages", authenticate, asy
       .limit(100);
 
     if (msgsErr) throw msgsErr;
-
-    if (!messages || messages.length === 0) {
-      return res.json([]);
-    }
-
-    const authorIds = [...new Set(messages.map(m => m.author_id))];
-    const { data: users, error: usersErr } = await supabase
-      .from("users")
-      .select("id, name, email, avatar_url, profile_frame_item_id, profile_badge_item_ids")
-      .in("id", authorIds);
-
-    if (usersErr) throw usersErr;
-
-    const userMap = new Map(users.map(u => [u.id, u]));
-    const decorated = messages.map(m => {
-      const author = userMap.get(m.author_id);
-      return {
-        id: m.id,
-        serverId: m.server_id,
-        channelId: m.channel_id,
-        text: m.text,
-        authorId: m.author_id,
-        createdAt: m.created_at,
-        author: author?.name || "Unknown",
-        authorAvatar: author?.avatar_url || null,
-        authorProfileFrameItemId: author?.profile_frame_item_id || null,
-        authorProfileFrameUrl: shopItemUrl(author?.profile_frame_item_id)
-      };
-    });
-
+    const decorated = await decorateServerMessages(messages || [], userId);
     res.json(decorated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-app.post("/api/servers/:serverId/channels/:channelId/messages", authenticate, async (req, res) => {
+app.post("/api/servers/:serverId/channels/:channelId/messages", authenticate, (req, res, next) => {
+  uploadImage.single("attachment")(req, res, (err) => {
+    if (err) return res.status(400).json({ error: err.message || "Upload failed" });
+    next();
+  });
+}, async (req, res) => {
   try {
     const userId = req.user.id;
     const { serverId, channelId } = req.params;
     const text = String(req.body?.text || "").trim();
-    if (!text) {
-      return res.status(400).json({ error: "Message text is required" });
+
+    const member = await ensureServerMember(serverId, userId);
+    if (!member) {
+      return res.status(403).json({ error: "Only server members can post messages" });
     }
 
-    const { data: member, error: memberErr } = await supabase
-      .from("server_members")
-      .select("role")
-      .eq("server_id", serverId)
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (memberErr || !member) {
-      return res.status(403).json({ error: "Only server members can post messages" });
+    let attachment = null;
+    if (req.file) attachment = await uploadAttachment("chat-attachments", req.file);
+    if (!text && !attachment) {
+      return res.status(400).json({ error: "Message text or attachment is required" });
     }
 
     const msgId = `smsg-${crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)}`;
@@ -6603,26 +6635,148 @@ app.post("/api/servers/:serverId/channels/:channelId/messages", authenticate, as
         id: msgId,
         server_id: serverId,
         channel_id: channelId,
-        text: text,
-        author_id: userId
+        text: text || null,
+        author_id: userId,
+        attachment_url: attachment?.url || null,
+        attachment_type: attachment ? (attachment.isImage ? "image" : "file") : null
       })
       .select("*")
       .maybeSingle();
 
     if (insertErr) throw insertErr;
 
-    res.status(201).json({
-      id: msg.id,
-      serverId: msg.server_id,
-      channelId: msg.channel_id,
-      text: msg.text,
-      authorId: msg.author_id,
-      createdAt: msg.created_at,
-      author: req.user.name,
-      authorAvatar: req.user.avatar_url,
-      authorProfileFrameItemId: req.user.profile_frame_item_id || null,
-      authorProfileFrameUrl: shopItemUrl(req.user.profile_frame_item_id)
-    });
+    const [decorated] = await decorateServerMessages([msg], userId);
+    res.status(201).json(decorated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.patch("/api/servers/:serverId/channels/:channelId/messages/:msgId", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId, channelId, msgId } = req.params;
+    const text = String(req.body?.text || "").trim();
+    if (!text) return res.status(400).json({ error: "Message text is required" });
+
+    const member = await ensureServerMember(serverId, userId);
+    if (!member) return res.status(403).json({ error: "Only server members can edit messages" });
+
+    const { data: existing, error: findErr } = await supabase
+      .from("server_messages")
+      .select("*")
+      .eq("id", msgId)
+      .eq("server_id", serverId)
+      .eq("channel_id", channelId)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!existing) return res.status(404).json({ error: "Message not found" });
+    if (existing.author_id !== userId) {
+      return res.status(403).json({ error: "You can only edit your own messages" });
+    }
+
+    const { data: updated, error: updateErr } = await supabase
+      .from("server_messages")
+      .update({ text, edited_at: new Date().toISOString() })
+      .eq("id", msgId)
+      .select("*")
+      .maybeSingle();
+    if (updateErr) throw updateErr;
+
+    const [decorated] = await decorateServerMessages([updated], userId);
+    res.json(decorated);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/servers/:serverId/channels/:channelId/messages/:msgId", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId, channelId, msgId } = req.params;
+
+    const member = await ensureServerMember(serverId, userId);
+    if (!member) return res.status(403).json({ error: "Only server members can delete messages" });
+
+    const { data: existing, error: findErr } = await supabase
+      .from("server_messages")
+      .select("*")
+      .eq("id", msgId)
+      .eq("server_id", serverId)
+      .eq("channel_id", channelId)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!existing) return res.status(404).json({ error: "Message not found" });
+
+    const canDelete =
+      existing.author_id === userId || member.role === "owner" || member.role === "admin";
+    if (!canDelete) {
+      return res.status(403).json({ error: "You can only delete your own messages" });
+    }
+
+    await supabase.from("server_message_reactions").delete().eq("message_id", msgId);
+    const { error: deleteErr } = await supabase.from("server_messages").delete().eq("id", msgId);
+    if (deleteErr) throw deleteErr;
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post("/api/servers/:serverId/channels/:channelId/messages/:msgId/react", authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { serverId, channelId, msgId } = req.params;
+    const wantClear = req.body?.emoji === null || req.body?.emoji === "";
+    const emoji = wantClear ? "" : String(req.body?.emoji || "").trim();
+    if (!wantClear && !emoji) {
+      return res.status(400).json({ error: "Emoji is required" });
+    }
+
+    const member = await ensureServerMember(serverId, userId);
+    if (!member) return res.status(403).json({ error: "Only server members can react" });
+
+    const { data: existing, error: findErr } = await supabase
+      .from("server_messages")
+      .select("*")
+      .eq("id", msgId)
+      .eq("server_id", serverId)
+      .eq("channel_id", channelId)
+      .maybeSingle();
+    if (findErr) throw findErr;
+    if (!existing) return res.status(404).json({ error: "Message not found" });
+
+    const { data: prior } = await supabase
+      .from("server_message_reactions")
+      .select("*")
+      .eq("message_id", msgId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (wantClear || (prior && prior.emoji === emoji)) {
+      await supabase.from("server_message_reactions").delete().eq("message_id", msgId).eq("user_id", userId);
+    } else if (prior) {
+      await supabase
+        .from("server_message_reactions")
+        .update({ emoji })
+        .eq("message_id", msgId)
+        .eq("user_id", userId);
+    } else {
+      await supabase.from("server_message_reactions").insert({
+        message_id: msgId,
+        user_id: userId,
+        emoji
+      });
+    }
+
+    const { data: refreshed } = await supabase
+      .from("server_messages")
+      .select("*")
+      .eq("id", msgId)
+      .maybeSingle();
+    const [decorated] = await decorateServerMessages([refreshed], userId);
+    res.json(decorated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
