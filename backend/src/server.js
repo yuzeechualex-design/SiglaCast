@@ -277,10 +277,16 @@ async function fetchUserByEmail(email) {
 
 const BOND_LEVELS = [
   { key: "stranger", label: "Stranger", min: 0, max: 100, benefit: "+1% bond EXP gain with this user/character." },
-  { key: "acquaintance", label: "Acquaintance", min: 100, max: 200, benefit: "Unlocks 1 character creation slot." },
-  { key: "friend", label: "Friend", min: 200, max: 300, benefit: "Unlocks profile bond display and AI profile interaction perks." },
-  { key: "partner", label: "Partner", min: 300, max: 500, benefit: "Unlocks special profile frames and banner badges." }
+  { key: "acquaintance", label: "Acquaintance", min: 100, max: 350, benefit: "Unlocks 1 character creation slot." },
+  { key: "friend", label: "Friend", min: 350, max: 750, benefit: "Unlocks profile bond display and AI profile interaction perks." },
+  { key: "partner", label: "Partner", min: 750, max: 1200, benefit: "Unlocks special profile frames and banner badges." }
 ];
+const BOND_LEVEL_COIN_REWARDS = {
+  acquaintance: 20,
+  friend: 30,
+  partner: 40
+};
+const BOND_MAX_COIN_REWARD = 50;
 
 const SHOP_ITEMS = [
   {
@@ -504,7 +510,7 @@ function serializeBond(row, target) {
   const exp = Math.max(0, Number(row?.exp) || 0);
   const level = bondLevelForExp(exp);
   const next = BOND_LEVELS.find((candidate) => candidate.min > level.min) || null;
-  const span = Math.max(1, (next?.min || 500) - level.min);
+  const span = Math.max(1, (next?.min || 1200) - level.min);
   return {
     targetUserId: row?.target_user_id || target?.id,
     exp,
@@ -524,7 +530,7 @@ async function publicPinnedBondsForUser(userId) {
     .select("*")
     .eq("user_id", userId)
     .eq("pinned", true)
-    .gte("exp", 200)
+    .gte("exp", 350)
     .order("updated_at", { ascending: false })
     .limit(3);
   if (error || !rows?.length) return [];
@@ -649,8 +655,22 @@ async function awardBondInteraction(userId, targetUserId, { hasAttachment = fals
   const multiplier = 1 + Math.min(0.15, currentExp >= 0 ? 0.01 : 0);
   const baseExp = 10 + (hasAttachment ? 4 : 0);
   const expGained = Math.max(1, Math.round(baseExp * multiplier));
-  const coinsGained = 3 + (hasAttachment ? 1 : 0) + Math.floor(Math.min(currentExp, 500) / 150);
-  const nextExp = Math.min(500, currentExp + expGained);
+  const nextExp = Math.min(1200, currentExp + expGained);
+
+  // Detect bond level-up and award coins only on level change
+  const prevLevel = bondLevelForExp(currentExp);
+  const newLevel = bondLevelForExp(nextExp);
+  let coinsGained = 0;
+  let leveledUp = false;
+  if (newLevel.key !== prevLevel.key) {
+    leveledUp = true;
+    coinsGained = BOND_LEVEL_COIN_REWARDS[newLevel.key] || 0;
+    // Award bonus coins when reaching max level (partner)
+    if (newLevel.key === "partner" && nextExp >= 1200) {
+      coinsGained = BOND_MAX_COIN_REWARD;
+    }
+  }
+
   const { data: bond, error } = await supabase
     .from("user_bonds")
     .upsert({
@@ -664,8 +684,8 @@ async function awardBondInteraction(userId, targetUserId, { hasAttachment = fals
     .select("*")
     .maybeSingle();
   if (error) return null;
-  const wallet = await addWalletCoins(userId, coinsGained);
-  return { expGained, coinsGained, bond, wallet };
+  const wallet = coinsGained > 0 ? await addWalletCoins(userId, coinsGained) : await fetchWallet(userId);
+  return { expGained, coinsGained, leveledUp, newLevelLabel: leveledUp ? newLevel.label : null, bond, wallet };
 }
 
 function isLocalRequest(req) {
@@ -2851,7 +2871,7 @@ app.patch("/api/bonds/:targetUserId", authenticate, async (req, res) => {
       .eq("target_user_id", targetUserId)
       .maybeSingle();
     if (existing.error || !existing.data) return res.status(404).json({ error: "Bond not found yet" });
-    if (pinned && (Number(existing.data.exp) || 0) < 200) {
+    if (pinned && (Number(existing.data.exp) || 0) < 350) {
       return res.status(403).json({ error: "Reach Friend Bond Level before adding someone to your profile bonds." });
     }
     const { data, error } = await supabase
@@ -2873,7 +2893,7 @@ app.get("/api/shop", authenticate, async (req, res) => {
   try {
     const wallet = await fetchWallet(req.user.id);
     const { data: purchases } = await supabase.from("user_shop_purchases").select("item_id").eq("user_id", req.user.id);
-    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
+    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 750).limit(1);
     const owned = new Set((purchases || []).map((purchase) => purchase.item_id));
     const keyWallet = await fetchGachaKeyWallet(req.user.id, purchases || []);
     const hasPartnerBond = Boolean(partnerBonds?.length);
@@ -2946,7 +2966,7 @@ app.post("/api/shop/:itemId/buy", authenticate, async (req, res) => {
       .maybeSingle();
     if (existing) return res.status(400).json({ error: "You already own this item" });
     const freeShop = userHasFreeShop(req.user);
-    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 300).limit(1);
+    const { data: partnerBonds } = await supabase.from("user_bonds").select("target_user_id").eq("user_id", req.user.id).gte("exp", 750).limit(1);
     if (!freeShop && item.requiredBondLevel === "partner" && !partnerBonds?.length) {
       return res.status(403).json({ error: "Reach Partner Bond Level with someone before buying this frame." });
     }

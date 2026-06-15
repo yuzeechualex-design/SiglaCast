@@ -1699,7 +1699,11 @@ export default function App() {
       return res;
     }
     if (res.bondAward) {
-      setNotice(`+${res.bondAward.expGained} bond EXP, +${res.bondAward.coinsGained} coins`);
+      if (res.bondAward.leveledUp) {
+        setNotice(`🎉 Bond level up to ${res.bondAward.newLevelLabel}! +${res.bondAward.coinsGained} coins`);
+      } else {
+        setNotice(`+${res.bondAward.expGained} bond EXP`);
+      }
       void loadBondsAndShop();
     }
     const refreshed =
