@@ -15263,6 +15263,8 @@ body.desktop-shell .shop-hero {
 
 .bundle-modal {
   width: min(560px, 96vw);
+  max-height: min(92vh, 900px);
+  overflow-y: auto;
   border: 1px solid rgba(216, 180, 254, 0.36);
   border-radius: 22px;
   padding: clamp(16px, 3vw, 24px);
@@ -15373,6 +15375,7 @@ body.desktop-shell .shop-hero {
   display: grid;
   place-items: center;
   padding: 18px;
+  overflow-y: auto;
   background: rgba(8, 4, 16, 0.72);
   backdrop-filter: blur(10px);
 }
