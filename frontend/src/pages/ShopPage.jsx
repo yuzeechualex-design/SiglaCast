@@ -144,13 +144,14 @@ const fallbackExeGacha = {
   pool: [
     { id: "exe-profile-background", name: "EXE Profile Card Background", type: "profile_card_background", imageUrl: "/assets/exe-profile-background.mp4", chanceGroup: "Featured reward" },
     { id: "exe-frame", name: "EXE Profile Frame", type: "profile_frame", imageUrl: "/assets/exe-frame.png", chanceGroup: "Rare" },
-    { id: "exe-key-1", name: "1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
-    { id: "exe-key-2", name: "2 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
-    { id: "exe-key-3", name: "3 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
-    { id: "exe-key-4", name: "4 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
-    { id: "exe-key-5", name: "5 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" }
+    { id: "exe-key-1", name: "×1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-2", name: "×1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-3", name: "×1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-4", name: "×1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" },
+    { id: "exe-key-5", name: "×1 Key", type: "gacha_key", imageUrl: "/assets/exe-key.png", chanceGroup: "Key reward" }
   ]
 };
+
 
 function ShopSectionTitle({ children }) {
   return <h3 className="shop-section-title">{children}</h3>;
