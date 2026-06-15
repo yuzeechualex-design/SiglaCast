@@ -448,7 +448,9 @@ export default function ShopPage({
   onDrawGacha,
   onCreatePayPalOrder,
   onCapturePayPalOrder,
-  onClaimMonthlyDaily
+  onClaimMonthlyDaily,
+  welcomeGiftUnclaimed = false,
+  onWelcomeGiftOpen
 }) {
   const [activeTab, setActiveTab] = useState("cosmetics");
   const [selectedGacha, setSelectedGacha] = useState(null);
@@ -502,6 +504,25 @@ export default function ShopPage({
 
   return (
     <section className="shop-page">
+      {welcomeGiftUnclaimed ? (
+        <div className="shop-welcome-gift-banner">
+          <div className="shop-wgb-left">
+            <span className="shop-wgb-icon" aria-hidden="true">🎁</span>
+            <div className="shop-wgb-text">
+              <strong>Gift Awaiting For You!</strong>
+              <span>Claim your free 300 welcome coins</span>
+            </div>
+          </div>
+          <button
+            id="shop-welcome-gift-claim-btn"
+            type="button"
+            className="shop-wgb-btn"
+            onClick={onWelcomeGiftOpen}
+          >
+            Claim Now ✨
+          </button>
+        </div>
+      ) : null}
       {showDailyClaim ? (
         <div className="monthly-claim-pop">
           <div>

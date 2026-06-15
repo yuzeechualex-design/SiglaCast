@@ -2361,9 +2361,12 @@ export default function App() {
               onCreatePayPalOrder={createShopPayPalOrder}
               onCapturePayPalOrder={captureShopPayPalOrder}
               onClaimMonthlyDaily={claimMonthlyCardDaily}
+              welcomeGiftUnclaimed={user?.id ? !localStorage.getItem(`${STORAGE_WELCOME_GIFT_PREFIX}${user.id}`) : false}
+              onWelcomeGiftOpen={() => setWelcomeGiftOpen(true)}
             />
           }
         />
+
 
         <Route
           path="/notifications"
